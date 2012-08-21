@@ -173,7 +173,8 @@ typedef enum
  */
 typedef enum {
     X10RT_OPT_REMOTE_OP = 0,
-    X10RT_OPT_COLLECTIVES = 1
+    X10RT_OPT_COLLECTIVES = 1,
+    X10RT_OPT_COLLECTIVES_VAR = 2
 } x10rt_opt;
 
 /**

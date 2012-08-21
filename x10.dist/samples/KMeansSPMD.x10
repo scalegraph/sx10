@@ -120,7 +120,12 @@ public class KMeansSPMD {
                     var comm_time:Long = 0;
                     var barrier_time:Long = 0;
 
+<<<<<<< HEAD
                     team.barrier(role);
+=======
+                        Console.ERR.println("team id = " + team.id());
+                        team.barrier(role);
+>>>>>>> imprement collective communications with MPI
 
                     main_loop: for (var iter:Int=0 ; iter<iterations ; iter++) {
 
@@ -188,10 +193,26 @@ public class KMeansSPMD {
                             Console.OUT.println(role.toString()+": barrier time: "+barrier_time/1E9);
                             Console.OUT.println(role.toString()+": Communication time: "+comm_time/1E9);
                         }
+<<<<<<< HEAD
                         team.barrier(role);
                         if (role==0) {
                             Console.OUT.println("\nFinal results:");
                             printClusters(host_clusters,dim);
+=======
+                        for (var i:Int=0 ; i<team.size() ; ++i) {
+                            team.barrier(role);
+                            if (role == i) {                            
+                                Console.OUT.println(role.toString()+": Computation time: "+compute_time/1E9);
+                                Console.OUT.println(role.toString()+": barrier time: "+barrier_time/1E9);
+                                Console.OUT.println(role.toString()+": Communication time: "+comm_time/1E9);
+                            }
+                            team.barrier(role);
+                            if (role==0) {
+                                Console.OUT.println("\nFinal results:");
+                                printClusters(host_clusters,dim);
+                            }
+
+>>>>>>> imprement collective communications with MPI
                         }
 
                     }

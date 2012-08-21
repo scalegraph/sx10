@@ -76,7 +76,7 @@ public struct Team {
         @Native("java", "x10.x10rt.TeamSupport.nativeBarrier(id, role);")
         @Native("c++", "x10rt_barrier(id, role, x10aux::coll_handler, x10aux::coll_enter());") {}
     }
-
+    
     /** Blocks until all members have received their part of root's array.
      * Each member receives a contiguous and distinct portion of the src array.
      * src should be structured so that the portions are sorted in ascending
@@ -105,6 +105,31 @@ public struct Team {
     private static def nativeScatter[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
         @Native("java", "x10.x10rt.TeamSupport.nativeScatter(id, role, root, src, src_off, dst, dst_off, count);")
         @Native("c++", "x10rt_scatter(id, role, root, &src->raw()[src_off], &dst->raw()[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
+
+    /** Almost same as scatter except for permitting messages to have different sizes.
+     *
+     * @param role Our role in the team
+     *
+     * @param root The member who is supplying the data
+     *
+     * @param src The data that will be sent (will only be used by the root
+     * member)
+     *
+     * @param src_offs The offsets into src at which to start reading
+     *
+     * @param dst The rail into which the data will be received for this member
+     *
+     * @param dst_off The offset into dst at which to start writing
+     *
+     * @param counts The numbers of elements being transferred
+     */
+    public def scatterv[T] (role:Int, root:Int, src:Array[T], src_offs:Array[Int], dst:Array[T], dst_off:Int, counts:Array[Int]) : void {
+        finish nativeScatterv(id, role, root, src.raw(), src_offs.raw(), dst.raw(), dst_off, counts.raw());
+    }
+
+    private static def nativeScatterv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_off:Int, counts:IndexedMemoryChunk[Int]) : void {
+        @Native("java", "x10.x10rt.TeamSupport.nativeScatterv(id, role, root, src, src_offs, dst, dst_off, counts);")
+        @Native("c++", "x10rt_scatterv(id, role, root, src->raw(), src_offs->raw(), &dst->raw()[dst_off], sizeof(TPMGL(T)), counts->raw(), x10aux::coll_handler, x10aux::coll_enter());") {}
     }
 
     /** Blocks until all members have received root's array.
