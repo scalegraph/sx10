@@ -1470,38 +1470,50 @@ int x10rt_red_type_length(x10rt_red_type dtype) {
 }
 
 MPI_Datatype mpi_red_type(x10rt_red_type dtype) {
+	// ToDo: following dirty macro definitions must be rewritten by the templete metaprograming.
+#define RED_TYPE_SIZE(x) (sizeof (x10rt_red_type_info<x>::Type))
+#define MPI_CORR_TYPE_IF(dtype, type, mpitype, els) ((RED_TYPE_SIZE(dtype) == sizeof(type)) ? mpitype : (els))
+#define MPI_CORR_TYPE_SUB(dtype,inttype,mpishort,mpiint,mpilong) \
+	(MPI_CORR_TYPE_IF(inttype, short, mpishort, \
+	MPI_CORR_TYPE_IF(inttype, int, mpiint, \
+	MPI_CORR_TYPE_IF(inttype, long, mpilong, \
+        (fprintf(stderr, "[%s:%d] unsuported data type: %s.\n", __FILE__, __LINE__, #dtype), abort(), MPI_DATATYPE_NULL)))))
+#define MPI_CORR_TYPE_SIGNED(dtype) (MPI_CORR_TYPE_SUB(dtype,dtype,MPI_SHORT,MPI_INT,MPI_LONG))
+#define MPI_CORR_TYPE_UNSIGNED(dtype) (MPI_CORR_TYPE_SUB(dtype,dtype,MPI_UNSIGNED_SHORT,MPI_UNSIGNED,MPI_UNSIGNED_LONG))
+#define MPI_CORR_TYPE_TUPLED_WITH_DBL(dtype,inttype) (MPI_CORR_TYPE_SUB(dtype,inttype,MPI_SHORT,MPI_INT,MPI_LONG))
+#define CLAUSE(cond,body) case (cond): return (body);
+#define BORING_SIGNED(dtype) CLAUSE(dtype,MPI_CORR_TYPE_SIGNED(dtype))
+#define BORING_UNSIGNED(dtype) CLAUSE(dtype,MPI_CORR_TYPE_UNSIGNED(dtype))
+#define BORING_TUPLED(dtype,inttype) CLAUSE(dtype,MPI_CORR_TYPE_TUPLED_WITH_DBL(dtype,inttype))
     switch (dtype) {
-    case X10RT_RED_TYPE_U8:
-        fprintf(stderr, "[%s:%d] unsuported data type: X10RT_RED_TYPE_U8.\n",
-                __FILE__, __LINE__);
-        abort();
-    case X10RT_RED_TYPE_S8:
-        fprintf(stderr, "[%s:%d] unsuported data type: X10RT_RED_TYPE_S8.\n",
-                __FILE__, __LINE__);
-        abort();
-    case X10RT_RED_TYPE_S16:
-        return MPI_SHORT;
-    case X10RT_RED_TYPE_U16:
-        return MPI_UNSIGNED_SHORT;
-    case X10RT_RED_TYPE_S32:
-        return MPI_INT;
-    case X10RT_RED_TYPE_U32:
-        return MPI_UNSIGNED;
-    case X10RT_RED_TYPE_S64:
-        return MPI_LONG;
-    case X10RT_RED_TYPE_U64:
-        return MPI_UNSIGNED_LONG;
+    BORING_UNSIGNED(X10RT_RED_TYPE_U8)
+    BORING_SIGNED(X10RT_RED_TYPE_S8)
+    BORING_SIGNED(X10RT_RED_TYPE_S16)
+    BORING_UNSIGNED(X10RT_RED_TYPE_U16)
+    BORING_SIGNED(X10RT_RED_TYPE_S32)
+    BORING_UNSIGNED(X10RT_RED_TYPE_U32)
+    BORING_SIGNED(X10RT_RED_TYPE_S64)
+    BORING_UNSIGNED(X10RT_RED_TYPE_U64)
+    BORING_TUPLED(X10RT_RED_TYPE_DBL_S32,X10RT_RED_TYPE_S32)
     case X10RT_RED_TYPE_DBL:
         return MPI_DOUBLE;
     case X10RT_RED_TYPE_FLT:
         return MPI_FLOAT;
-    case X10RT_RED_TYPE_DBL_S32:
-        return MPI_DOUBLE_INT;
     default:
         fprintf(stderr, "[%s:%d] unexpected argument. got: %d\n",
                 __FILE__, __LINE__, dtype);
         abort();
     }
+#undef RED_TYPE_SIZE
+#undef MPI_CORR_TYPE_IF
+#undef MPI_CORR_TYPE_SUB
+#undef MPI_CORR_TYPE_SIGNED
+#undef MPI_CORR_TYPE_UNSIGNED
+#undef MPI_CORR_TYPE_TUPLED_WITH_DBL
+#undef CLAUSE
+#undef BORING_SIGNED
+#undef BORING_UNSIGNED
+#undef BORING_TUPLED
 }
 
 MPI_Op mpi_red_op_type(x10rt_red_op_type op) {
