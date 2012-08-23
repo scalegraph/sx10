@@ -18,6 +18,8 @@
 
 #include <pthread.h>
 #include <errno.h>
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 
 #include <x10rt_net.h>
 
@@ -26,10 +28,8 @@
 #include <x10rt_cpp.h>
 #include <x10rt_ser.h>
 
-#define __STDC_FORMAT_MACROS
-#include <inttypes.h>
-#define X10RT_NET_DEBUG(fmt, ...) fprintf(stderr, "[%s:%d:%s] (%"PRIu32") " fmt "\n", __FILE__, __LINE__, __func__, x10rt_net_here(), __VA_ARGS__)
-//#define X10RT_NET_DEBUG(fmt, ...)
+//#define X10RT_NET_DEBUG(fmt, ...) fprintf(stderr, "[%s:%d:%s] (%"PRIu32") " fmt "\n", __FILE__, __LINE__, __func__, x10rt_net_here(), __VA_ARGS__)
+#define X10RT_NET_DEBUG(fmt, ...)
 
 void x10rt_net_coll_init(int *argc, char ** *argv, x10rt_msg_type *counter);
 
@@ -1108,7 +1108,6 @@ static void x10rt_net_probe_ex (bool network_only) {
 }
 
 void x10rt_net_finalize(void) {
-    X10RT_NET_DEBUG("%s", "called");
     assert(global_state.init);
     assert(!global_state.finalized);
 
@@ -1127,7 +1126,6 @@ void x10rt_net_finalize(void) {
     }
     UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
     global_state.finalized = true;
-    X10RT_NET_DEBUG("%s", "finalized");
 }
 
 int x10rt_net_supports (x10rt_opt o) {
@@ -1193,7 +1191,6 @@ struct TeamDB {
 
     x10rt_team allocTeam (MPI_Comm comm)
     {
-        X10RT_NET_DEBUG("%s", "called");
         SYNCHRONIZED(global_lock);
         x10rt_team t = team_next;
         allocTeam(t, comm);
@@ -1221,6 +1218,7 @@ struct TeamDB {
 
     bool isValidTeam (x10rt_team t)
     {
+        X10RT_NET_DEBUG("t = %d", t);
         return (t < teamc);
     }
 
@@ -1302,6 +1300,8 @@ struct CollState {
 static void x10rt_net_team_new_decrement_counter (int *counter, x10rt_completion_handler2 *ch,
                                         x10rt_team t, void *arg)
 {
+    X10RT_NET_DEBUG("%s", "called");
+
     (*counter)--;
     if (*counter == 0) {
         ch(t, arg);
@@ -1311,6 +1311,8 @@ static void x10rt_net_team_new_decrement_counter (int *counter, x10rt_completion
 
 static void x10rt_net_team_new_finished_recv (const x10rt_msg_params *p)
 {
+    X10RT_NET_DEBUG("%s", "called");
+
     x10rt_deserbuf b;
     x10rt_deserbuf_init(&b, p);
     x10rt_team t; x10rt_deserbuf_read(&b, &t);
@@ -1328,6 +1330,8 @@ static void x10rt_net_team_new_finished_recv (const x10rt_msg_params *p)
 static void x10rt_net_send_team_new_finished (x10rt_place home, x10rt_team t, x10rt_remote_ptr ch_,
                                     x10rt_remote_ptr arg_, x10rt_remote_ptr counter_)
 {
+    X10RT_NET_DEBUG("%s", "called");
+
     if (x10rt_net_here()==home) {
         int *counter = (int*)(size_t)counter_;
         x10rt_completion_handler2 *ch = (x10rt_completion_handler2*)(size_t)ch_;
@@ -1346,6 +1350,8 @@ static void x10rt_net_send_team_new_finished (x10rt_place home, x10rt_team t, x1
 }
 static void x10rt_net_team_new_recv (const x10rt_msg_params *p)
 {
+    X10RT_NET_DEBUG("%s", "called");
+
     x10rt_deserbuf b;
     x10rt_deserbuf_init(&b, p);
     x10rt_team t; x10rt_deserbuf_read(&b, &t);
@@ -1377,7 +1383,6 @@ void x10rt_net_coll_init(int *argc, char ** *argv, x10rt_msg_type *counter) {
 void x10rt_net_team_new (x10rt_place placec, x10rt_place *placev,
 		x10rt_completion_handler2 *ch, void *arg)
 {
-    X10RT_NET_DEBUG("%d", "called");
     x10rt_place home = x10rt_net_here();
     x10rt_remote_ptr ch_ = (x10rt_remote_ptr) (size_t) ch;
     x10rt_remote_ptr arg_ = (x10rt_remote_ptr) (size_t) arg;
@@ -1424,6 +1429,7 @@ void x10rt_net_team_del (x10rt_team team, x10rt_place role,
 
 x10rt_place x10rt_net_team_sz (x10rt_team team)
 {
+    X10RT_NET_DEBUG("team=%d", team);
     int sz;
 
     MPI_Comm comm = mpi_tdb[team];
@@ -1439,7 +1445,9 @@ void x10rt_net_team_split (x10rt_team parent, x10rt_place parent_role,
                            x10rt_place color, x10rt_place new_role,
                            x10rt_completion_handler2 *ch, void *arg)
 {
-    // X10RT_NET_DEBUG("parent=%d, parent_role=%d, color=%d, new_role=%d", parent, parent_role, color, new_role);
+    X10RT_NET_DEBUG("parent=%d, parent_role=%d, color=%d, new_role=%d", parent, parent_role, color, new_role);
+    fprintf(stderr, "[%s:%d] %s\n",
+            __FILE__, __LINE__, "unimpremented function");
 
     MPI_Comm comm = mpi_tdb[parent];
     MPI_Comm new_comm;
@@ -1548,7 +1556,7 @@ MPI_Op mpi_red_op_type(x10rt_red_op_type op) {
 void x10rt_net_barrier (x10rt_team team, x10rt_place role,
                         x10rt_completion_handler *ch, void *arg)
 {
-    // X10RT_NET_DEBUG("team=%d, role=%d", team, role);
+    X10RT_NET_DEBUG("team=%d, role=%d", team, role);
     if (!mpi_tdb.isValidTeam(team)) {
         fprintf(stderr, "[%s:%d] %d is not valid team!)\n",
                 __FILE__, __LINE__, team);
@@ -1569,7 +1577,8 @@ void x10rt_net_bcast (x10rt_team team, x10rt_place role,
                       size_t el, size_t count,
                       x10rt_completion_handler *ch, void *arg)
 {
-//    X10RT_NET_DEBUG("team=%d, role=%d, count=%d, sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, team, role, count, sbuf, dbuf);
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%d", team, role, count);
+    X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
     void *buf = (role == root) ? (void *)sbuf : dbuf;
     MPI_Comm comm = mpi_tdb.comm(team);
@@ -1590,7 +1599,8 @@ void x10rt_net_scatter (x10rt_team team, x10rt_place role,
                         size_t el, size_t count,
                         x10rt_completion_handler *ch, void *arg)
 {
-//    X10RT_NET_DEBUG("team=%d, role=%d, count=%d, sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, team, role, count, sbuf, dbuf);
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%d", team, role, count);
+    X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
     MPI_Comm comm = mpi_tdb.comm(team);
     void *buf = (sbuf == dbuf) ? ChkAlloc<void>(count * el) : dbuf;
@@ -1613,7 +1623,8 @@ void x10rt_net_alltoall (x10rt_team team, x10rt_place role,
                          size_t el, size_t count,
                          x10rt_completion_handler *ch, void *arg)
 {
-    // X10RT_NET_DEBUG("team=%d, role=%d, count=%d, sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, team, role, count, sbuf, dbuf);
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%d", team, role, count);
+    X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
     MPI_Comm comm = mpi_tdb.comm(team);
     void *buf = (sbuf == dbuf) ? ChkAlloc<void>(count * el) : dbuf;
@@ -1639,9 +1650,9 @@ void x10rt_net_allreduce (x10rt_team team, x10rt_place role,
                           x10rt_completion_handler *ch, void *arg)
 {
     int el = x10rt_red_type_length(dtype);
-    // X10RT_NET_DEBUG("team=%d, role=%d, count=%d", team, role, count);
-    // X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
-    // X10RT_NET_DEBUG("dtype=%d sizeof(dtype)=%d", dtype, el);
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%d", team, role, count);
+    X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
+    X10RT_NET_DEBUG("dtype=%d sizeof(dtype)=%d", dtype, el);
 
     MPI_Comm comm = mpi_tdb.comm(team);
     void *buf = (sbuf == dbuf) ? ChkAlloc<void>(count * el) : dbuf;
