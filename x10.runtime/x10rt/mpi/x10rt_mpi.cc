@@ -1566,14 +1566,16 @@ void x10rt_net_bcast (x10rt_team team, x10rt_place role,
 {
 //    X10RT_NET_DEBUG("team=%d, role=%d, count=%d, sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, team, role, count, sbuf, dbuf);
 
-    x10rt_place home = x10rt_net_here();
-    void *buf = (role == home) ? (void *)sbuf : dbuf;
+    void *buf = (role == root) ? (void *)sbuf : dbuf;
     MPI_Comm comm = mpi_tdb.comm(team);
 
     if (MPI_SUCCESS != MPI_Bcast(buf, count * el, MPI_BYTE, root, comm)){
         fprintf(stderr, "[%s:%d] %s\n",
                 __FILE__, __LINE__, "Error in MPI_Bcast");
         abort();
+    }
+    if (role == root) {
+    	memcpy(dbuf, sbuf, count  * el);
     }
     ch(arg);
 }
@@ -1586,9 +1588,9 @@ void x10rt_net_scatter (x10rt_team team, x10rt_place role,
 //    X10RT_NET_DEBUG("team=%d, role=%d, count=%d, sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, team, role, count, sbuf, dbuf);
 
     MPI_Comm comm = mpi_tdb.comm(team);
-    void *buf = (sbuf == dbuf) ? malloc(count * el) : dbuf;
+    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(count * el) : dbuf;
 
-    if (MPI_SUCCESS != MPI_Scatter((void *)sbuf, count * el, MPI_BYTE, buf, el, MPI_BYTE, root, comm)){
+    if (MPI_SUCCESS != MPI_Scatter((void *)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, root, comm)){
         fprintf(stderr, "[%s:%d] %s\n",
                 __FILE__, __LINE__, "Error in MPI_Scatter");
         abort();
@@ -1609,9 +1611,9 @@ void x10rt_net_alltoall (x10rt_team team, x10rt_place role,
     // X10RT_NET_DEBUG("team=%d, role=%d, count=%d, sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, team, role, count, sbuf, dbuf);
 
     MPI_Comm comm = mpi_tdb.comm(team);
-    void *buf = (sbuf == dbuf) ? malloc(count * el) : dbuf;
+    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(count * el) : dbuf;
 
-    if (MPI_SUCCESS != MPI_Alltoall((void*)sbuf, count * el, MPI_BYTE, buf, el, MPI_BYTE, comm)){
+    if (MPI_SUCCESS != MPI_Alltoall((void*)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, comm)){
         fprintf(stderr, "[%s:%d] %s\n",
                 __FILE__, __LINE__, "Error in MPI_Alltoall");
         abort();
@@ -1637,7 +1639,7 @@ void x10rt_net_allreduce (x10rt_team team, x10rt_place role,
     // X10RT_NET_DEBUG("dtype=%d sizeof(dtype)=%d", dtype, el);
 
     MPI_Comm comm = mpi_tdb.comm(team);
-    void *buf = (sbuf == dbuf) ? malloc(count * el) : dbuf;
+    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(count * el) : dbuf;
 
     if (MPI_SUCCESS != MPI_Allreduce((void*)sbuf, buf, count, mpi_red_type(dtype), mpi_red_op_type(op), comm)){
         X10RT_NET_DEBUG("%s", "Error in MPI_Allreduce");
