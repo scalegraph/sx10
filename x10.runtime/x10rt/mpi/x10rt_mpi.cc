@@ -1214,8 +1214,9 @@ struct TeamDB {
     void releaseTeam (x10rt_team t)
     {
         X10RT_NET_DEBUG("t = %d", t);
-        SYNCHRONIZED(global_lock);
+        LOCK_IF_MPI_IS_NOT_MULTITHREADED;
         MPI_Comm_free(&(this->teamv[t]));
+        UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
     }
 
     bool isValidTeam (x10rt_team t)
@@ -1229,7 +1230,9 @@ struct TeamDB {
         ensureIndex(t);
 
        MPI_Comm c;
+        LOCK_IF_MPI_IS_NOT_MULTITHREADED;
        MPI_Comm_dup(comm, &c);
+        UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
        this->teamv[t] = c;
     }
 
@@ -1266,6 +1269,7 @@ private:
                 ranks[i] = placev[i];
             }
             MPI_Group grp, MPI_GROUP_WORLD;
+            LOCK_IF_MPI_IS_NOT_MULTITHREADED;
             MPI_Comm_group(MPI_COMM_WORLD, &MPI_GROUP_WORLD);
             if (MPI_SUCCESS != MPI_Group_incl(MPI_GROUP_WORLD, members, ranks, &grp)) {
             	fprintf(stderr, "[%s:%d] %s\n",
@@ -1281,6 +1285,7 @@ private:
             	abort();
             }
             MPI_Group_free(&MPI_GROUP_WORLD);
+            UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
 
             this->teamv[t] = comm;
         }
