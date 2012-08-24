@@ -29,6 +29,7 @@ namespace {
 
     bool has_remote_op;
     bool has_collectives;
+    bool has_collectives_append;
 
     x10rt_lgl_ctx g;
 }
@@ -191,6 +192,7 @@ namespace {
         usleep(1000000); // sleep for 1 second
         has_remote_op = getenv("X10RT_EMULATE_REMOTE_OP")==NULL && 0!=x10rt_net_supports(X10RT_OPT_REMOTE_OP);
         has_collectives = getenv("X10RT_EMULATE_COLLECTIVES")==NULL && 0!=x10rt_net_supports(X10RT_OPT_COLLECTIVES);
+        has_collectives_append = has_collectives && getenv("X10RT_EMULATE_COLLECTIVES_APPEND")==NULL && 0!=x10rt_net_supports(X10RT_OPT_COLLECTIVES_APPEND);
         g.nhosts = x10rt_net_nhosts();
 
         x10rt_place num_local_spes = 0;
@@ -987,6 +989,54 @@ void x10rt_lgl_allreduce (x10rt_team team, x10rt_place role,
     }
 }
 
+void x10rt_lgl_scatterv (x10rt_team team, x10rt_place role,
+                    x10rt_place root, const void *sbuf, const void *soffsets, const void *scounts,
+                    void *dbuf, size_t dcount,
+                    size_t el, x10rt_completion_handler *ch, void *arg)
+{
+    if (has_collectives_append) {
+        x10rt_net_scatterv(team, role, root, sbuf, soffsets, scounts, dbuf, dcount, el, ch, arg);
+    } else {
+        x10rt_emu_scatterv(team, role, root, sbuf, soffsets, scounts, dbuf, dcount, el, ch, arg);
+    }
+}
+
+void x10rt_lgl_gather (x10rt_team team, x10rt_place role,
+                    x10rt_place root, const void *sbuf, void *dbuf,
+                    size_t el, size_t count,
+                    x10rt_completion_handler *ch, void *arg)
+{
+    if (has_collectives_append) {
+        x10rt_net_gather(team, role, root, sbuf, dbuf, el, count, ch, arg);
+    } else {
+        x10rt_emu_gather(team, role, root, sbuf,dbuf, el, count, ch, arg);
+    }
+}
+
+void x10rt_lgl_gatherv (x10rt_team team, x10rt_place role,
+                    x10rt_place root, const void *sbuf, size_t scount,
+                    void *dbuf, const void *doffsets, const void *dcounts,
+                    size_t el, x10rt_completion_handler *ch, void *arg)
+{
+    if (has_collectives_append) {
+        x10rt_net_gatherv(team, role, root, sbuf, scount, dbuf, doffsets, dcounts, el, ch, arg);
+    } else {
+        x10rt_emu_gatherv(team, role, root, sbuf, scount, dbuf, doffsets, dcounts, el, ch, arg);
+    }
+}
+
+
+void x10rt_lgl_alltoallv (x10rt_team team, x10rt_place role,
+                    const void *sbuf, const void *soffsets, const void *scounts,
+                    void *dbuf, const void *doffsets, const void *dcounts,
+                    size_t el, x10rt_completion_handler *ch, void *arg)
+{
+    if (has_collectives_append) {
+        x10rt_net_alltoallv(team, role, sbuf, soffsets, scounts, dbuf, doffsets, dcounts, el, ch, arg);
+    } else {
+        x10rt_emu_alltoallv(team, role, sbuf, soffsets, scounts, dbuf, doffsets, dcounts, el, ch, arg);
+    }
+}
 
 void x10rt_lgl_get_stats (x10rt_stats *s)
 {

@@ -401,6 +401,25 @@ X10RT_C void x10rt_lgl_allreduce (x10rt_team team, x10rt_place role,
                                   size_t count,
                                   x10rt_completion_handler *ch, void *arg);
 
+X10RT_C void x10rt_lgl_scatterv (x10rt_team team, x10rt_place role,
+                    x10rt_place root, const void *sbuf, const void *soffsets, const void *scounts,
+                    void *dbuf, size_t dcount,
+                    size_t el, x10rt_completion_handler *ch, void *arg);
+
+X10RT_C void x10rt_lgl_gather (x10rt_team team, x10rt_place role,
+                    x10rt_place root, const void *sbuf, void *dbuf,
+                    size_t el, size_t count,
+                    x10rt_completion_handler *ch, void *arg);
+
+X10RT_C void x10rt_lgl_gatherv (x10rt_team team, x10rt_place role,
+                    x10rt_place root, const void *sbuf, size_t scount,
+                    void *dbuf, const void *doffbuf, const void *dcounts,
+                    size_t el, x10rt_completion_handler *ch, void *arg);
+
+X10RT_C void x10rt_lgl_alltoallv (x10rt_team team, x10rt_place role,
+                    const void *sbuf, const void *soffsets, const void *scounts,
+                    void *dbuf, const void *doffsets, const void *dcounts,
+                    size_t el, x10rt_completion_handler *ch, void *arg);
 #endif
 
 // vim: tabstop=4:shiftwidth=4:expandtab:textwidth=100

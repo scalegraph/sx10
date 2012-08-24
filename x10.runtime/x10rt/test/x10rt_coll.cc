@@ -281,6 +281,111 @@ static void coll_test (x10rt_team team, x10rt_place role, x10rt_place per_place)
                                << ((double)taken)/long_tests/1000 << " μs" << std::endl;
     }
 
+    if (getenv("NO_SCATTERV")==NULL) {
+        x10rt_place root = 43 % x10rt_team_sz(team);
+        size_t count = 1234;
+        typedef double test_t;
+        test_t *sbuf = new test_t[count*x10rt_team_sz(team)];
+        int *soffsets = new int[x10rt_team_sz(team)];
+        int *scounts = new int[x10rt_team_sz(team)];
+        size_t el = sizeof(test_t);
+        test_t *dbuf = new test_t[count*x10rt_team_sz(team)];
+
+        for (size_t p=0 ; p<x10rt_team_sz(team) ; ++p) {
+        	scounts[p] = count;
+        	soffsets[p] = p * count;
+            for (size_t i=0 ; i<count ; ++i) {
+                sbuf[p*count + i] = pow(test_t(p+2),test_t(role+1)) + i;
+            }
+        }
+        for (size_t i=0 ; i<count*x10rt_team_sz(team) ; ++i) dbuf[i] = -(test_t)i;
+
+        if (0==role)
+            std::cout << team << ": scatterv from " << root
+                      << " correctness (if no warnings follow then OK)..." << std::endl;
+        finished = 0;
+        x10rt_scatterv(team, role, root, root==role ? sbuf : NULL, soffsets, scounts, dbuf, count,
+                      el, x10rt_one_setter, &finished);
+        while (!finished) { x10rt_probe(); }
+        for (size_t i=0 ; i<count ; ++i) {
+            test_t oracle = pow(test_t(role+2),test_t(root+1)) + i;
+            if (dbuf[i] != oracle) {
+                std::cout << team << ": role " << role
+                          << " has received invalid data from scatterv: ["<<i<<"] = " << dbuf[i]
+                          << " (not " << oracle << ")" << std::endl;
+            }
+        }
+
+        if (0==role) std::cout << team << ": scatterv timing test..." << std::endl;
+        x10rt_barrier_b(team,role);
+        taken = -nano_time();
+        for (int i=0 ; i<long_tests ; ++i) {
+            finished = 0;
+            x10rt_scatterv(team, role, root, sbuf, soffsets, scounts, dbuf, count, el, x10rt_one_setter, &finished);
+            while (!finished) { sched_yield(); x10rt_probe(); }
+        }
+        taken += nano_time();
+        if (0==role) std::cout << team << ": scatterv time:  "
+                               << ((double)taken)/long_tests/1000 << " μs" << std::endl;
+    }
+
+    if (getenv("NO_ALLTOALLV")==NULL) {
+        typedef double test_t;
+        test_t *sbuf = new test_t[x10rt_team_sz(team)];
+        int *scounts = new int[x10rt_team_sz(team)];
+        int *soffsets = new int[x10rt_team_sz(team)];
+        size_t el = sizeof(test_t);
+        test_t *dbuf = new test_t[x10rt_team_sz(team)];
+        int *dcounts = new int[x10rt_team_sz(team)];
+        int *doffsets = new int[x10rt_team_sz(team)];
+
+        for (size_t p=0 ; p<x10rt_team_sz(team) ; ++p) {
+        	scounts[p] = (p <= role) ? 1 : 0;
+        	soffsets[p] = p;
+        	dcounts[p] = (p >= role) ? 1 : 0;
+        	doffsets[p] = (p >= role) ? p - role : 0;
+        }
+        for (size_t i=0 ; i<=role ; ++i) {
+        	sbuf[i] = role * (role + 1) / 2 + i;
+        }
+        for (size_t i=0 ; i<x10rt_team_sz(team) ; ++i) dbuf[i] = -(test_t)i;
+
+        if (0==role)
+            std::cout<<team<<": alltoallv correctness (if no errors then OK):" << std::endl;
+        finished = 0;
+        x10rt_alltoallv(team, role, sbuf, soffsets, scounts, dbuf, doffsets, dcounts, el, x10rt_one_setter, &finished);
+        while (!finished) { x10rt_probe(); }
+        for (size_t i=0 ; i<x10rt_team_sz(team) - role ; ++i) {
+        	test_t oracle = (i + role) * (i + role + 1) / 2 + role;
+        	std::cout <<  role << ": i=" <<  i << ", oracle=" << oracle << ", dbuf=" << dbuf[i] << std::endl;
+        	if (dbuf[i] != oracle) {
+        		std::cout << team << ": role " << role
+        				<< " has received invalid data"
+        				<< ": ["<<i<<"] = " << dbuf[i]
+        				                            << " (not " << oracle << ")" << std::endl;
+        	}
+        }
+
+
+        if (0==role) std::cout << team << ": alltoallv timing test..." << std::endl;
+        x10rt_barrier_b(team,role);
+        taken = -nano_time();
+        for (int i=0 ; i<long_tests ; ++i) {
+            finished = 0;
+            x10rt_alltoallv(team, role, sbuf, soffsets, scounts, dbuf, doffsets, dcounts, el, x10rt_one_setter, &finished);
+            while (!finished) { sched_yield(); x10rt_probe(); }
+        }
+        taken += nano_time();
+        if (0==role) std::cout << team << ": alltoallv time:  "
+                               << ((double)taken)/long_tests/1000 << " μs" << std::endl;
+
+        delete [] sbuf;
+        delete [] soffsets;
+        delete [] scounts;
+        delete [] dbuf;
+        delete [] doffsets;
+        delete [] dcounts;
+    }
 }
 
 static void spmd_test (x10rt_team team, x10rt_place role, x10rt_place per_place)

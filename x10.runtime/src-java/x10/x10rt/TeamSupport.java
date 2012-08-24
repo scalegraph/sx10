@@ -125,7 +125,27 @@ public class TeamSupport {
             aboutToDie("nativeAllReduce");
         }
     }
+    
+    public static void nativeScatterV(int id, int role, int root, IndexedMemoryChunk<?> src, IndexedMemoryChunk<?> src_offs, IndexedMemoryChunk<?> src_counts, 
+	                                 IndexedMemoryChunk<?> dst, int dst_off,  int counts) {
+        aboutToDie("nativeScatterV");
+    }
 
+    public static void nativeGather(int id, int role, int root, IndexedMemoryChunk<?> src, int src_offs,
+	                                 IndexedMemoryChunk<?> dst, int dst_off,  int counts) {
+        aboutToDie("nativeGather");
+    }
+    
+    public static void nativeGatherV(int id, int role, int root, IndexedMemoryChunk<?> src, int src_offs, int src_counts,
+	                                 IndexedMemoryChunk<?> dst, IndexedMemoryChunk<?> dst_offs, IndexedMemoryChunk<?> dst_counts) {
+        aboutToDie("nativeGatherV");
+    }
+    
+    public static void nativeAllToAllV(int id, int role, int root, IndexedMemoryChunk<?> src, IndexedMemoryChunk<?> src_offs, IndexedMemoryChunk<?> src_counts, 
+	                                 IndexedMemoryChunk<?> dst, IndexedMemoryChunk<?> dst_offs, IndexedMemoryChunk<?> dst_counts) {
+        aboutToDie("nativeAllToAllV");
+    }
+    
     public static void nativeIndexOfMax(int id, int role, IndexedMemoryChunk<?> src,
                                         IndexedMemoryChunk<?> dst) {
         aboutToDie("nativeIndexOfMax");

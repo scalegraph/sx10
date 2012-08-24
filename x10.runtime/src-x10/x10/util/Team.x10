@@ -105,6 +105,7 @@ public struct Team {
     private static def nativeScatter[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
         @Native("java", "x10.x10rt.TeamSupport.nativeScatter(id, role, root, src, src_off, dst, dst_off, count);")
         @Native("c++", "x10rt_scatter(id, role, root, &src->raw()[src_off], &dst->raw()[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
+    }
 
     /** Almost same as scatter except for permitting messages to have different sizes.
      *
@@ -117,19 +118,82 @@ public struct Team {
      *
      * @param src_offs The offsets into src at which to start reading
      *
+     * @param src_counts The numbers of elements being sent
+     * 
      * @param dst The rail into which the data will be received for this member
      *
      * @param dst_off The offset into dst at which to start writing
      *
-     * @param counts The numbers of elements being transferred
+     * @param dst_count The numbers of elements being received
      */
-    public def scatterv[T] (role:Int, root:Int, src:Array[T], src_offs:Array[Int], dst:Array[T], dst_off:Int, counts:Array[Int]) : void {
-        finish nativeScatterv(id, role, root, src.raw(), src_offs.raw(), dst.raw(), dst_off, counts.raw());
+    public def scatterv[T] (role:Int, root:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst:Array[T], dst_off:Int, dst_count:Int) : void {
+        finish nativeScatterv(id, role, root, src.raw(), src_offs.raw(), src_counts.raw(), dst.raw(), dst_off, dst_count);
     }
 
-    private static def nativeScatterv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_off:Int, counts:IndexedMemoryChunk[Int]) : void {
-        @Native("java", "x10.x10rt.TeamSupport.nativeScatterv(id, role, root, src, src_offs, dst, dst_off, counts);")
-        @Native("c++", "x10rt_scatterv(id, role, root, src->raw(), src_offs->raw(), &dst->raw()[dst_off], sizeof(TPMGL(T)), counts->raw(), x10aux::coll_handler, x10aux::coll_enter());") {}
+    private static def nativeScatterv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], src_counts:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_off:Int, dst_count:Int) : void {
+        @Native("java", "x10.x10rt.TeamSupport.nativeScatterV(id, role, root, src, src_offs, src_counts, dst, dst_off, dst_count);")
+        @Native("c++", "x10rt_scatterv(id, role, root, src->raw(), src_offs->raw(), src_counts->raw(), &dst->raw()[dst_off], dst_count, sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
+    }
+    
+    /** Blocks until all members have sent their part of root's array.
+     * Each member sends a contiguous and distinct portion of the src array.
+     * dst will be structured so that the portions are sorted in ascending
+     * order, e.g., the first member gets the portion at offset src_off of sbuf, and the
+     * last member gets the last portion.
+     *
+     * @param role Our role in the team
+     *
+     * @param root The member who is receiving the data
+     *
+     * @param src The data that will be sent 
+     *
+     * @param src_off The offset into src at which to start reading
+     *
+     * @param dst The rail into which the data will be received (will only be used by the root
+     * member)
+     *
+     * @param dst_off The offset into dst at which to start writing (will only be used by the root
+     * member)
+     *
+     * @param count The number of elements being transferred
+     */
+    public def gather[T] (role:Int, root:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
+        finish nativeGather(id, role, root, src.raw(), src_off, dst.raw(), dst_off, count);
+    }
+
+    private static def nativeGather[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
+        @Native("java", "x10.x10rt.TeamSupport.nativeGather(id, role, root, src, src_off, dst, dst_off, count);")
+        @Native("c++", "x10rt_gather(id, role, root, &src->raw()[src_off], &dst->raw()[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
+    }
+
+
+    /** Almost same as gather except for permitting messages to have different sizes.
+     *
+     * @param role Our role in the team
+     *
+     * @param root The member who is receiving the data
+     *
+     * @param src The data that will be sent 
+     *
+     * @param src_off The offset into src at which to start reading
+     *
+     * @param src_count The numbers of elements being sent
+     * 
+     * @param dst The rail into which the data will be received (will only be used by the root
+     * member)
+     *
+     * @param dst_offs The offsets into dst at which to start writing (will only be used by the root
+     * member)
+     *
+     * @param dst_counts The numbers of elements being transferred
+     */
+    public def Gatherv[T] (role:Int, root:Int, src:Array[T], src_off:Int, dst:Array[T], src_count:Int, dst_offs:Array[Int], dst_counts:Array[Int]) : void {
+        finish nativeGatherv(id, role, root, src.raw(), src_off, src_count, dst.raw(), dst_offs.raw(), dst_counts.raw());
+    }
+
+    private static def nativeGatherv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, src_count:Int, dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
+        @Native("java", "x10.x10rt.TeamSupport.nativeGatherV(id, role, root, src, src_off, src_count, dst, dst_offs, dst_counts);")
+        @Native("c++", "x10rt_gatherv(id, role, root, src->raw(), src_off, src_count, dst->raw(), dst_offs->raw(), dst_counts->raw(), sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
     }
 
     /** Blocks until all members have received root's array.

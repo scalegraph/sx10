@@ -76,6 +76,19 @@ namespace {
         struct {
             x10rt_place root;
             const void *sbuf;
+            const void *soffsets;
+            const void *scounts;
+            void *dbuf;
+            size_t dcount;
+            size_t el; // element size
+            x10rt_completion_handler *ch;
+            void *arg;
+            bool barrier_done;
+            bool data_done;
+        } scatterv;
+        struct {
+            x10rt_place root;
+            const void *sbuf;
             void *dbuf;
             size_t el; // element size
             size_t count;
@@ -783,6 +796,100 @@ void x10rt_emu_scatter (x10rt_team team, x10rt_place role,
     // 'run into' the current barrier causing race conditions
 }
 
+static void scatterv_after_barrier (void *arg)
+{
+    MemberObj &m = *(static_cast<MemberObj*>(arg));
+    TeamObj &t = *gtdb[m.team];
+
+    if (m.scatterv.root == m.role) {
+
+        // send data to everyone
+        for (x10rt_place i=0 ; i<t.memberc ; ++i) {
+            x10rt_place role_place = t.placev[i];
+            const char *sbuf_ = static_cast<const char*>(m.scatterv.sbuf);
+            const int *soffsets_ = static_cast<const int*>(m.scatterv.soffsets); // is 'int' is right?
+            const int *scounts_ = static_cast<const int*>(m.scatterv.scounts);
+            size_t offs = soffsets_[i];
+            size_t count = scounts_[i];
+            const char *sbuf = &sbuf_[offs * m.scatterv.el];
+            if (role_place==x10rt_net_here()) {
+                MemberObj *m2 = t.memberv[i];
+                assert(m2!=NULL);
+                memcpy(m2->scatterv.dbuf, sbuf, count * m.scatterv.el);
+                SYNCHRONIZED (global_lock);
+                m2->scatterv.data_done = true;
+                if (m2->scatterv.barrier_done && m2->scatterv.ch != NULL) {
+                    PREEMPT (global_lock);
+                    m2->scatterv.ch(m2->scatterv.arg);
+                }
+            } else {
+                // serialise all the data
+                // TODO: hoist some of this serialisation out of the loop (reuse buffer)
+                x10rt_serbuf b;
+                x10rt_serbuf_init(&b, role_place, SCATTER_COPY_ID);
+                x10rt_serbuf_write(&b, &m.team);
+                x10rt_serbuf_write(&b, &i);
+                x10rt_serbuf_write_ex(&b, sbuf, m.scatterv.el, count);
+                x10rt_net_send_msg(&b.p);
+                x10rt_serbuf_free(&b);
+            }
+        }
+
+        // the barrier must have completed or we wouldn't even be here
+        // signal completion to root role
+        if (m.scatterv.ch != NULL) {
+            m.scatterv.ch(m.scatterv.arg);
+        }
+
+    } else {
+
+        // if we have already received the data (rare) then signal completion to non-root role
+        SYNCHRONIZED (global_lock);
+        m.scatterv.barrier_done = true;
+        if (m.scatterv.data_done && m.scatterv.ch != NULL) {
+            PREEMPT (global_lock);
+            m.scatterv.ch(m.scatterv.arg);
+        }
+    }
+}
+
+void x10rt_emu_scatterv (x10rt_team team, x10rt_place role,
+                    x10rt_place root, const void *sbuf, const void *soffsets, const void *scounts,
+                    void *dbuf, size_t dcount,
+                    size_t el, x10rt_completion_handler *ch, void *arg)
+{
+    TeamObj &t = *gtdb[team];
+
+    MemberObj &m = *t[role];
+
+    m.scatterv.root = root;
+    m.scatterv.sbuf = sbuf;
+    m.scatterv.soffsets = static_cast<const size_t*>(soffsets);
+    m.scatterv.scounts = static_cast<const size_t*>(scounts);
+    m.scatterv.dbuf = dbuf;
+    m.scatterv.dcount = dcount;
+    m.scatterv.el = el;
+    m.scatterv.ch = ch;
+    m.scatterv.arg = arg;
+    m.scatterv.barrier_done = false;
+    m.scatterv.data_done = false;
+
+    // FIXME: there is currently no support for preventing, warning, or
+    // accepting two 'concurrent' collective operations from the same role of
+    // the same team.  In other words.  This looks like an atomicity violation
+    // here because m.scatter.* may change but this in fact will not happen
+    // unless operations are invoked in this way..
+
+    x10rt_emu_barrier (team, role, scatterv_after_barrier, &m);
+
+    // after barrier:
+    // root sends to everyone else and immediately signals completion
+    // everyone else signals completion when they receive root's message
+    //    AND after the barrier is done
+    // if you don't wait until after the barrier is done then the next barrier will
+    // 'run into' the current barrier causing race conditions
+}
+
 static void bcast_copy_recv (const x10rt_msg_params *p)
 {
     x10rt_deserbuf b;
@@ -1349,4 +1456,25 @@ bool x10rt_emu_coll_probe (void)
         progressing = op->progress() || progressing;
     }
     return progressing;
+}
+
+void x10rt_emu_gather (x10rt_team team, x10rt_place role, x10rt_place root, const void *sbuf,
+		void *dbuf, size_t el, size_t count, x10rt_completion_handler *ch, void *arg)
+{
+	fprintf(stderr, "X10RT: x10rt_emu_gather is not implemented.\n");
+	abort();
+}
+
+void x10rt_emu_gatherv (x10rt_team team, x10rt_place role, x10rt_place root, const void *sbuf, size_t scount,
+		void *dbuf, const void *doffsets, const void *dcounts, size_t el, x10rt_completion_handler *ch, void *arg)
+{
+	fprintf(stderr, "X10RT: x10rt_emu_gatherv is not implemented.\n");
+	abort();
+}
+
+void x10rt_emu_alltoallv (x10rt_team team, x10rt_place role, const void *sbuf, const void *soffsets, const void *scounts,
+		void *dbuf, const void *doffsets, const void *dcounts, size_t el, x10rt_completion_handler *ch, void *arg)
+{
+	fprintf(stderr, "X10RT: x10rt_emu_alltoallv is not implemented.\n");
+	abort();
 }
