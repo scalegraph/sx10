@@ -1859,7 +1859,7 @@ MPI_Datatype mpi_red_type(x10rt_red_type dtype) {
 #undef BORING_TUPLED
 }
 
-MPI_Op mpi_red_op_type(x10rt_red_op_type op) {
+MPI_Op mpi_red_arith_op_type(x10rt_red_op_type op) {
     switch (op) {
     case X10RT_RED_OP_ADD:
         return MPI_SUM;
@@ -1880,7 +1880,41 @@ MPI_Op mpi_red_op_type(x10rt_red_op_type op) {
                 __FILE__, __LINE__, op);
         abort();
     }
+}
 
+MPI_Op mpi_red_loc_op_type(x10rt_red_op_type op) {
+    switch (op) {
+    case X10RT_RED_OP_MAX:
+        return MPI_MAXLOC;
+    case X10RT_RED_OP_MIN:
+        return MPI_MINLOC;
+    default:
+        fprintf(stderr, "[%s:%d] unexpected argument. got: %d\n",
+                __FILE__, __LINE__, op);
+        abort();
+    }
+}
+
+MPI_Op mpi_red_op_type(x10rt_red_type dtype, x10rt_red_op_type op) {
+    switch (dtype) {
+    case X10RT_RED_TYPE_U8:
+    case X10RT_RED_TYPE_S8:
+    case X10RT_RED_TYPE_S16:
+    case X10RT_RED_TYPE_U16:
+    case X10RT_RED_TYPE_S32:
+    case X10RT_RED_TYPE_U32:
+    case X10RT_RED_TYPE_S64:
+    case X10RT_RED_TYPE_U64:
+    case X10RT_RED_TYPE_DBL:
+    case X10RT_RED_TYPE_FLT:
+        return mpi_red_arith_op_type(op);
+    case X10RT_RED_TYPE_DBL_S32:
+        return mpi_red_loc_op_type(op);
+    default:
+        fprintf(stderr, "[%s:%d] unexpected argument. got: %d\n",
+                __FILE__, __LINE__, dtype);
+        abort();
+    }
 }
 
 void x10rt_net_barrier (x10rt_team team, x10rt_place role,
@@ -1996,7 +2030,7 @@ void x10rt_net_allreduce (x10rt_team team, x10rt_place role,
     void *buf = (sbuf == dbuf) ? ChkAlloc<void>(count * el) : dbuf;
 
     LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    if (MPI_SUCCESS != MPI_Allreduce((void*)sbuf, buf, count, mpi_red_type(dtype), mpi_red_op_type(op), comm)){
+    if (MPI_SUCCESS != MPI_Allreduce((void*)sbuf, buf, count, mpi_red_type(dtype), mpi_red_op_type(dtype, op), comm)){
         X10RT_NET_DEBUG("%s", "Error in MPI_Allreduce");
         abort();
     }
