@@ -187,7 +187,7 @@ public struct Team {
      *
      * @param dst_counts The numbers of elements being transferred
      */
-    public def Gatherv[T] (role:Int, root:Int, src:Array[T], src_off:Int, dst:Array[T], src_count:Int, dst_offs:Array[Int], dst_counts:Array[Int]) : void {
+    public def gatherv[T] (role:Int, root:Int, src:Array[T], src_off:Int, dst:Array[T], src_count:Int, dst_offs:Array[Int], dst_counts:Array[Int]) : void {
         finish nativeGatherv(id, role, root, src.raw(), src_off, src_count, dst.raw(), dst_offs.raw(), dst_counts.raw());
     }
 
