@@ -25,6 +25,7 @@
 #include <inttypes.h>
 #include <typeinfo>
 #include <vector>
+#include <map>
 
 #include <x10rt_net.h>
 
@@ -1416,6 +1417,7 @@ static void team_new_recv (const x10rt_msg_params *p)
     X10RT_NET_DEBUG("%s", "team allocated");
 
     send_team_new_finished(home,t,ch_,arg_,counter_);
+    free(placev);
 }
 
 void send_team_new (x10rt_team teamc, x10rt_team *teamv, x10rt_place placec, x10rt_place *placev,
@@ -1478,6 +1480,8 @@ static void team_new_allocate_teams_recv (const x10rt_msg_params *p)
     x10rt_place *places = reinterpret_cast<x10rt_place *>(cont);
 
     send_team_new(teamc,teamv,places[0],&places[1],ch_,arg_);
+    free(cont);
+    free(teamv);
 }
 
 
@@ -1533,6 +1537,8 @@ static void team_split_allocate_teams_recv (const x10rt_msg_params *p)
     void *arg = (void*)(size_t)arg_;
 
     send_split_new_team(teamc,teamv,comm1[0],team1[0],places[0],&places[1],ch,arg);
+    free(cont);
+    free(teamv);
 }
 
 static void send_new_teams (x10rt_place home, int teamc, x10rt_team *teamv,
@@ -1578,6 +1584,7 @@ static void team_allocate_new_teams_recv (const x10rt_msg_params *p)
     X10RT_NET_DEBUG("%s", "team id allocated");
 
     send_new_teams(home,teamc,new_team_ids,msg_id,cont_len,cont,ch_,arg_);
+    free(cont);
 }
 
 static void x10rt_net_coll_init(int *argc, char ** *argv, x10rt_msg_type *counter) {
@@ -1637,6 +1644,8 @@ void x10rt_net_team_new (x10rt_place placec, x10rt_place *placev,
     x10rt_serbuf_write(&b, &arg_);
     x10rt_net_send_msg(&b.p);
     x10rt_serbuf_free(&b);
+
+    free(places);
 }
 
 void x10rt_net_team_del (x10rt_team team, x10rt_place role,
@@ -1682,7 +1691,7 @@ void x10rt_net_team_split (x10rt_team parent, x10rt_place parent_role,
     UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
 
     // role 0 must exist
-    int colors[gsize];
+    int *colors = new int[gsize];
     {
     	int finished = 0;
     	x10rt_net_gather(parent, parent_role, 0, &color, colors, sizeof(x10rt_place), 1, x10rt_net_one_setter, &finished);
@@ -1709,11 +1718,12 @@ void x10rt_net_team_split (x10rt_team parent, x10rt_place parent_role,
     	for (int i = 0; i < gsize; ++i) {
     		new_team_ids[i] = color_mapping[colors[i]];
     	}
+    	delete[] colors;
 
     x10rt_place home = x10rt_net_here();
     	int msg_id = coll_state.TEAM_SPLIT_ALLOCATE_TEAM_ID;
     	const size_t cont_len = sizeof(MPI_Comm) + sizeof(x10rt_team) + (1 + gsize)  * sizeof(x10rt_place);
-    	char cont[cont_len];
+    	char *cont = static_cast<char *>(malloc(cont_len));
     	MPI_Comm *comm1 = reinterpret_cast<MPI_Comm *>(cont);
     	x10rt_team *team1 = reinterpret_cast<x10rt_team *>(&comm1[1]);
     	x10rt_place *places = reinterpret_cast<x10rt_place *>(&team1[1]);
@@ -1735,6 +1745,8 @@ void x10rt_net_team_split (x10rt_team parent, x10rt_place parent_role,
     	x10rt_serbuf_write(&b, &arg_);
     	x10rt_net_send_msg(&b.p);
     	x10rt_serbuf_free(&b);
+
+    	free(cont);
     } else {
     	int new_team_id;
     	{
