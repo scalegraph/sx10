@@ -2142,6 +2142,57 @@ void x10rt_net_gatherv (x10rt_team team, x10rt_place role, x10rt_place root, con
     ch(arg);
 }
 
+
+void x10rt_net_allgather (x10rt_team team, x10rt_place role, const void *sbuf,
+		void *dbuf, size_t el, size_t count, x10rt_completion_handler *ch, void *arg)
+{
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%d", team, role, count);
+    X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
+
+    MPI_Comm comm = mpi_tdb.comm(team);
+    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(count * el) : dbuf;
+
+    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    if (MPI_SUCCESS != MPI_Allgather((void *)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, comm)){
+        fprintf(stderr, "[%s:%d] %s\n",
+                __FILE__, __LINE__, "Error in MPI_Scatter");
+        abort();
+    }
+    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+
+    if (sbuf == dbuf) {
+        memcpy(dbuf, buf, count * el);
+        free(buf);
+    }
+    ch(arg);
+}
+void x10rt_net_allgatherv (x10rt_team team, x10rt_place role, const void *sbuf, int scount,
+		void *dbuf, const void *doffsets, const void *dcounts, size_t el, x10rt_completion_handler *ch, void *arg)
+{
+    MPI_Comm comm = mpi_tdb.comm(team);
+    int gsize = x10rt_net_team_sz(team);
+//    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(scount * el) : dbuf;
+    void *buf = dbuf;
+    int *dcounts_ = ChkAlloc<int>(gsize * el);
+    int *doffsets_ = ChkAlloc<int>(gsize * el);
+    for (int i = 0; i < gsize; ++i) {
+        dcounts_[i] = static_cast<const int*>(dcounts)[i] * el;
+        doffsets_[i] = static_cast<const int*>(doffsets)[i] * el;
+    }
+
+    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    if (MPI_SUCCESS != MPI_Allgatherv((void *)sbuf, scount * el, MPI_BYTE, buf, dcounts_, doffsets_, MPI_BYTE, comm)){
+        fprintf(stderr, "[%s:%d] %s\n",
+                __FILE__, __LINE__, "Error in MPI_Scatter");
+        abort();
+    }
+    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+
+    free(dcounts_);
+    free(doffsets_);
+    ch(arg);
+}
+
 void x10rt_net_alltoallv (x10rt_team team, x10rt_place role, const void *sbuf, const void *soffsets, const void *scounts,
 		void *dbuf, const void *doffsets, const void *dcounts, size_t el, x10rt_completion_handler *ch, void *arg)
 {
