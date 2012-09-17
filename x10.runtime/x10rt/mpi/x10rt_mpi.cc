@@ -2083,6 +2083,8 @@ void x10rt_net_scatterv (x10rt_team team, x10rt_place role, x10rt_place root, co
     	memcpy(dbuf, buf, dcount * el);
     	free(buf);
     }
+    free(counts);
+    free(displs);
     ch(arg);
 }
 
@@ -2135,6 +2137,8 @@ void x10rt_net_gatherv (x10rt_team team, x10rt_place role, x10rt_place root, con
     	memcpy(dbuf, buf, scount * el);
     	free(buf);
     }
+    free(counts);
+    free(displs);
     ch(arg);
 }
 
@@ -2170,6 +2174,10 @@ void x10rt_net_alltoallv (x10rt_team team, x10rt_place role, const void *sbuf, c
     	free(buf);
     }
     */
+    free(scounts_);
+    free(soffsets_);
+    free(dcounts_);
+    free(doffsets_);
     ch(arg);
 }
 
