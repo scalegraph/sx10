@@ -28,15 +28,19 @@ public struct Team {
 
     /** A team that has one member at each place.
      */
-    public static WORLD = Team(0);
+    public static WORLD = Team(0, new Array[Place](PlaceGroup.WORLD.numPlaces(), (i:Int)=>PlaceGroup.WORLD(i)));
 
     /** The underlying representation of a team's identity.
      */
     private id: Int;
+    private places: Array[Place](1);
 
     public def id() = id;
+    public def places() = places;
 
-    private def this (id:Int) { this.id = id; }
+    public def getPlace(role:Int) = places(role);
+    
+    private def this (id:Int, places:Array[Place](1)) { this.id = id; this.places = places; }
 
     /** Create a team by defining the place where each member lives.  This would usually be called before creating an async for each member of the team.
      * @param places The place of each member
@@ -48,7 +52,8 @@ public struct Team {
     private def this (places:IndexedMemoryChunk[Place], count:Int) {
         val result = IndexedMemoryChunk.allocateUninitialized[Int](1);
         finish nativeMake(places, count, result);
-        id = result(0);
+        this.id = result(0);
+        this.places =new Array[Place](places);
     }
 
     private static def nativeMake (places:IndexedMemoryChunk[Place], count:Int, result:IndexedMemoryChunk[Int]) : void {
@@ -417,7 +422,10 @@ public struct Team {
     public def split (role:Int, color:Int, new_role:Int) : Team {
         val result = IndexedMemoryChunk.allocateUninitialized[Int](1);
         finish nativeSplit(id, role, color, new_role, result);
-        return Team(result(0));
+        val new_id = result(0);
+        val place:Int = here.id;
+        val new_places= allgather(new_role, place);
+        return Team(new_id, new Array[Place](new_places.size, (i:Int)=>new Place(new_places(i))));
     }
 
     private static def nativeSplit(id:Int, role:Int, color:Int, new_role:Int, result:IndexedMemoryChunk[Int]) : void {
