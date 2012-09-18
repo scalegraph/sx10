@@ -231,6 +231,21 @@ void x10rt_gatherv (x10rt_team team, x10rt_place role,
     x10rt_lgl_gatherv(team, role, root, sbuf, scount, dbuf, doffsets, dcounts, el, ch, arg);
 }
 
+void x10rt_allgather (x10rt_team team, x10rt_place role,
+		const void *sbuf,
+		void *dbuf,
+		size_t el, size_t count, x10rt_completion_handler *ch, void *arg)
+{
+	x10rt_lgl_allgather(team, role, sbuf, dbuf, el, count, ch, arg);
+}
+
+void x10rt_allgatherv (x10rt_team team, x10rt_place role,
+		const void *sbuf, int scount,
+		void *dbuf, const void *doffsets, const void *dcounts,
+		size_t el, x10rt_completion_handler *ch, void *arg)
+{
+	x10rt_lgl_allgatherv(team, role, sbuf, scount, dbuf, doffsets, dcounts, el, ch, arg);
+}
 void x10rt_alltoall (x10rt_team team, x10rt_place role,
                      const void *sbuf, void *dbuf,
                      size_t el, size_t count,

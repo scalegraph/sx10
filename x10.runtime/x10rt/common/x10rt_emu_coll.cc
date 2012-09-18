@@ -1472,6 +1472,24 @@ void x10rt_emu_gatherv (x10rt_team team, x10rt_place role, x10rt_place root, con
 	abort();
 }
 
+void x10rt_emu_allgather (x10rt_team team, x10rt_place role,
+		const void *sbuf,
+		void *dbuf,
+		size_t el, size_t count, x10rt_completion_handler *ch, void *arg)
+{
+	fprintf(stderr, "X10RT: x10rt_emu_allgather is not implemented.\n");
+	abort();
+}
+
+void x10rt_emu_allgatherv (x10rt_team team, x10rt_place role,
+		const void *sbuf, int scount,
+		void *dbuf, const void *doffsets, const void *dcounts,
+		size_t el, x10rt_completion_handler *ch, void *arg)
+{
+	fprintf(stderr, "X10RT: x10rt_emu_allgatherv is not implemented.\n");
+	abort();
+}
+
 void x10rt_emu_alltoallv (x10rt_team team, x10rt_place role, const void *sbuf, const void *soffsets, const void *scounts,
 		void *dbuf, const void *doffsets, const void *dcounts, size_t el, x10rt_completion_handler *ch, void *arg)
 {

@@ -1025,6 +1025,30 @@ void x10rt_lgl_gatherv (x10rt_team team, x10rt_place role,
     }
 }
 
+void x10rt_lgl_allgather (x10rt_team team, x10rt_place role,
+		const void *sbuf,
+		void *dbuf,
+		size_t el, size_t count, x10rt_completion_handler *ch, void *arg)
+{
+    if (has_collectives_append) {
+        x10rt_net_allgather(team, role, sbuf, dbuf, el, count, ch, arg);
+    } else {
+        x10rt_emu_allgather(team, role, sbuf, dbuf, el, count, ch, arg);
+    }
+}
+
+void x10rt_lgl_allgatherv (x10rt_team team, x10rt_place role,
+		const void *sbuf, int scount,
+		void *dbuf, const void *doffsets, const void *dcounts,
+		size_t el, x10rt_completion_handler *ch, void *arg)
+{
+    if (has_collectives_append) {
+        x10rt_net_allgatherv(team, role, sbuf, scount, dbuf, doffsets, dcounts, el, ch, arg);
+    } else {
+        x10rt_emu_allgatherv(team, role, sbuf, scount, dbuf, doffsets, dcounts, el, ch, arg);
+    }
+}
+
 
 void x10rt_lgl_alltoallv (x10rt_team team, x10rt_place role,
                     const void *sbuf, const void *soffsets, const void *scounts,

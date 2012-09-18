@@ -187,7 +187,7 @@ public struct Team {
      *
      * @param dst_counts The numbers of elements being transferred
      */
-    public def gatherv[T] (role:Int, root:Int, src:Array[T], src_off:Int, dst:Array[T], src_count:Int, dst_offs:Array[Int], dst_counts:Array[Int]) : void {
+    public def gatherv[T] (role:Int, root:Int, src:Array[T], src_off:Int, src_count:Int, dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
         finish nativeGatherv(id, role, root, src.raw(), src_off, src_count, dst.raw(), dst_offs.raw(), dst_counts.raw());
     }
 
@@ -221,6 +221,24 @@ public struct Team {
         @Native("c++", "x10rt_bcast(id, role, root, &src->raw()[src_off], &dst->raw()[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
     }
 
+    public def allgather[T] (role:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
+        finish nativeAllgather(id, role, src.raw(), src_off, dst.raw(), dst_off, count);
+    }
+
+    private static def nativeAllgather[T](id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
+        @Native("java", "x10.x10rt.TeamSupport.nativeAllGather(id, role, src, src_off, dst, dst_off, count);")
+        @Native("c++", "x10rt_allgather(id, role, &src->raw()[src_off], &dst->raw()[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
+    }
+    
+    public def allgatherv[T] (role:Int, root:Int, src:Array[T], src_off:Int, src_count:Int, dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
+        finish nativeAllgatherv(id, role, src.raw(), src_off, src_count, dst.raw(), dst_offs.raw(), dst_counts.raw());
+    }
+
+    private static def nativeAllgatherv[T] (id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, src_count:Int, dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
+        @Native("java", "x10.x10rt.TeamSupport.nativeAllGatherV(id, role, src, src_off, src_count, dst, dst_offs, dst_counts);")
+        @Native("c++", "x10rt_allgatherv(id, role, src->raw(), src_off, src_count, dst->raw(), dst_offs->raw(), dst_counts->raw(), sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
+    }
+
     /** Blocks until all members have received their part of each other member's array.
      * Each member receives a contiguous and distinct portion of the src array.
      * src should be structured so that the portions are sorted in ascending
@@ -248,6 +266,16 @@ public struct Team {
         @Native("java", "x10.x10rt.TeamSupport.nativeAllToAll(id, role, src, src_off, dst, dst_off, count);")
         @Native("c++", "x10rt_alltoall(id, role, &src->raw()[src_off], &dst->raw()[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
     }
+    
+    public def alltoallv[T] (role:Int, root:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
+        finish nativeAlltoallv(id, role, src.raw(), src_offs.raw(), src_counts.raw(), dst.raw(), dst_offs.raw(), dst_counts.raw());
+    }
+
+    private static def nativeAlltoallv[T] (id:Int, role:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], src_counts:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
+        @Native("java", "x10.x10rt.TeamSupport.nativeAllToAllV(id, role, src, src_offs, src_counts, dst, dst_offs, dst_counts);")
+        @Native("c++", "x10rt_alltoallv(id, role, src->raw(), src_offs->raw(), src_counts->raw(), dst->raw(), dst_offs->raw(), dst_counts->raw(), sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
+    }
+
 
     /** Indicates the operation to perform when reducing. */
     public static val ADD = 0;
@@ -403,6 +431,38 @@ public struct Team {
     public def equals(that:Any) = that instanceof Team && (that as Team).id==this.id;
     public def hashCode()=id;
 
+    class OneSidedContext[T] {
+//    	type T = Long;
+    	private vertices: Array[T];
+    	private getter: (idx: Int)=>T;
+//    	private actions: Array[ArrayList[T]];
+    	private actions: ArrayList[()=>void];
+
+    	public def this (vertices: Array[T], getter: (Int)=>T) {
+    		this.vertices = vertices;
+    		this.getter = getter;
+//    		this.actions = new Array[ArrayList[T]](nativeSize(id), (int)=>new ArrayList[T]());
+    		this.actions = new ArrayList[()=>void]();
+    	}
+    	public def get[T](dst_ind: Int, src_role: Int, src_ind: Int) : void {
+    		atomic actions.add(()=>{
+//    			vertices(dst_ind) = at(comm.getPlace(src_role)) getter(src_ind);
+    		});
+    	}
+    	public def map[T](vertices: Region{rank==1}, f: (Int)=>void) : void {
+    		for ([i] in vertices) async f(i);
+    	}
+    	public def executeAlone() : void {
+    		for (f in actions) async f();
+    	}
+    	public def executeWithAll() : void {
+    		executeAlone();
+    	}
+    }
+    
+    public def createOneSidedContext[T](vertices: Array[T], getter: (Int)=>T) : OneSidedContext[T] {
+    	return new OneSidedContext[T](vertices, getter);
+    }
 }
 
 // vim: shiftwidth=4:tabstop=4:expandtab

@@ -140,8 +140,18 @@ public class TeamSupport {
 	                                 IndexedMemoryChunk<?> dst, IndexedMemoryChunk<?> dst_offs, IndexedMemoryChunk<?> dst_counts) {
         aboutToDie("nativeGatherV");
     }
+
+    public static void nativeAllGather(int id, int role, IndexedMemoryChunk<?> src, int src_offs,
+	                                 IndexedMemoryChunk<?> dst, int dst_off,  int counts) {
+        aboutToDie("nativeAllGather");
+    }
     
-    public static void nativeAllToAllV(int id, int role, int root, IndexedMemoryChunk<?> src, IndexedMemoryChunk<?> src_offs, IndexedMemoryChunk<?> src_counts, 
+    public static void nativeAllGatherV(int id, int role, IndexedMemoryChunk<?> src, int src_offs, int src_counts,
+	                                 IndexedMemoryChunk<?> dst, IndexedMemoryChunk<?> dst_offs, IndexedMemoryChunk<?> dst_counts) {
+        aboutToDie("nativeAllGatherV");
+    }
+    
+    public static void nativeAllToAllV(int id, int role, IndexedMemoryChunk<?> src, IndexedMemoryChunk<?> src_offs, IndexedMemoryChunk<?> src_counts, 
 	                                 IndexedMemoryChunk<?> dst, IndexedMemoryChunk<?> dst_offs, IndexedMemoryChunk<?> dst_counts) {
         aboutToDie("nativeAllToAllV");
     }
