@@ -468,7 +468,7 @@ public struct Team {
     public def equals(that:Any) = that instanceof Team && (that as Team).id==this.id;
     public def hashCode()=id;
 
-    class OneSidedContext[T] {
+    public class OneSidedContext[T] {
 //    	type T = Long;
     	private vertices: Array[T](1);
     	private getter: (idx: Int)=>T;
@@ -481,17 +481,17 @@ public struct Team {
 //    		this.actions = new Array[ArrayList[T]](nativeSize(id), (int)=>new ArrayList[T]());
     		this.actions = new ArrayList[()=>void]();
     	}
-    	public def get[T](dst_ind: Int, src_role: Int, src_ind: Int) : void {
+    	public def get(dst_ind: Int, src_role: Int, src_ind: Int) : void {
     		atomic actions.add(()=>{
     			val v = at(getPlace(src_role)) getter(src_ind);
     			vertices(dst_ind) = v;
     		});
     	}
-    	public def map[T](vertices: Region{rank==1}, f: (Int)=>void) : void {
-    		for ([i] in vertices) async f(i);
+    	public def map(vertices: Iterable[Int], f: (Int)=>void) : void {
+    		finish for (i in vertices) async f(i);
     	}
     	public def executeAlone() : void {
-    		for (f in actions) async f();
+    		finish for (f in actions) async f();
     	}
     	public def executeWithAll() : void {
     		executeAlone();
