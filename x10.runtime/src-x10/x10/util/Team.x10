@@ -227,16 +227,16 @@ public struct Team {
     }
 
     public def allgather[T] (role:Int, src:T) : Array[T](1) {
-    	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](size());
+    	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
     	src_raw(0) = src;
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](size());
-        finish nativeAllgather(id, role, src_raw, 0, dst_raw, 0, size());
+        finish nativeAllgather(id, role, src_raw, 0, dst_raw, 0, 1);
         return new Array[T](dst_raw);
     }
 
     public def allgather[T] (role:Int, src:Array[T]) : Array[T](1) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](src.size * size());
-        finish nativeAllgather(id, role, src.raw(), 0, dst_raw, 0, src.size * size());
+        finish nativeAllgather(id, role, src.raw(), 0, dst_raw, 0, src.size);
         return new Array[T](dst_raw);
     }
 
@@ -424,8 +424,14 @@ public struct Team {
         finish nativeSplit(id, role, color, new_role, result);
         val new_id = result(0);
         val place:Int = here.id;
-        val new_places= allgather(new_role, place);
-        return Team(new_id, new Array[Place](new_places.size, (i:Int)=>new Place(new_places(i))));
+        val new_size = nativeSize (new_id);
+        
+    	val src_raw = IndexedMemoryChunk.allocateUninitialized[Int](1);
+    	src_raw(0) = place;
+    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[Int](new_size);
+        finish nativeAllgather(new_id, new_role, src_raw, 0, dst_raw, 0, 1);
+        
+        return Team(new_id, new Array[Place](dst_raw.length(), (i:Int)=>new Place(dst_raw(i))));
     }
 
     private static def nativeSplit(id:Int, role:Int, color:Int, new_role:Int, result:IndexedMemoryChunk[Int]) : void {
@@ -448,19 +454,19 @@ public struct Team {
         @Native("c++", "x10rt_team_del(id, role, x10aux::coll_handler, x10aux::coll_enter());") {}
     }
 
-    public def toString() = "Team(" + this.id + ")";
+    public def toString() = "Team(" + this.id + "," + this.places +  ")";
     public def equals(that:Team) = that.id==this.id;
     public def equals(that:Any) = that instanceof Team && (that as Team).id==this.id;
     public def hashCode()=id;
 
     class OneSidedContext[T] {
 //    	type T = Long;
-    	private vertices: Array[T];
+    	private vertices: Array[T](1);
     	private getter: (idx: Int)=>T;
 //    	private actions: Array[ArrayList[T]];
     	private actions: ArrayList[()=>void];
 
-    	public def this (vertices: Array[T], getter: (Int)=>T) {
+    	public def this (vertices: Array[T](1), getter: (Int)=>T) {
     		this.vertices = vertices;
     		this.getter = getter;
 //    		this.actions = new Array[ArrayList[T]](nativeSize(id), (int)=>new ArrayList[T]());
@@ -468,7 +474,8 @@ public struct Team {
     	}
     	public def get[T](dst_ind: Int, src_role: Int, src_ind: Int) : void {
     		atomic actions.add(()=>{
-//    			vertices(dst_ind) = at(comm.getPlace(src_role)) getter(src_ind);
+    			val v = at(getPlace(src_role)) getter(src_ind);
+    			vertices(dst_ind) = v;
     		});
     	}
     	public def map[T](vertices: Region{rank==1}, f: (Int)=>void) : void {
@@ -482,7 +489,7 @@ public struct Team {
     	}
     }
     
-    public def createOneSidedContext[T](vertices: Array[T], getter: (Int)=>T) : OneSidedContext[T] {
+    public def createOneSidedContext[T](vertices: Array[T](1), getter: (Int)=>T) : OneSidedContext[T] {
     	return new OneSidedContext[T](vertices, getter);
     }
 }
