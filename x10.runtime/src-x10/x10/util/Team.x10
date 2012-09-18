@@ -221,6 +221,20 @@ public struct Team {
         @Native("c++", "x10rt_bcast(id, role, root, &src->raw()[src_off], &dst->raw()[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
     }
 
+    public def allgather[T] (role:Int, src:T) : Array[T](1) {
+    	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](size());
+    	src_raw(0) = src;
+    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](size());
+        finish nativeAllgather(id, role, src_raw, 0, dst_raw, 0, size());
+        return new Array[T](dst_raw);
+    }
+
+    public def allgather[T] (role:Int, src:Array[T]) : Array[T](1) {
+    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](src.size * size());
+        finish nativeAllgather(id, role, src.raw(), 0, dst_raw, 0, src.size * size());
+        return new Array[T](dst_raw);
+    }
+
     public def allgather[T] (role:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
         finish nativeAllgather(id, role, src.raw(), src_off, dst.raw(), dst_off, count);
     }
