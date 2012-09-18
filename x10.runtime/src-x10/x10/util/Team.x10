@@ -249,6 +249,16 @@ public struct Team {
         @Native("c++", "x10rt_allgather(id, role, &src->raw()[src_off], &dst->raw()[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
     }
     
+    public def allgatherv[T] (role:Int, src:Array[T]) : Array[T](1) {
+    	val dst_counts = allgather(role, src.size as Int);
+    	val dst_offs = dst_counts.scan((x:Int, y:Int)=> x+y, 0);
+    	Console.OUT.println("allgatherv: " + dst_offs);
+    	
+    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0));
+        finish nativeAllgatherv(id, role, src.raw(), 0, src.size, dst_raw, dst_offs.raw(), dst_counts.raw());
+        return new Array[T](dst_raw);
+    }
+
     public def allgatherv[T] (role:Int, root:Int, src:Array[T], src_off:Int, src_count:Int, dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
         finish nativeAllgatherv(id, role, src.raw(), src_off, src_count, dst.raw(), dst_offs.raw(), dst_counts.raw());
     }
