@@ -252,7 +252,6 @@ public struct Team {
     public def allgatherv[T] (role:Int, src:Array[T]) : Array[T](1) {
     	val dst_counts = allgather(role, src.size as Int);
     	val dst_offs = dst_counts.scan((x:Int, y:Int)=> x+y, 0);
-    	Console.OUT.println("allgatherv: " + dst_offs);
     	
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0));
         finish nativeAllgatherv(id, role, src.raw(), 0, src.size, dst_raw, dst_offs.raw(), dst_counts.raw());
