@@ -465,9 +465,9 @@ public struct Team {
         @Native("c++", "x10rt_alltoallv(id, role, src->raw(), src_offs->raw(), src_counts->raw(), dst->raw(), dst_offs->raw(), dst_counts->raw(), sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
     }
 
-    public def alltoallvAuto[T] (role:Int, src:Array[T], src_counts:Array[Int]) : Array[T](1) {
+    public def alltoallvAuto[T] (role:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int]) : Array[T](1) {
     	assert(src_counts.size == size());
-    	val src_offs = src_counts.scan((x:Int, y:Int)=> x+y, 0);
+    	assert(src_offs.size == size());
     	val dst_counts = alltoall(role, src_counts);
     	val dst_offs = dst_counts.scan((x:Int, y:Int)=> x+y, 0);
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0));
@@ -475,8 +475,13 @@ public struct Team {
         return new Array[T](dst_raw);
     }
     
+    public def alltoallvAuto[T] (role:Int, src:Array[T], src_counts:Array[Int]) : Array[T](1) {
+    	val src_offs = src_counts.scan((x:Int, y:Int)=> x+y, 0);
+        return alltoallvAuto[T](role, src, src_counts, src_offs);
+    }
+    
     public def alltoallvAuto[T] (role:Int, src:Array[Array[T](1)](1)) : Array[T](1) {
-    	val src_sizes = src.map((x:Array[T])=>x.size);
+    	val src_sizes = src.map((x:Array[T])=>x.size as Int);
     	val src_size = src_sizes.reduce((x:Int, y:Int)=>x+y, 0);
     	val src_offs = src_sizes.scan((x:Int, y:Int)=> x+y, 0);
     	val find_arr = (i:Int) => {
@@ -486,7 +491,7 @@ public struct Team {
     	};
     	val flatten_src = new Array[T](src_size, (i:Int)=> src(find_arr(i))(i - src_offs(find_arr(i))));
     	Console.OUT.println("alltoallv: src: " + src + ", flatten: " + flatten_src);
-    	return alltoallv(role, flatten_src, src_sizes);
+    	return alltoallvAuto(role, flatten_src, src_sizes);
     }
     
 
