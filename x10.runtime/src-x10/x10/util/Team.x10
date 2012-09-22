@@ -47,6 +47,15 @@ public struct Team {
 
     public def getPlace(role:Int) = places(role);
     
+    public def getRole(place:Place) = {
+    	var role:Int = -1;
+    	for ([p] in places) {
+    		if (places(p) == place)
+    			role = p;
+    	}
+    	return role;
+    }
+    
     private def this (id:Int, places:Array[Place](1)) { this.id = id; this.places = places; }
 
     /** Create a team by defining the place where each member lives.  This would usually be called before creating an async for each member of the team.
@@ -133,21 +142,6 @@ public struct Team {
         return new Array[T](dst_raw);
     }
 
-    public def scatterSendAuto[T] (role:Int, root:Int, src:Array[T]) : Array[T](1) {
-    	assert(src.size % size() == 0);
-    	val count = bcastSend1(role, root, src.size / size());
-    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
-        finish nativeScatter(id, role, root, src.raw(), 0, dst_raw, 0, count);
-        return new Array[T](dst_raw);
-    }
-
-    public def scatterRecvAuto[T] (role:Int, root:Int) : Array[T](1) {
-    	val count = bcastRecv1[Int](role, root);
-    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
-        finish nativeScatter(id, role, root, dummyChunk[T](), 0, dst_raw, 0, count);
-        return new Array[T](dst_raw);
-    }
-
 
     /** Almost same as scatter except for permitting messages to have different sizes.
      *
@@ -177,44 +171,15 @@ public struct Team {
         @Native("c++", "x10rt_scatterv(id, role, root, src->raw(), src_offs->raw(), src_counts->raw(), &dst->raw()[dst_off], dst_count, sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
     }
     
-    public def scattervSendAuto[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int]) : Array[T](1) {
+    public def scattervSend[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int], dst_count:Int) : Array[T](1) {
     	assert(src_counts.size == size());
     	assert(src_offs.size == size());
-    	val dst_count = scatterSend(role, root, src_counts, 1)(0);
     	val dst_raw : IndexedMemoryChunk[T] = IndexedMemoryChunk.allocateUninitialized[T](dst_count);
     	finish nativeScatterv(id, role, root, src.raw(), src_offs.raw(), src_counts.raw(), dst_raw, 0, dst_count);
     	return new Array[T](dst_raw);
     }
     
-    public def scattervSendAuto[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int](1)) : Array[T](1) {
-    	val src_offs = countsToOffs(src_counts);
-    	return scattervSendAuto[T](role, root, src, src_counts, src_offs);
-    }
-    
-    public def scattervSendAuto[T] (role:Int, root:Int, src:Array[Array[T](1)](1)) : Array[T](1) {
-    	val src_sizes = src.map((x:Array[T])=>x.size as Int);
-    	val src_size = src_sizes.reduce((x:Int, y:Int)=>x+y, 0);
-    	val src_acc = src_sizes.scan((x:Int, y:Int)=> x+y, 0);
-    	val src_offs = new Array[Int](src_acc.size, (i:Int)=>(i==0) ? 0 : src_acc(i-1));
-    	val find_arr = (i:Int) => {
-    		assert(i < src_size);
-    		val ind = ArrayUtils.binarySearch(src_acc, i );
-    		if (ind >= 0) {
-    			var max_ind:Int = ind;
-    			while (max_ind < src_acc.size - 1 && src_acc(max_ind) == src_acc(max_ind + 1)) ++max_ind;
-    			assert(max_ind + 1< src_acc.size);
-    			return max_ind + 1;
-    		}
-    		else return -(ind +1);
-    	};
-    	val flatten_src = new Array[T](src_size, (i:Int)=> 
-    		src(find_arr(i))(i - src_offs(find_arr(i)))
-    	);
-    	return scattervSendAuto[T](role, root, flatten_src, src_sizes, src_offs);
-    }
-    
-    public def scattervRecvAuto[T] (role:Int, root:Int) : Array[T](1) {
-    	val dst_count = scatterRecv[Int](role, root, 1)(0);
+    public def scattervRecv[T] (role:Int, root:Int, dst_count:Int) : Array[T](1) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](dst_count);
     	finish nativeScatterv(id, role, root, dummyChunk[T](), dummyChunk[Int](), dummyChunk[Int](), dst_raw, 0, dst_count);
     	return new Array[T](dst_raw);
@@ -314,19 +279,14 @@ public struct Team {
         return new Array[T](dst_raw);
     }
 
+    private static def countsToOffs (counts:Array[Int](1)) : Array[Int](1) = {
+    	val acc = counts.scan((x:Int, y:Int)=> x+y, 0);
+    	return new Array[Int](counts.size, (i:Int)=>(i==0) ? 0 : acc(i-1));
+    }
+    
     public def gathervRecv[T] (role:Int, root:Int, src:Array[T], dst_counts:Array[Int](1) ) : Array[T](1) {
     	val dst_offs = countsToOffs(dst_counts);
         return gathervRecv[T](role, root, src, dst_offs, dst_counts);
-    }
-
-    public def gathervSendAuto[T] (role:Int, root:Int, src:Array[T]) : void {
-    	gatherSend1(role, root, src.size);
-    	gathervSend(role, root, src);
-    }
-
-    public def gathervRecvAuto[T] (role:Int, root:Int, src:Array[T]) : Array[T](1) {
-    	val dst_counts = gatherRecv1[Int](role, root, src.size);
-        return gathervRecv[T](role, root, src, dst_counts);
     }
 
     /** Blocks until all members have received root's array.
@@ -380,16 +340,6 @@ public struct Team {
         return new Array[T](dst_raw);
     }
 
-    public def bcastSendAuto[T] (role:Int, root:Int, src:Array[T]) : Array[T](1) {
-    	val count = bcastSend1(role, root, src.size);
-        return bcastSend(role, root, src, count);
-    }
-
-    public def bcastRecvAuto[T] (role:Int, root:Int) : Array[T](1) {
-    	val count = bcastRecv1[Int](role, root);
-        return bcastRecv[T](role, root, count);
-    }
-
     public def allgather1[T] (role:Int, src:T) : Array[T](1) {
     	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
     	src_raw(0) = src;
@@ -413,10 +363,7 @@ public struct Team {
         @Native("c++", "x10rt_allgather(id, role, &src->raw()[src_off], &dst->raw()[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
     }
     
-    public def allgathervAuto[T] (role:Int, src:Array[T]) : Array[T](1) {
-    	val dst_counts = allgather1(role, src.size as Int);
-    	val dst_offs = countsToOffs(dst_counts);
-    	
+    public def allgatherv[T] (role:Int, src:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : Array[T](1) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0));
         finish nativeAllgatherv(id, role, src.raw(), 0, src.size, dst_raw, dst_offs.raw(), dst_counts.raw());
         return new Array[T](dst_raw);
@@ -475,49 +422,16 @@ public struct Team {
         @Native("c++", "x10rt_alltoallv(id, role, src->raw(), src_offs->raw(), src_counts->raw(), dst->raw(), dst_offs->raw(), dst_counts->raw(), sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
     }
 
-    private static def countsToOffs (counts:Array[Int](1)) : Array[Int](1) = {
-    	val acc = counts.scan((x:Int, y:Int)=> x+y, 0);
-    	return new Array[Int](counts.size, (i:Int)=>(i==0) ? 0 : acc(i-1));
-    }
-    
-    public def alltoallvAuto[T] (role:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int]) : Array[T](1) {
+    public def alltoallv[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst_offs:Array[Int], dst_counts:Array[Int]) : Array[T](1) {
     	assert(src_counts.size == size());
     	assert(src_offs.size == size());
+    	assert(dst_counts.size == size());
+    	assert(dst_offs.size == size());
     	assert(size() > 0);
-    	val dst_counts = alltoall(role, src_counts);
-    	val dst_offs = countsToOffs(dst_counts);
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0));
         finish nativeAlltoallv(id, role, src.raw(), src_offs.raw(), src_counts.raw(), dst_raw, dst_offs.raw(), dst_counts.raw());
         return new Array[T](dst_raw);
     }
-    
-    public def alltoallvAuto[T] (role:Int, src:Array[T], src_counts:Array[Int](1)) : Array[T](1) {
-    	val src_offs = countsToOffs(src_counts);
-        return alltoallvAuto[T](role, src, src_counts, src_offs);
-    }
-    
-    public def alltoallvAuto[T] (role:Int, src:Array[Array[T](1)](1)) : Array[T](1) {
-    	val src_sizes = src.map((x:Array[T])=>x.size as Int);
-    	val src_size = src_sizes.reduce((x:Int, y:Int)=>x+y, 0);
-    	val src_acc = src_sizes.scan((x:Int, y:Int)=> x+y, 0);
-    	val src_offs = new Array[Int](src_acc.size, (i:Int)=>(i==0) ? 0 : src_acc(i-1));
-    	val find_arr = (i:Int) => {
-    		assert(i < src_size);
-    		val ind = ArrayUtils.binarySearch(src_acc, i );
-    		if (ind >= 0) {
-    			var max_ind:Int = ind;
-    			while (max_ind < src_acc.size - 1 && src_acc(max_ind) == src_acc(max_ind + 1)) ++max_ind;
-    			assert(max_ind + 1< src_acc.size);
-    			return max_ind + 1;
-    		}
-    		else return -(ind +1);
-    	};
-    	val flatten_src = new Array[T](src_size, (i:Int)=> 
-    		src(find_arr(i))(i - src_offs(find_arr(i)))
-    	);
-    	return alltoallvAuto(role, flatten_src, src_sizes, src_offs);
-    }
-    
 
     /** Indicates the operation to perform when reducing. */
     public static val ADD = 0;
