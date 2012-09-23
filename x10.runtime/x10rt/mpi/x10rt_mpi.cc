@@ -2063,14 +2063,18 @@ void x10rt_net_scatterv (x10rt_team team, x10rt_place role, x10rt_place root, co
     X10RT_NET_DEBUG("dcount=%d", dcount);
     MPI_Comm comm = mpi_tdb.comm(team);
     int gsize = x10rt_net_team_sz(team);
-    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(dcount * el) : dbuf;
-    int *counts = ChkAlloc<int>(gsize * el);
-    int *displs = ChkAlloc<int>(gsize * el);
-    for (int i = 0; i < gsize; ++i) {
-    	counts[i] = static_cast<const int*>(scounts)[i] * el;
-    	displs[i] = static_cast<const int*>(soffsets)[i] * el;
+    void *buf = dbuf;
+    int *counts = (role == root) ? ChkAlloc<int>(gsize * el) : NULL;
+    int *displs = (role == root) ? ChkAlloc<int>(gsize * el) : NULL;
+    X10RT_NET_DEBUG("buf=%x, counts=%x, displs=%x", buf, counts, displs);
+    if (role == root) {
+    	for (int i = 0; i < gsize; ++i) {
+    		counts[i] = static_cast<const int*>(scounts)[i] * el;
+    		displs[i] = static_cast<const int*>(soffsets)[i] * el;
+    	}
     }
 
+    X10RT_NET_DEBUG("%s", "pre scatterv");
     LOCK_IF_MPI_IS_NOT_MULTITHREADED;
     if (MPI_SUCCESS != MPI_Scatterv((void *)sbuf, counts, displs, MPI_BYTE, buf, dcount * el, MPI_BYTE, root, comm)){
         fprintf(stderr, "[%s:%d] %s\n",
@@ -2078,6 +2082,7 @@ void x10rt_net_scatterv (x10rt_team team, x10rt_place role, x10rt_place root, co
         abort();
     }
     UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    X10RT_NET_DEBUG("%s", "pro scatterv");
 
     if (sbuf == dbuf) {
     	memcpy(dbuf, buf, dcount * el);
@@ -2105,6 +2110,7 @@ void x10rt_net_gather (x10rt_team team, x10rt_place role, x10rt_place root, cons
     }
     UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
 
+    X10RT_NET_DEBUG("%s", "done");
     if (sbuf == dbuf) {
     	memcpy(dbuf, buf, count * el);
     	free(buf);
@@ -2117,12 +2123,14 @@ void x10rt_net_gatherv (x10rt_team team, x10rt_place role, x10rt_place root, con
 {
     MPI_Comm comm = mpi_tdb.comm(team);
     int gsize = x10rt_net_team_sz(team);
-    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(scount * el) : dbuf;
-    int *counts = ChkAlloc<int>(gsize * el);
-    int *displs = ChkAlloc<int>(gsize * el);
-    for (int i = 0; i < gsize; ++i) {
-    	counts[i] = static_cast<const int*>(dcounts)[i] * el;
-    	displs[i] = static_cast<const int*>(doffsets)[i] * el;
+    void *buf = dbuf;
+    int *counts = (role == root) ? ChkAlloc<int>(gsize * el) : NULL;
+    int *displs = (role == root) ? ChkAlloc<int>(gsize * el) : NULL;
+    if (role == root) {
+    	for (int i = 0; i < gsize; ++i) {
+    		counts[i] = static_cast<const int*>(dcounts)[i] * el;
+    		displs[i] = static_cast<const int*>(doffsets)[i] * el;
+    	}
     }
 
     LOCK_IF_MPI_IS_NOT_MULTITHREADED;

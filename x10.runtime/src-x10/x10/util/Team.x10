@@ -217,26 +217,26 @@ public struct Team {
     }
 
     public def gatherSend[T] (role:Int, root:Int, src:Array[T], count:Int) : void {
-        finish nativeScatter(id, role, root, src.raw(), 0, dummyChunk[T](), 0, count);
+        finish nativeGather(id, role, root, src.raw(), 0, dummyChunk[T](), 0, count);
     }
 
     public def gatherRecv[T] (role:Int, root:Int, src:Array[T], count:Int) : Array[T](1) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
-        finish nativeScatter(id, role, root, src.raw(), 0, dst_raw, 0, count);
+        finish nativeGather(id, role, root, src.raw(), 0, dst_raw, 0, count);
         return new Array[T](dst_raw);
     }
 
     public def gatherSend1[T] (role:Int, root:Int, src:T) : void {
     	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
     	src_raw(0) = src;
-        finish nativeScatter(id, role, root, src_raw, 0, dummyChunk[T](), 0, 1);
+        finish nativeGather(id, role, root, src_raw, 0, dummyChunk[T](), 0, 1);
     }
 
     public def gatherRecv1[T] (role:Int, root:Int, src:T) : Array[T](1) {
     	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
     	src_raw(0) = src;
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](size());
-        finish nativeScatter(id, role, root, src_raw, 0, dst_raw, 0, 1);
+        finish nativeGather(id, role, root, src_raw, 0, dst_raw, 0, 1);
         return new Array[T](dst_raw);
     }
 
