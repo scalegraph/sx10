@@ -31,6 +31,10 @@ public class StringBuilder implements Builder[Any,String] {
     public def toString() {
       return result();
     }
+    
+    public def clear() {
+    	buf.clear();
+    }
 
     public def add(o:Any): StringBuilder {
         if (o == null)

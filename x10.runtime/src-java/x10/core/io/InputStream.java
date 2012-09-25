@@ -82,18 +82,18 @@ public class InputStream extends Ref {
         }
     }
 
-    public void read(byte[] b, int off, int len) {
+    public int read(byte[] b, int off, int len) {
         try {
-            stream.read(b, off, len);
+            return stream.read(b, off, len);
         } catch (java.io.IOException e) {
             throw new x10.io.IOException(e.getMessage());
         }
     }
 
     // XTENLANG-2680
-    public void read__0$1x10$lang$Byte$2(x10.array.Array r, int off, int len) {
+    public int read__0$1x10$lang$Byte$2$O(x10.array.Array r, int off, int len) {
         try {
-            stream.read(r.raw().getByteArray(), off, len);
+            return stream.read(r.raw().getByteArray(), off, len);
         } catch (java.io.IOException e) {
             throw new x10.io.IOException(e.getMessage());
         }

@@ -41,7 +41,7 @@ public abstract class Reader {
      * This is significantly faster than read(Marshal.BYTE,r,off,len)
      * since this reads multiple bytes at once if possible.
      */
-    public abstract def read(r:Rail[Byte], off:Int, len:Int): void; //throws IOException
+    public abstract def read(r:Rail[Byte], off:Int, len:Int): Int; //throws IOException
 
     /**
      * How many bytes can be read from this stream without blocking?
@@ -121,7 +121,8 @@ public abstract class Reader {
     /**
      * Read the next line from the input; throws IOException if none.
      */
-    public def readLine():String = Marshal.LINE.read(this);
+    private val lineMarshal = new Marshal.LineMarshal();
+    public def readLine():String = lineMarshal.read(this);
 
     /**
      * Read the next value from the input; throws IOException if none.
@@ -130,23 +131,26 @@ public abstract class Reader {
 
     /**
      * Fill the argument array by reading the next a.size elements. 
-     * Throws IOException if not enough elements.
+     * Returns: The number of elements read.
      */
-    public final def read[T](m:Marshal[T], a:Array[T](1)):void { 
-        read[T](m, a, 0, a.size); 
-    }
+    public final def read[T](m:Marshal[T], a:Array[T](1)):Int = read[T](m, a, 0, a.size);
 
     /**
      * Fill len elements of the argument array starting at off.
      * Throws IOException if not enough elements.
      */
-    public final def read[T](m: Marshal[T], a:Array[T](1), off:Int, len:Int):void {
-        for (var i: Int = off; i < off+len; i++) {
-            a(i) = read[T](m);
+    public final def read[T](m: Marshal[T], a:Array[T](1), off:Int, len:Int):Int {
+        var i: Int = off;
+        try {
+	        for ( ; i < off+len; i++) {
+	            a(i) = read[T](m);
+	        }
+        } catch (e:IOException) {
         }
+        return i - off;
     }
     
-    public def lines(): ReaderIterator[String] = new ReaderIterator[String](Marshal.LINE, this);
+    public def lines(): ReaderIterator[String] = new ReaderIterator[String](new Marshal.LineMarshal(), this);
     public def chars(): ReaderIterator[Char] = new ReaderIterator[Char](Marshal.CHAR, this);
     public def bytes(): ReaderIterator[Byte] = new ReaderIterator[Byte](Marshal.BYTE, this);
 }

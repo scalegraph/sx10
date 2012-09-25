@@ -31,7 +31,7 @@ public class PutbackReader extends FilterReader {
        return super.read();
     }
 
-    public def read(r:Rail[Byte], off:Int, len:Int): void //throws IOException 
+    public def read(r:Rail[Byte], off:Int, len:Int)
     {
     	var read:Int = 0;
     	while (putback.length() > 0) {
@@ -41,7 +41,7 @@ public class PutbackReader extends FilterReader {
     		r(read) = p;
     		++read;
     	}
-    	if (read < len) super.read(r,off+read,len-read);
+    	return read + (read < len ? super.read(r,off+read,len-read) : 0);
     }
 
     public def putback(p: Byte) {

@@ -29,12 +29,14 @@ public interface Marshal[T] {
     public static ULONG = new ULongMarshal();
     public static FLOAT = new FloatMarshal();
     public static DOUBLE = new DoubleMarshal();
-    public static LINE = new LineMarshal();
+    // We shall not use LineMarshal as static object due to its low performance.
+ //   public static LINE = new LineMarshal();
     
     public static class LineMarshal implements Marshal[String] {
+        val sb = new StringBuilder();
         public def read(r: Reader):String {
-            val sb = new StringBuilder();
             var ch: Char;
+            sb.clear();
             try {
                 while(true) {
                     ch = CHAR.read(r);
