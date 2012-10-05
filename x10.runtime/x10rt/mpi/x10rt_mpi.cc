@@ -1308,6 +1308,7 @@ private:
             int *ranks = new int[members];
             for (x10rt_place i = 0; i < members; ++i) {
                 ranks[i] = placev[i];
+                X10RT_NET_DEBUG("placev[%d} = %d", i, placev[i]);
             }
             MPI_Group grp, MPI_GROUP_WORLD;
             LOCK_IF_MPI_IS_NOT_MULTITHREADED;
@@ -1423,7 +1424,7 @@ static void team_new_recv (const x10rt_msg_params *p)
 void send_team_new (x10rt_team teamc, x10rt_team *teamv, x10rt_place placec, x10rt_place *placev,
 		x10rt_remote_ptr ch_, x10rt_remote_ptr arg_)
 {
-    X10RT_NET_DEBUG("%s", "called");
+    X10RT_NET_DEBUG("called: teamc=%d placec=%d", teamc, placec);
 
     x10rt_place home = x10rt_net_here();
 
