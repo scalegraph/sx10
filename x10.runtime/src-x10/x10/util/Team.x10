@@ -130,13 +130,13 @@ public struct Team {
     
     private static def dummyChunk[T]() { return IndexedMemoryChunk.allocateUninitialized[T](0); }; 
     
-    public def scatterSend[T] (role:Int, root:Int, src:Array[T], count:Int) : Array[T](1) {
+    public def scatterSend[T] (role:Int, root:Int, src:Array[T], count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
         finish nativeScatter(id, role, root, src.raw(), 0, dst_raw, 0, count);
         return new Array[T](dst_raw);
     }
 
-    public def scatterRecv[T] (role:Int, root:Int, count:Int) : Array[T](1) {
+    public def scatterRecv[T] (role:Int, root:Int, count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
         finish nativeScatter(id, role, root, dummyChunk[T](), 0, dst_raw, 0, count);
         return new Array[T](dst_raw);
@@ -171,7 +171,7 @@ public struct Team {
         @Native("c++", "x10rt_scatterv(id, role, root, src->raw(), src_offs->raw(), src_counts->raw(), &dst->raw()[dst_off], dst_count, sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
     }
     
-    public def scattervSend[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int], dst_count:Int) : Array[T](1) {
+    public def scattervSend[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int], dst_count:Int) {
     	assert(src_counts.size == size());
     	assert(src_offs.size == size());
     	val dst_raw : IndexedMemoryChunk[T] = IndexedMemoryChunk.allocateUninitialized[T](dst_count);
@@ -179,7 +179,7 @@ public struct Team {
     	return new Array[T](dst_raw);
     }
     
-    public def scattervRecv[T] (role:Int, root:Int, dst_count:Int) : Array[T](1) {
+    public def scattervRecv[T] (role:Int, root:Int, dst_count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](dst_count);
     	finish nativeScatterv(id, role, root, dummyChunk[T](), dummyChunk[Int](), dummyChunk[Int](), dst_raw, 0, dst_count);
     	return new Array[T](dst_raw);
@@ -220,7 +220,7 @@ public struct Team {
         finish nativeGather(id, role, root, src.raw(), 0, dummyChunk[T](), 0, count);
     }
 
-    public def gatherRecv[T] (role:Int, root:Int, src:Array[T], count:Int) : Array[T](1) {
+    public def gatherRecv[T] (role:Int, root:Int, src:Array[T], count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
         finish nativeGather(id, role, root, src.raw(), 0, dst_raw, 0, count);
         return new Array[T](dst_raw);
@@ -232,7 +232,7 @@ public struct Team {
         finish nativeGather(id, role, root, src_raw, 0, dummyChunk[T](), 0, 1);
     }
 
-    public def gatherRecv1[T] (role:Int, root:Int, src:T) : Array[T](1) {
+    public def gatherRecv1[T] (role:Int, root:Int, src:T) {
     	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
     	src_raw(0) = src;
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](size());
@@ -273,18 +273,18 @@ public struct Team {
     	finish nativeGatherv(id, role, root, src.raw(), 0, src.size, dummyChunk[T](), dummyChunk[Int](), dummyChunk[Int]());
     }
     
-    public def gathervRecv[T] (role:Int, root:Int, src:Array[T], dst_offs:Array[Int], dst_counts:Array[Int] ) : Array[T](1) {
+    public def gathervRecv[T] (role:Int, root:Int, src:Array[T], dst_offs:Array[Int], dst_counts:Array[Int] ) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0));
     	finish nativeGatherv(id, role, root, src.raw(), 0, src.size, dst_raw, dst_offs.raw(), dst_counts.raw());
         return new Array[T](dst_raw);
     }
 
-    private static def countsToOffs (counts:Array[Int](1)) : Array[Int](1) = {
+    private static def countsToOffs (counts:Array[Int](1)) {
     	val acc = counts.scan((x:Int, y:Int)=> x+y, 0);
     	return new Array[Int](counts.size, (i:Int)=>(i==0) ? 0 : acc(i-1));
     }
     
-    public def gathervRecv[T] (role:Int, root:Int, src:Array[T], dst_counts:Array[Int](1) ) : Array[T](1) {
+    public def gathervRecv[T] (role:Int, root:Int, src:Array[T], dst_counts:Array[Int](1) ) {
     	val dst_offs = countsToOffs(dst_counts);
         return gathervRecv[T](role, root, src, dst_offs, dst_counts);
     }
@@ -328,19 +328,19 @@ public struct Team {
         return dst_raw(0);
     }
 
-    public def bcastSend[T] (role:Int, root:Int, src:Array[T], count:Int) : Array[T](1) {
+    public def bcastSend[T] (role:Int, root:Int, src:Array[T], count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
         finish nativeBcast(id, role, root, src.raw(), 0, dst_raw, 0, count);
         return new Array[T](dst_raw);
     }
 
-    public def bcastRecv[T] (role:Int, root:Int, count:Int) : Array[T](1) {
+    public def bcastRecv[T] (role:Int, root:Int, count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
         finish nativeBcast(id, role, root, dummyChunk[T](), 0, dst_raw, 0, count);
         return new Array[T](dst_raw);
     }
 
-    public def allgather1[T] (role:Int, src:T) : Array[T](1) {
+    public def allgather1[T] (role:Int, src:T) {
     	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
     	src_raw(0) = src;
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](size());
@@ -348,7 +348,7 @@ public struct Team {
         return new Array[T](dst_raw);
     }
 
-    public def allgather[T] (role:Int, src:Array[T]) : Array[T](1) {
+    public def allgather[T] (role:Int, src:Array[T]) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](src.size * size());
         finish nativeAllgather(id, role, src.raw(), 0, dst_raw, 0, src.size);
         return new Array[T](dst_raw);
@@ -363,7 +363,7 @@ public struct Team {
         @Native("c++", "x10rt_allgather(id, role, &src->raw()[src_off], &dst->raw()[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
     }
     
-    public def allgatherv[T] (role:Int, src:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : Array[T](1) {
+    public def allgatherv[T] (role:Int, src:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0));
         finish nativeAllgatherv(id, role, src.raw(), 0, src.size, dst_raw, dst_offs.raw(), dst_counts.raw());
         return new Array[T](dst_raw);
@@ -406,7 +406,7 @@ public struct Team {
         @Native("c++", "x10rt_alltoall(id, role, &src->raw()[src_off], &dst->raw()[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
     }
 
-    public def alltoall[T] (role:Int, src:Array[T]) : Array[T](1) {
+    public def alltoall[T] (role:Int, src:Array[T]) {
     	assert(src.size % size() == 0);
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](src.size);
         finish nativeAlltoall(id, role, src.raw(), 0, dst_raw, 0, src.size / size());
@@ -422,7 +422,7 @@ public struct Team {
         @Native("c++", "x10rt_alltoallv(id, role, src->raw(), src_offs->raw(), src_counts->raw(), dst->raw(), dst_offs->raw(), dst_counts->raw(), sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
     }
 
-    public def alltoallv[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst_offs:Array[Int], dst_counts:Array[Int]) : Array[T](1) {
+    public def alltoallv[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst_offs:Array[Int], dst_counts:Array[Int]) {
     	assert(src_counts.size == size());
     	assert(src_offs.size == size());
     	assert(dst_counts.size == size());
