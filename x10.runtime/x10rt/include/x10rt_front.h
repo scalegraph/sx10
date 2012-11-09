@@ -772,6 +772,30 @@ X10RT_C void x10rt_scatterv (x10rt_team team, x10rt_place role,
                     void *dbuf, size_t dcount,
                     size_t el, x10rt_completion_handler *ch, void *arg);
 
+/** Asynchronously blocks until root have received all members' arrays.  Note that
+ * dbuf is n times the size of sbuf, where n is the number of members in the team.  Each member
+ * sends a contiguous and distinct portion of the dbuf array.  dbuf should be structured so that
+ * the portions are sorted in ascending order, e.g., the first member sends the portion at offset 0
+ * of dbuf, and the last member sends the portion at the end of dbuf.
+ *
+ * \param team Team that identifies the members who are participating in this operation
+ *
+ * \param role Our role in the team
+ *
+ * \param root The member who is supplied the data
+ *
+ * \param sbuf The array into which the data will be sent from this member
+ *
+ * \param dbuf The data that will be received (will only be used when root == role)
+ *
+ * \param el The size of each element, in bytes
+ *
+ * \param count The number of elements being transferred
+ *
+ * \param ch Will be called when the operation is complete
+ *
+ * \param arg User pointer that is passed to the completion handler
+ */
 X10RT_C void x10rt_gather (x10rt_team team, x10rt_place role,
                     x10rt_place root, const void *sbuf, void *dbuf,
                     size_t el, size_t count,
@@ -782,6 +806,30 @@ X10RT_C void x10rt_gatherv (x10rt_team team, x10rt_place role,
                     void *dbuf, const void *doffsets, const void *dcounts,
                     size_t el, x10rt_completion_handler *ch, void *arg);
 
+/** Asynchronously blocks until all member have received all parts of each members' arrays.  Note that
+ * dbuf is n times the size of sbuf, where n is the number of members in the team.  Each member
+ * sends a contiguous and distinct portion of the dbuf array.  dbuf should be structured so that
+ * the portions are sorted in ascending order, e.g., the first member sends the portion at offset 0
+ * of dbuf, and the last member sends the portion at the end of dbuf.
+ *
+ * \param team Team that identifies the members who are participating in this operation
+ *
+ * \param role Our role in the team
+ *
+ * \param root The member who is supplied the data
+ *
+ * \param sbuf The array into which the data will be sent from this member
+ *
+ * \param dbuf The data that will be received
+ *
+ * \param el The size of each element, in bytes
+ *
+ * \param count The number of elements being transferred
+ *
+ * \param ch Will be called when the operation is complete
+ *
+ * \param arg User pointer that is passed to the completion handler
+ */
 X10RT_C void x10rt_allgather (x10rt_team team, x10rt_place role,
 		const void *sbuf,
 		void *dbuf,
@@ -792,6 +840,36 @@ X10RT_C void x10rt_allgatherv (x10rt_team team, x10rt_place role,
 		void *dbuf, const void *doffsets, const void *dcounts,
 		size_t el, x10rt_completion_handler *ch, void *arg);
 
+/** Asynchronously blocks until all members have received their portion of data from each
+ * member.  Note that the size of sbuf is equal to scount,
+ * the size of dbuf is equal to dcount, and soffsets, scounts, doffsets, and dcounts are
+ * the same size, which is equal to n, where scount is the sum of scounts, dcount is the sum of
+ * dcounts, n is the number of members in the team.  Each potion of transferred data must be exclusive. 
+ * The sbuf is supplied by each member, and is divided up and sent
+ * to each member in a manner similar to the sbuf in #x10rt_scatterv.
+ *
+ * \param team Team that identifies the members who are participating in this operation
+ *
+ * \param role Our role in the team
+ *
+ * \param sbuf The data that will be sent
+ *
+ * \param soffsets The array of displacements. The nth entry indicates the first element of the portion of the outcoming data to nth member
+ *
+ * \param scounts The array of sizes. The nth entry indicates the number of the portion of the outcoming data to nth member
+ *
+ * \param dbuf The array into which the data will be received for this member
+ *
+ * \param doffsets The array of displacements. The nth entry indicates the first element of the portion of the incoming data from nth member
+ *
+ * \param dcounts The array of sizes. The nth entry indicates the number of the portion of the incoming data from nth member
+ *
+ * \param el The size of each element, in bytes
+ *
+ * \param ch Will be called when the operation is complete
+ *
+ * \param arg User pointer that is passed to the completion handler
+ */
 X10RT_C void x10rt_alltoallv (x10rt_team team, x10rt_place role,
                     const void *sbuf, const void *soffsets, const void *scounts,
                     void *dbuf, const void *doffsets, const void *dcounts,
