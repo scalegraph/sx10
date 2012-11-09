@@ -619,14 +619,146 @@ public struct Team {
     }
 
     private static def nativeDel(id:Int, role:Int) : void {
+    	Runtime.increaseParallelism(); // for MPI transport
         @Native("java", "x10.x10rt.TeamSupport.nativeDel(id, role);")
         @Native("c++", "x10rt_team_del(id, role, x10aux::coll_handler, x10aux::coll_enter());") {}
+    	Runtime.decreaseParallelism(1); // for MPI transport
     }
 
     public def toString() = "Team(" + this.id + "," + this.places +  ")";
     public def equals(that:Team) = that.id==this.id;
     public def equals(that:Any) = that instanceof Team && (that as Team).id==this.id;
     public def hashCode()=id;
+
+
+    public def flatten[T] (src:Array[Array[T](1)](1)) : Pair[Array[T](1), Pair[Array[Int](1), Array[Int](1)]] {
+        val sizes:Array[Int](1) = src.map((x:Array[T])=>x.size as Int);
+        val size = sizes.reduce((x:Int, y:Int)=>x+y, 0);
+        val acc:Array[Int](1) = sizes.scan((x:Int, y:Int)=> x+y, 0);
+        val offs:Array[Int](1) = new Array[Int](acc.size, (i:Int)=>(i==0) ? 0 : acc(i-1));
+        val find_arr = (i:Int) => {
+            assert(i < size);
+            val ind = ArrayUtils.binarySearch(acc, i );
+            if (ind >= 0) {
+                var max_ind:Int = ind;
+                while (max_ind < acc.size - 1 && acc(max_ind) == acc(max_ind + 1)) ++max_ind;
+                assert(max_ind + 1< acc.size);
+                return max_ind + 1;
+            }
+            else return -(ind +1);
+        };
+        val flatten_src:Array[T](1) = new Array[T](size, (i:Int)=> 
+            src(find_arr(i))(i - offs(find_arr(i)))
+        );
+        return Pair[Array[T](1), Pair[Array[Int](1), Array[Int](1)]](flatten_src, Pair[Array[Int](1), Array[Int](1)](offs, sizes));
+    }
+
+
+    public def scatterSendAuto[T] (role:Int, root:Int, src:Array[T]) {
+        val team_size = size();
+        assert(src.size % team_size == 0);
+        val count = bcastSend1(role, root, src.size / team_size);
+        return scatterSend(role, root, src, count);
+    }
+
+    public def scatterRecvAuto[T] (role:Int, root:Int) {
+        val count = bcastRecv1[Int](role, root);
+        return scatterRecv[T](role, root, count);
+    }
+
+    public def scattervSendAuto[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int]) {
+        val team_size = size();
+        assert(src_counts.size == team_size);
+        assert(src_offs.size == team_size);
+        val dst_count = scatterSend(role, root, src_counts, 1)(0);
+        return scattervSend(role, root, src, src_counts, src_offs, dst_count);
+    }
+
+    public def scattervSend[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int](1)) {
+        val src_offs = countsToOffs(src_counts);
+        return scattervSendAuto[T](role, root, src, src_counts, src_offs);
+    }
+
+    public def scattervSend[T] (role:Int, root:Int, src:Array[Array[T](1)](1)) {
+        val flatten_src_tuple = flatten(src);
+        val flatten_src = flatten_src_tuple.first;
+        val src_offs = flatten_src_tuple.second.first;
+        val src_sizes = flatten_src_tuple.second.second;
+        return scattervSendAuto[T](role, root, flatten_src, src_sizes, src_offs);
+    }
+
+    public def scattervRecvAuto[T] (role:Int, root:Int) {
+        val dst_count = scatterRecv[Int](role, root, 1)(0);
+        val result = scattervRecv[T](role, root, dst_count);
+        return result;
+    }
+
+
+    public def gathervSendAuto[T] (role:Int, root:Int, src:Array[T]) : void {
+        gatherSend1(role, root, src.size);
+        gathervSend(role, root, src);
+    }
+
+    public def gathervRecvAuto[T] (role:Int, root:Int, src:Array[T]) {
+        val dst_counts = gatherRecv1[Int](role, root, src.size);
+        return gathervRecv[T](role, root, src, dst_counts);
+    }
+
+
+    public def bcastSendAuto[T] (role:Int, root:Int, src:Array[T]) {
+        val count = bcastSend1(role, root, src.size);
+        return bcastSend(role, root, src, count);
+    }
+
+    public def bcastRecvAuto[T] (role:Int, root:Int) {
+        val count = bcastRecv1[Int](role, root);
+        return bcastRecv[T](role, root, count);
+    }
+
+
+    public def allgathervAuto[T] (role:Int, src:Array[T]) {
+        val dst_counts = allgather1(role, src.size as Int);
+        val dst_offs = countsToOffs(dst_counts);
+
+        return allgatherv[T](role, src, dst_offs, dst_counts);
+    }
+
+
+    public def alltoallvAutoWithBreakdown[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int]) : Pair[Array[T](1),Array[Int](1)] {
+        val dst_counts = alltoall(role, src_counts);
+        val dst_offs = countsToOffs(dst_counts);
+        val dst = alltoallv[T](role, src, src_offs, src_counts, dst_offs, dst_counts);
+        return Pair[Array[T](1),Array[Int](1)](dst, dst_counts);
+    }
+
+    public def alltoallvAutoWithBreakdown[T] (role:Int, src:Array[Array[T](1)](1)) : Pair[Array[T](1),Array[Int](1)] {
+        val flatten_src_tuple = flatten(src);
+        val flatten_src = flatten_src_tuple.first;
+        val src_offs = flatten_src_tuple.second.first;
+        val src_sizes = flatten_src_tuple.second.second;
+        return alltoallvAutoWithBreakdown(role, flatten_src, src_offs, src_sizes);
+    }
+
+    public def alltoallvAuto[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int]) {
+        val dst_counts = alltoall(role, src_counts);
+        val dst_offs = countsToOffs(dst_counts);
+        val dst = alltoallv[T](role, src, src_offs, src_counts, dst_offs, dst_counts);
+        return dst;
+    }
+
+    public def alltoallvAuto[T] (role:Int, src:Array[T], src_counts:Array[Int](1)) {
+        val src_offs = countsToOffs(src_counts);
+        return alltoallvAuto[T](role, src, src_offs, src_counts);
+    }
+
+    public def alltoallvAuto[T] (role:Int, src:Array[Array[T](1)](1)) {
+        val flatten_src_tuple = flatten(src);
+        val flatten_src = flatten_src_tuple.first;
+        val src_offs = flatten_src_tuple.second.first;
+        val src_sizes = flatten_src_tuple.second.second;
+        return alltoallvAuto(role, flatten_src, src_offs, src_sizes);
+    }
+
 }
 
 // vim: shiftwidth=4:tabstop=4:expandtab
