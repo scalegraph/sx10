@@ -74,7 +74,7 @@ static void coll_test (x10rt_team team, x10rt_place role, x10rt_place per_place)
         if (0==role)
             std::cout << team << ": barrier sync test (shape should be \\):  " << std::endl;
         for (x10rt_place i=0 ; i<x10rt_team_sz(team) ; ++i) {
-        	std::cerr << role << ": " << team << ": " << i  << std::endl;
+//        	std::cerr << role << ": " << team << ": " << i  << std::endl;
             if (i==role) {
                 if (i<per_place) {
                     std::cout << team << ": " << std::string(i,' ') << '\\' << std::endl;
@@ -90,9 +90,9 @@ static void coll_test (x10rt_team team, x10rt_place role, x10rt_place per_place)
                     x10rt_serbuf_write(&b, &finish_counter_);
                     x10rt_send_msg(&b.p);
                     x10rt_serbuf_free(&b);
-                    std::cerr << role << ": " << team << ": " << i << ": msg sent." << std::endl;
+ //                   std::cerr << role << ": " << team << ": " << i << ": msg sent." << std::endl;
                     while (finish_counter) { x10rt_probe(); }
-                    std::cerr << role << ": " << team << ": " << i << ": msg received." << std::endl;
+  //                  std::cerr << role << ": " << team << ": " << i << ": msg received." << std::endl;
                 }
             }
             x10rt_barrier_b(team,role);
