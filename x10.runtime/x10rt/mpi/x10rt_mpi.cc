@@ -1343,19 +1343,55 @@ struct CollState {
     int TEAM_ALLOCATE_NEW_TEAMS_ID;
 } coll_state;
 
+struct CounterWithLock {
+    int counter;
+    pthread_mutex_t lock;
+};
+
 static void x10rt_net_one_setter (void *arg)
 { *((int*)arg) = 1; }
 
-static void team_new_decrement_counter (int *counter, x10rt_completion_handler2 *ch,
+static CounterWithLock *new_counter(int count) {
+	CounterWithLock *c = safe_malloc<CounterWithLock>();
+	c->counter = count;
+	if (pthread_mutex_init(&c->lock, NULL)) {
+		perror("pthread_mutex_init");
+		abort();
+	}
+	return c;
+}
+
+static void decrement_counter(CounterWithLock *c) {
+	if (pthread_mutex_lock(&c->lock)) {
+		perror("pthread_mutex_lock");
+		abort();
+	}
+	c->counter--;
+    if(pthread_mutex_unlock(&c->lock)) {
+		perror("pthread_mutex_unlock");
+		abort();
+    }
+}
+
+static void destroy_counter(CounterWithLock *c) {
+	if (pthread_mutex_destroy(&c->lock)) {
+		perror("pthread_mutex_destroy");
+		abort();
+	}
+	free(c);
+}
+
+static void team_new_decrement_counter (CounterWithLock *counter, x10rt_completion_handler2 *ch,
                                         x10rt_team t, void *arg)
 {
     X10RT_NET_DEBUG("%s", "called");
-    X10RT_NET_DEBUGV("d",*counter);
+    X10RT_NET_DEBUGV("d", counter->counter);
+    X10RT_NET_DEBUGV("lx",*ch);
 
-    (*counter)--;
-    if (*counter == 0) {
+    decrement_counter(counter);
+    if (counter->counter == 0) {
         ch(t, arg);
-        safe_free(counter);
+        destroy_counter(counter);
     }
 }
 
@@ -1370,7 +1406,7 @@ static void team_new_finished_recv (const x10rt_msg_params *p)
     x10rt_remote_ptr arg_; x10rt_deserbuf_read(&b, &arg_);
     x10rt_remote_ptr counter_; x10rt_deserbuf_read(&b, &counter_);
 
-    int *counter = (int*)(size_t)counter_;
+    CounterWithLock *counter = (CounterWithLock*)(size_t)counter_;
     x10rt_completion_handler2 *ch = (x10rt_completion_handler2*)(size_t)ch_;
     void *arg = (void*)(size_t)arg_;
 
@@ -1383,7 +1419,7 @@ static void send_team_new_finished (x10rt_place home, x10rt_team t, x10rt_remote
     X10RT_NET_DEBUG("%s", "called");
 
     if (x10rt_net_here()==home) {
-        int *counter = (int*)(size_t)counter_;
+        CounterWithLock *counter = (CounterWithLock*)(size_t)counter_;
         x10rt_completion_handler2 *ch = (x10rt_completion_handler2*)(size_t)ch_;
         void *arg = (void*)(size_t)arg_;
         team_new_decrement_counter(counter, ch, t, arg);
@@ -1428,8 +1464,7 @@ void send_team_new (x10rt_team teamc, x10rt_team *teamv, x10rt_place placec, x10
 
     x10rt_place home = x10rt_net_here();
 
-    int *counter = (safe_malloc<int>());
-    *counter = x10rt_net_nhosts();
+    CounterWithLock *counter = new_counter(x10rt_net_nhosts());
     x10rt_remote_ptr counter_ = reinterpret_cast<x10rt_remote_ptr>(counter);
 
     x10rt_team t = teamv[0];
