@@ -73,8 +73,10 @@ public struct Team {
     }
 
     private static def nativeMake (places:IndexedMemoryChunk[Place], count:Int, result:IndexedMemoryChunk[Int]) : void {
+    	Runtime.increaseParallelism(); // for MPI transport
         @Native("java", "x10.x10rt.TeamSupport.nativeMake(places, count, result);")
     	@Native("c++", "x10rt_team_new(count, (x10rt_place*)places->raw(), x10aux::coll_handler2, x10aux::coll_enter2(result->raw()));") {}
+    	Runtime.decreaseParallelism(1);
     }
 
     /** Returns the number of elements in the team.
@@ -94,8 +96,10 @@ public struct Team {
     }
 
     private static def nativeBarrier (id:int, role:Int) : void {
+    	Runtime.increaseParallelism(); // for MPI transport
         @Native("java", "x10.x10rt.TeamSupport.nativeBarrier(id, role);")
         @Native("c++", "x10rt_barrier(id, role, x10aux::coll_handler, x10aux::coll_enter());") {}
+    	Runtime.decreaseParallelism(1); // for MPI transport
     }
     
     /** Blocks until all members have received their part of root's array.
@@ -124,8 +128,10 @@ public struct Team {
     }
 
     private static def nativeScatter[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
+    	Runtime.increaseParallelism(); // for MPI transport
         @Native("java", "x10.x10rt.TeamSupport.nativeScatter(id, role, root, src, src_off, dst, dst_off, count);")
         @Native("c++", "x10rt_scatter(id, role, root, &src->raw()[src_off], &dst->raw()[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
+    	Runtime.decreaseParallelism(1); // for MPI transport
     }
     
     private static def dummyChunk[T]() { return IndexedMemoryChunk.allocateUninitialized[T](0); }; 
@@ -167,8 +173,10 @@ public struct Team {
     }
 
     private static def nativeScatterv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], src_counts:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_off:Int, dst_count:Int) : void {
+    	Runtime.increaseParallelism(); // for MPI transport
         @Native("java", "x10.x10rt.TeamSupport.nativeScatterV(id, role, root, src, src_offs, src_counts, dst, dst_off, dst_count);")
         @Native("c++", "x10rt_scatterv(id, role, root, src->raw(), src_offs->raw(), src_counts->raw(), &dst->raw()[dst_off], dst_count, sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
+    	Runtime.decreaseParallelism(1); // for MPI transport
     }
     
     public def scattervSend[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int], dst_count:Int) {
@@ -212,8 +220,10 @@ public struct Team {
     }
 
     private static def nativeGather[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
+    	Runtime.increaseParallelism(); // for MPI transport
         @Native("java", "x10.x10rt.TeamSupport.nativeGather(id, role, root, src, src_off, dst, dst_off, count);")
         @Native("c++", "x10rt_gather(id, role, root, &src->raw()[src_off], &dst->raw()[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
+    	Runtime.decreaseParallelism(1); // for MPI transport
     }
 
     public def gatherSend[T] (role:Int, root:Int, src:Array[T], count:Int) : void {
@@ -265,8 +275,10 @@ public struct Team {
     }
 
     private static def nativeGatherv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, src_count:Int, dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
+    	Runtime.increaseParallelism(); // for MPI transport
         @Native("java", "x10.x10rt.TeamSupport.nativeGatherV(id, role, root, src, src_off, src_count, dst, dst_offs, dst_counts);")
         @Native("c++", "x10rt_gatherv(id, role, root, &src->raw()[src_off], src_count, dst->raw(), dst_offs->raw(), dst_counts->raw(), sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
+    	Runtime.decreaseParallelism(1); // for MPI transport
     }
 
     public def gathervSend[T] (role:Int, root:Int, src:Array[T]) : void {
@@ -310,8 +322,10 @@ public struct Team {
     }
 
     private static def nativeBcast[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
+    	Runtime.increaseParallelism(); // for MPI transport
         @Native("java", "x10.x10rt.TeamSupport.nativeBcast(id, role, root, src, src_off, dst, dst_off, count);")
         @Native("c++", "x10rt_bcast(id, role, root, &src->raw()[src_off], &dst->raw()[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
+    	Runtime.decreaseParallelism(1); // for MPI transport
     }
     
     public def bcastSend1[T] (role:Int, root:Int, src:T) : T {
@@ -359,8 +373,10 @@ public struct Team {
     }
 
     private static def nativeAllgather[T](id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
+    	Runtime.increaseParallelism(); // for MPI transport
         @Native("java", "x10.x10rt.TeamSupport.nativeAllGather(id, role, src, src_off, dst, dst_off, count);")
         @Native("c++", "x10rt_allgather(id, role, &src->raw()[src_off], &dst->raw()[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
+    	Runtime.decreaseParallelism(1); // for MPI transport
     }
     
     public def allgatherv[T] (role:Int, src:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) {
@@ -374,8 +390,10 @@ public struct Team {
     }
 
     private static def nativeAllgatherv[T] (id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, src_count:Int, dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
+    	Runtime.increaseParallelism(); // for MPI transport
         @Native("java", "x10.x10rt.TeamSupport.nativeAllGatherV(id, role, src, src_off, src_count, dst, dst_offs, dst_counts);")
         @Native("c++", "x10rt_allgatherv(id, role, &src->raw()[src_off], src_count, dst->raw(), dst_offs->raw(), dst_counts->raw(), sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
+    	Runtime.decreaseParallelism(1); // for MPI transport
     }
 
     /** Blocks until all members have received their part of each other member's array.
@@ -402,8 +420,10 @@ public struct Team {
     }
 
     private static def nativeAlltoall[T](id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
+    	Runtime.increaseParallelism(); // for MPI transport
         @Native("java", "x10.x10rt.TeamSupport.nativeAllToAll(id, role, src, src_off, dst, dst_off, count);")
         @Native("c++", "x10rt_alltoall(id, role, &src->raw()[src_off], &dst->raw()[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
+    	Runtime.decreaseParallelism(1); // for MPI transport
     }
 
     public def alltoall[T] (role:Int, src:Array[T]) {
@@ -418,8 +438,10 @@ public struct Team {
     }
 
     private static def nativeAlltoallv[T] (id:Int, role:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], src_counts:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
+    	Runtime.increaseParallelism(); // for MPI transport
         @Native("java", "x10.x10rt.TeamSupport.nativeAllToAllV(id, role, src, src_offs, src_counts, dst, dst_offs, dst_counts);")
         @Native("c++", "x10rt_alltoallv(id, role, src->raw(), src_offs->raw(), src_counts->raw(), dst->raw(), dst_offs->raw(), dst_counts->raw(), sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
+    	Runtime.decreaseParallelism(1); // for MPI transport
     }
 
     public def alltoallv[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst_offs:Array[Int], dst_counts:Array[Int]) {
@@ -476,8 +498,10 @@ public struct Team {
     }
 
     private static def nativeAllreduce[T](id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int, op:Int) : void {
+    	Runtime.increaseParallelism(); // for MPI transport
         @Native("java", "x10.x10rt.TeamSupport.nativeAllReduce(id, role, src, src_off, dst, dst_off, count, op);")
     	@Native("c++", "x10rt_allreduce(id, role, &src->raw()[src_off], &dst->raw()[dst_off], (x10rt_red_op_type)op, x10rt_get_red_type<TPMGL(T)>(), count, x10aux::coll_handler, x10aux::coll_enter());") {}
+    	Runtime.decreaseParallelism(1); // for MPI transport
     }
 
     /** Performs a reduction on a single value, returning the result */
@@ -510,8 +534,10 @@ public struct Team {
     }
 
     private static def nativeAllreduce[T](id:Int, role:Int, src:IndexedMemoryChunk[T], dst:IndexedMemoryChunk[T], op:Int) : void {
+    	Runtime.increaseParallelism(); // for MPI transport
         @Native("java", "x10.x10rt.TeamSupport.nativeAllReduce(id, role, src, 0, dst, 0, 1, op);")
         @Native("c++", "x10rt_allreduce(id, role, src->raw(), dst->raw(), (x10rt_red_op_type)op, x10rt_get_red_type<TPMGL(T)>(), 1, x10aux::coll_handler, x10aux::coll_enter());") {}
+    	Runtime.decreaseParallelism(1); // for MPI transport
     }
 
     /** Returns the index of the biggest double value across the team */
@@ -524,8 +550,10 @@ public struct Team {
     }
 
     private static def nativeIndexOfMax(id:Int, role:Int, src:IndexedMemoryChunk[DoubleIdx], dst:IndexedMemoryChunk[DoubleIdx]) : void {
+    	Runtime.increaseParallelism(); // for MPI transport
         @Native("java", "x10.x10rt.TeamSupport.nativeIndexOfMax(id, role, src, dst);")
         @Native("c++", "x10rt_allreduce(id, role, src->raw(), dst->raw(), X10RT_RED_OP_MAX, X10RT_RED_TYPE_DBL_S32, 1, x10aux::coll_handler, x10aux::coll_enter());") {}
+    	Runtime.decreaseParallelism(1); // for MPI transport
     }
 
     /** Returns the index of the smallest double value across the team */
@@ -538,8 +566,10 @@ public struct Team {
     }
 
     private static def nativeIndexOfMin(id:Int, role:Int, src:IndexedMemoryChunk[DoubleIdx], dst:IndexedMemoryChunk[DoubleIdx]) : void {
+    	Runtime.increaseParallelism(); // for MPI transport
         @Native("java", "x10.x10rt.TeamSupport.nativeIndexOfMin(id, role, src, dst);")
         @Native("c++", "x10rt_allreduce(id, role, src->raw(), dst->raw(), X10RT_RED_OP_MIN, X10RT_RED_TYPE_DBL_S32, 1, x10aux::coll_handler, x10aux::coll_enter());") {}
+    	Runtime.decreaseParallelism(1); // for MPI transport
     }
 
     /** Create new teams by subdividing an existing team.  This is called by each member
@@ -572,8 +602,10 @@ public struct Team {
     }
 
     private static def nativeSplit(id:Int, role:Int, color:Int, new_role:Int, result:IndexedMemoryChunk[Int]) : void {
+    	Runtime.increaseParallelism(); // for MPI transport
         @Native("java", "x10.x10rt.TeamSupport.nativeSplit(id, role, color, new_role, result);")
         @Native("c++", "x10rt_team_split(id, role, color, new_role, x10aux::coll_handler2, x10aux::coll_enter2(result->raw()));") {}
+    	Runtime.decreaseParallelism(1); // for MPI transport
     }
 
     /** Destroy a team that is no-longer needed.  Called simultaneously by each member of
