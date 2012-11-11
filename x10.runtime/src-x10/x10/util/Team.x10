@@ -37,17 +37,31 @@ public struct Team {
     private id: Int;
     private places: Array[Place](1);
 
+    /** Returns the id of the team.
+     */
     public def id() = id;
+
+    /** Returns the places of the team.
+     */
     public def places() = places;
-    public def placeGroup() = {
+
+    /** Returns the PlaceGroup of the places of the team.
+     */
+    public def placeGroup() : PlaceGroup = {
     	val ps = new Array[Place](places);
     	ArrayUtils.sort(ps, (x:Place, y:Place)=>x.id.compareTo(y.id));
     	return new SparsePlaceGroup(ps.sequence());
     }
 
-    public def getPlace(role:Int) = places(role);
-    
-    public def getRole(place:Place) = {
+    /** Returns the place corresponding to the given role.
+     * @param role Our role in this team
+     */
+    public def getPlace(role:Int) : Place = places(role);
+
+    /** Returns the role corresponding to the given place.
+     * @param place Place in this team
+     */
+    public def getRole(place:Place) : Int = {
     	var role:Int = -1;
     	for ([p] in places) {
     		if (places(p) == place)
@@ -136,12 +150,48 @@ public struct Team {
     
     private static def dummyChunk[T]() { return IndexedMemoryChunk.allocateUninitialized[T](0); }; 
     
+    /** Scatters the given array, called by the root.  Blocks until all members have received their part of root's array.
+     * Each member receives a contiguous and distinct portion of the src array.
+     * src should be structured so that the portions are sorted in ascending
+     * order, e.g., the first member gets the portion at offset src_off of sbuf, and the
+     * last member gets the last portion.  Note that the size of src is equal to n * count,
+     * where n is the number of members of the team.
+     *
+     * @see #scatter
+     * @see #scatterRecv
+     *
+     * @param role Our role in the team
+     *
+     * @param root The member who is supplying the data
+     *
+     * @param src The data that will be sent 
+     *
+     * @param count The number of elements being transferred
+     *
+     * @return received array
+     *
+     */
     public def scatterSend[T] (role:Int, root:Int, src:Array[T], count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
         finish nativeScatter(id, role, root, src.raw(), 0, dst_raw, 0, count);
         return new Array[T](dst_raw);
     }
 
+    /** Receives the scattered array, called by all members excluding the root.
+     * Blocks until all members have received their part of root's array.
+     *
+     * @see #scatter
+     * @see #scatterSend
+     *
+     * @param role Our role in the team
+     *
+     * @param root The member who is supplying the data
+     *
+     * @param count The number of elements being transferred
+     *
+     * @return received array
+     *
+     */
     public def scatterRecv[T] (role:Int, root:Int, count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
         finish nativeScatter(id, role, root, dummyChunk[T](), 0, dst_raw, 0, count);
@@ -151,6 +201,8 @@ public struct Team {
 
     /** Almost same as scatter except for permitting messages to have different sizes.
      *
+     * @see #scatter
+
      * @param role Our role in the team
      *
      * @param root The member who is supplying the data
@@ -179,6 +231,28 @@ public struct Team {
     	Runtime.decreaseParallelism(1); // for MPI transport
     }
     
+    /** Almost same as scatterSend except for permitting messages to have different sizes.
+     * The received array is structured so that the portions are sorted in ascending
+     * order, e.g., the first member gets the portion at the head of sbuf, and the
+     * last member gets the last portion.
+     *
+     * @see #scatterv
+     * @see #scattervRecv
+     *
+     * @param role Our role in the team
+     *
+     * @param root The member who is supplying the data
+     *
+     * @param src The data that will be sent 
+     *
+     * @param src_offs The offsets into src at which to start reading
+     *
+     * @param src_counts The numbers of elements being sent
+     *
+     * @param dst_count The numbers of elements being received
+     *
+     * @return received array
+     */
     public def scattervSend[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int], dst_count:Int) {
     	assert(src_counts.size == size());
     	assert(src_offs.size == size());
@@ -187,13 +261,30 @@ public struct Team {
     	return new Array[T](dst_raw);
     }
     
+
+    /** Almost same as scatterRecv except for permitting messages to have different sizes.
+     * The received array is structured so that the portions are sorted in ascending
+     * order, e.g., the first member gets the portion at the head of sbuf, and the
+     * last member gets the last portion.
+     *
+     * @see #scatterv
+     * @see #scattervSend
+     *
+     * @param role Our role in the team
+     *
+     * @param root The member who is supplying the data
+     *
+     * @param dst_count The numbers of elements being received
+     *
+     * @return received array
+     */
     public def scattervRecv[T] (role:Int, root:Int, dst_count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](dst_count);
     	finish nativeScatterv(id, role, root, dummyChunk[T](), dummyChunk[Int](), dummyChunk[Int](), dst_raw, 0, dst_count);
     	return new Array[T](dst_raw);
     }
     
-    /** Blocks until all members have sent their part of root's array.
+    /** Blocks until the root have received each part of all member's array.
      * Each member sends a contiguous and distinct portion of the src array.
      * dst will be structured so that the portions are sorted in ascending
      * order, e.g., the first member gets the portion at offset src_off of sbuf, and the
@@ -226,22 +317,83 @@ public struct Team {
     	Runtime.decreaseParallelism(1); // for MPI transport
     }
 
+    /** Gathers the given array, called by all members excluding the root.
+     * Blocks until the root have received each part of all member's array.
+     *
+     * @see #gather
+     * @see #gatherRecv
+     *
+     * @param role Our role in the team
+     *
+     * @param root The member who is receiving the data
+     *
+     * @param src The data that will be sent 
+     *
+     * @param count The number of elements being transferred
+     */
     public def gatherSend[T] (role:Int, root:Int, src:Array[T], count:Int) : void {
         finish nativeGather(id, role, root, src.raw(), 0, dummyChunk[T](), 0, count);
     }
 
+    /** Gathers the given array, called by the root.
+     * Blocks until the root have received each part of all member's array.
+     * Each member sends a contiguous and distinct portion of the src array.
+     * dst will be structured so that the portions are sorted in ascending
+     * order, e.g., the first member gets the portion at offset src_off of sbuf, and the
+     * last member gets the last portion.
+     *
+     * @see #gather
+     * @see #gatherRecv
+     *
+     * @param role Our role in the team
+     *
+     * @param root The member who is receiving the data
+     *
+     * @param src The data that will be sent 
+     *
+     * @param count The number of elements being transferred
+     *
+     * @return received array
+     */
     public def gatherRecv[T] (role:Int, root:Int, src:Array[T], count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
         finish nativeGather(id, role, root, src.raw(), 0, dst_raw, 0, count);
         return new Array[T](dst_raw);
     }
 
+
+    /** Almost same as gatherSend except that each member sends one data.
+     *
+     * @see #gatherSend
+     * @see #gatherRecv1
+     *
+     * @param role Our role in the team
+     *
+     * @param root The member who is receiving the data
+     *
+     * @param src The data that will be sent 
+     *
+     * @param count The number of elements being transferred
+     */
     public def gatherSend1[T] (role:Int, root:Int, src:T) : void {
     	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
     	src_raw(0) = src;
         finish nativeGather(id, role, root, src_raw, 0, dummyChunk[T](), 0, 1);
     }
 
+    /** Almost same as gatherRecv except that each member sends one data.
+     *
+     * @see #gatherRecv
+     * @see #gatherSend1
+     *
+     * @param role Our role in the team
+     *
+     * @param root The member who is receiving the data
+     *
+     * @param src The data that will be sent 
+     *
+     * @param count The number of elements being transferred
+     */
     public def gatherRecv1[T] (role:Int, root:Int, src:T) {
     	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
     	src_raw(0) = src;
