@@ -631,7 +631,7 @@ public struct Team {
     public def hashCode()=id;
 
 
-    public def flatten[T] (src:Array[Array[T](1)](1)) : Pair[Array[T](1), Pair[Array[Int](1), Array[Int](1)]] {
+    private def flatten[T] (src:Array[Array[T](1)](1)) : Pair[Array[T](1), Pair[Array[Int](1), Array[Int](1)]] {
         val sizes:Array[Int](1) = src.map((x:Array[T])=>x.size as Int);
         val size = sizes.reduce((x:Int, y:Int)=>x+y, 0);
         val acc:Array[Int](1) = sizes.scan((x:Int, y:Int)=> x+y, 0);
@@ -674,12 +674,12 @@ public struct Team {
         return scattervSend(role, root, src, src_counts, src_offs, dst_count);
     }
 
-    public def scattervSend[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int](1)) {
+    public def scattervSendAuto[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int](1)) {
         val src_offs = countsToOffs(src_counts);
         return scattervSendAuto[T](role, root, src, src_counts, src_offs);
     }
 
-    public def scattervSend[T] (role:Int, root:Int, src:Array[Array[T](1)](1)) {
+    public def scattervSendAuto[T] (role:Int, root:Int, src:Array[Array[T](1)](1)) {
         val flatten_src_tuple = flatten(src);
         val flatten_src = flatten_src_tuple.first;
         val src_offs = flatten_src_tuple.second.first;
