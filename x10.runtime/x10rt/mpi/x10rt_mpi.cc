@@ -34,7 +34,7 @@
 #include <x10rt_cpp.h>
 #include <x10rt_ser.h>
 
-#if 0
+#if 1
 #define X10RT_NET_DEBUG(fmt, ...) fprintf(stderr, "[%s:%d:%s] (%"PRIu32") " fmt "\n", __FILE__, __LINE__, __func__, static_cast<uint32_t>(x10rt_net_here()), __VA_ARGS__)
 #define X10RT_NET_DEBUGV(fmt, var) fprintf(stderr, "[%s:%d:%s] (%"PRIu32") " #var " = %"fmt "\n", __FILE__, __LINE__, __func__, static_cast<uint32_t>(x10rt_net_here()), (var))
 #else
@@ -1994,7 +1994,7 @@ void x10rt_net_bcast (x10rt_team team, x10rt_place role,
                       size_t el, size_t count,
                       x10rt_completion_handler *ch, void *arg)
 {
-    X10RT_NET_DEBUG("team=%d, role=%d, count=%d", team, role, count);
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%d, el=%d", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
     void *buf = (role == root) ? (void *)sbuf : dbuf;
@@ -2018,7 +2018,7 @@ void x10rt_net_scatter (x10rt_team team, x10rt_place role,
                         size_t el, size_t count,
                         x10rt_completion_handler *ch, void *arg)
 {
-    X10RT_NET_DEBUG("team=%d, role=%d, count=%d", team, role, count);
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%d, el=%d", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
     MPI_Comm comm = mpi_tdb.comm(team);
@@ -2044,7 +2044,7 @@ void x10rt_net_alltoall (x10rt_team team, x10rt_place role,
                          size_t el, size_t count,
                          x10rt_completion_handler *ch, void *arg)
 {
-    X10RT_NET_DEBUG("team=%d, role=%d, count=%d", team, role, count);
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%d, el=%d", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
     MPI_Comm comm = mpi_tdb.comm(team);
@@ -2073,7 +2073,7 @@ void x10rt_net_allreduce (x10rt_team team, x10rt_place role,
                           x10rt_completion_handler *ch, void *arg)
 {
     int el = x10rt_red_type_length(dtype);
-    X10RT_NET_DEBUG("team=%d, role=%d, count=%d", team, role, count);
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%d, el=%d", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
     X10RT_NET_DEBUG("dtype=%d sizeof(dtype)=%d", dtype, el);
 
@@ -2097,7 +2097,7 @@ void x10rt_net_allreduce (x10rt_team team, x10rt_place role,
 void x10rt_net_scatterv (x10rt_team team, x10rt_place role, x10rt_place root, const void *sbuf, const void *soffsets, const void *scounts,
 		void *dbuf, size_t dcount, size_t el, x10rt_completion_handler *ch, void *arg)
 {
-    X10RT_NET_DEBUG("team=%d, role=%d, root=%d,", team, role, root);
+    X10RT_NET_DEBUG("team=%d, role=%d, root=%d, el=%d", team, role, root, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
     X10RT_NET_DEBUG("dcount=%d", dcount);
     MPI_Comm comm = mpi_tdb.comm(team);
@@ -2135,7 +2135,7 @@ void x10rt_net_scatterv (x10rt_team team, x10rt_place role, x10rt_place root, co
 void x10rt_net_gather (x10rt_team team, x10rt_place role, x10rt_place root, const void *sbuf,
 		void *dbuf, size_t el, size_t count, x10rt_completion_handler *ch, void *arg)
 {
-    X10RT_NET_DEBUG("team=%d, role=%d, count=%d", team, role, count);
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%d, el=%d", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
     MPI_Comm comm = mpi_tdb.comm(team);
@@ -2193,7 +2193,7 @@ void x10rt_net_gatherv (x10rt_team team, x10rt_place role, x10rt_place root, con
 void x10rt_net_allgather (x10rt_team team, x10rt_place role, const void *sbuf,
 		void *dbuf, size_t el, size_t count, x10rt_completion_handler *ch, void *arg)
 {
-    X10RT_NET_DEBUG("team=%d, role=%d, count=%d", team, role, count);
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%d, el=%d", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
     MPI_Comm comm = mpi_tdb.comm(team);
