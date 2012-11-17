@@ -844,7 +844,7 @@ X10RT_C void x10rt_allgatherv (x10rt_team team, x10rt_place role,
  * member.  Note that the size of sbuf is equal to scount,
  * the size of dbuf is equal to dcount, and soffsets, scounts, doffsets, and dcounts are
  * the same size, which is equal to n, where scount is the sum of scounts, dcount is the sum of
- * dcounts, n is the number of members in the team.  Each potion of transferred data must be exclusive. 
+ * dcounts, n is the number of members in the team.  Each potion of transferred data must be mutually exclusive.
  * The sbuf is supplied by each member, and is divided up and sent
  * to each member in a manner similar to the sbuf in #x10rt_scatterv.
  *
