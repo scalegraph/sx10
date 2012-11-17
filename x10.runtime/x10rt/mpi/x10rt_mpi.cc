@@ -34,7 +34,7 @@
 #include <x10rt_cpp.h>
 #include <x10rt_ser.h>
 
-#if 1
+#if 0
 #define X10RT_NET_DEBUG(fmt, ...) fprintf(stderr, "[%s:%d:%s] (%"PRIu32") " fmt "\n", __FILE__, __LINE__, __func__, static_cast<uint32_t>(x10rt_net_here()), __VA_ARGS__)
 #define X10RT_NET_DEBUGV(fmt, var) fprintf(stderr, "[%s:%d:%s] (%"PRIu32") " #var " = %"fmt "\n", __FILE__, __LINE__, __func__, static_cast<uint32_t>(x10rt_net_here()), (var))
 #else
@@ -2048,7 +2048,8 @@ void x10rt_net_alltoall (x10rt_team team, x10rt_place role,
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
     MPI_Comm comm = mpi_tdb.comm(team);
-    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(count * el) : dbuf;
+    int gsize = x10rt_net_team_sz(team);
+    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(gsize * count * el) : dbuf;
 
     LOCK_IF_MPI_IS_NOT_MULTITHREADED;
     if (MPI_SUCCESS != MPI_Alltoall((void*)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, comm)){
@@ -2139,7 +2140,8 @@ void x10rt_net_gather (x10rt_team team, x10rt_place role, x10rt_place root, cons
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
     MPI_Comm comm = mpi_tdb.comm(team);
-    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(count * el) : dbuf;
+    int gsize = x10rt_net_team_sz(team);
+    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(gsize * count * el) : dbuf;
 
     LOCK_IF_MPI_IS_NOT_MULTITHREADED;
     if (MPI_SUCCESS != MPI_Gather((void *)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, root, comm)){
@@ -2197,7 +2199,8 @@ void x10rt_net_allgather (x10rt_team team, x10rt_place role, const void *sbuf,
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
     MPI_Comm comm = mpi_tdb.comm(team);
-    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(count * el) : dbuf;
+    int gsize = x10rt_net_team_sz(team);
+    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(gsize * count * el) : dbuf;
 
     LOCK_IF_MPI_IS_NOT_MULTITHREADED;
     if (MPI_SUCCESS != MPI_Allgather((void *)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, comm)){
