@@ -429,6 +429,15 @@ void x10rt_net_init(int *argc, char ** *argv, x10rt_msg_type *counter) {
             }
         }
     } else {
+		if (getenv("X10RT_EMULATE_COLLECTIVES")==NULL) {
+				fprintf(stderr, "[%s:%d] Collective communications might go wrong\n", __FILE__, __LINE__);
+				fprintf(stderr, "[%s:%d] To use native implimentations of collective communications correctly,"
+								" you need to set env var X10RT_MPI_THREAD_MULTIPLE\n",
+								__FILE__, __LINE__);
+				fprintf(stderr, "[%s:%d] Alternatively, you could set env var"
+								" X10RT_EMULATE_COLLECTIVES\n",
+								__FILE__, __LINE__);
+		}
         global_state.is_mpi_multithread = false;
         if (MPI_SUCCESS != MPI_Init(argc, argv)) {
             fprintf(stderr, "[%s:%d] Error in MPI_Init\n", __FILE__, __LINE__);
