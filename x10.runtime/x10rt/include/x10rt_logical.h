@@ -401,31 +401,97 @@ X10RT_C void x10rt_lgl_allreduce (x10rt_team team, x10rt_place role,
                                   size_t count,
                                   x10rt_completion_handler *ch, void *arg);
 
+/** \see #x10rt_scatterv
+ * \param team As in #x10rt_scatterv
+ * \param role As in #x10rt_scatterv
+ * \param sbuf As in #x10rt_scatterv
+ * \param dbuf As in #x10rt_scatterv
+ * \param op As in #x10rt_scatterv
+ * \param dtype As in #x10rt_scatterv
+ * \param count As in #x10rt_scatterv
+ * \param ch As in #x10rt_scatterv
+ * \param arg As in #x10rt_scatterv
+ */
 X10RT_C void x10rt_lgl_scatterv (x10rt_team team, x10rt_place role,
                     x10rt_place root, const void *sbuf, const void *soffsets, const void *scounts,
                     void *dbuf, size_t dcount,
                     size_t el, x10rt_completion_handler *ch, void *arg);
 
+/** \see #x10rt_gather
+ * \param team As in #x10rt_gather
+ * \param role As in #x10rt_gather
+ * \param sbuf As in #x10rt_gather
+ * \param dbuf As in #x10rt_gather
+ * \param op As in #x10rt_gather
+ * \param dtype As in #x10rt_gather
+ * \param count As in #x10rt_gather
+ * \param ch As in #x10rt_gather
+ * \param arg As in #x10rt_gather
+ */
 X10RT_C void x10rt_lgl_gather (x10rt_team team, x10rt_place role,
                     x10rt_place root, const void *sbuf, void *dbuf,
                     size_t el, size_t count,
                     x10rt_completion_handler *ch, void *arg);
 
+/** \see #x10rt_gatherv
+ * \param team As in #x10rt_gatherv
+ * \param role As in #x10rt_gatherv
+ * \param sbuf As in #x10rt_gatherv
+ * \param dbuf As in #x10rt_gatherv
+ * \param op As in #x10rt_gatherv
+ * \param dtype As in #x10rt_gatherv
+ * \param count As in #x10rt_gatherv
+ * \param ch As in #x10rt_gatherv
+ * \param arg As in #x10rt_gatherv
+ */
 X10RT_C void x10rt_lgl_gatherv (x10rt_team team, x10rt_place role,
                     x10rt_place root, const void *sbuf, size_t scount,
                     void *dbuf, const void *doffbuf, const void *dcounts,
                     size_t el, x10rt_completion_handler *ch, void *arg);
 
+/** \see #x10rt_allgather
+ * \param team As in #x10rt_allgather
+ * \param role As in #x10rt_allgather
+ * \param sbuf As in #x10rt_allgather
+ * \param dbuf As in #x10rt_allgather
+ * \param op As in #x10rt_allgather
+ * \param dtype As in #x10rt_allgather
+ * \param count As in #x10rt_allgather
+ * \param ch As in #x10rt_allgather
+ * \param arg As in #x10rt_allgather
+ */
 X10RT_C void x10rt_lgl_allgather (x10rt_team team, x10rt_place role,
 		const void *sbuf,
 		void *dbuf,
 		size_t el, size_t count, x10rt_completion_handler *ch, void *arg);
 
+/** \see #x10rt_allgatherv
+ * \param team As in #x10rt_allgatherv
+ * \param role As in #x10rt_allgatherv
+ * \param sbuf As in #x10rt_allgatherv
+ * \param dbuf As in #x10rt_allgatherv
+ * \param op As in #x10rt_allgatherv
+ * \param dtype As in #x10rt_allgatherv
+ * \param count As in #x10rt_allgatherv
+ * \param ch As in #x10rt_allgatherv
+ * \param arg As in #x10rt_allgatherv
+ */
 X10RT_C void x10rt_lgl_allgatherv (x10rt_team team, x10rt_place role,
 		const void *sbuf, int scount,
 		void *dbuf, const void *doffsets, const void *dcounts,
 		size_t el, x10rt_completion_handler *ch, void *arg);
 
+/** \see #x10rt_alltoallv
+ * \param team As in #x10rt_alltoallv
+ * \param role As in #x10rt_alltoallv
+ * \param sbuf As in #x10rt_alltoallv
+ * \param dbuf As in #x10rt_alltoallv
+ * \param op As in #x10rt_alltoallv
+ * \param dtype As in #x10rt_alltoallv
+ * \param count As in #x10rt_alltoallv
+ * \param ch As in #x10rt_alltoallv
+ * \param arg As in #x10rt_alltoallv
+ */
 X10RT_C void x10rt_lgl_alltoallv (x10rt_team team, x10rt_place role,
                     const void *sbuf, const void *soffsets, const void *scounts,
                     void *dbuf, const void *doffsets, const void *dcounts,
