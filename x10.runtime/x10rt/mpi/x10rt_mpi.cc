@@ -1705,6 +1705,33 @@ void x10rt_net_team_del (x10rt_team team, x10rt_place role,
     return;
 }
 
+void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg)
+{
+    MPI_Comm comm = mpi_tdb[team];
+    MPI_Group grp, MPI_GROUP_WORLD;
+    MPI_Comm_group(comm, &grp);
+    MPI_Comm_group(MPI_COMM_WORLD, &MPI_GROUP_WORLD);
+    int sz = x10rt_net_team_sz(team);
+    int *sbuf = ChkAlloc<int>(sz * sizeof(int));
+    int *dbuf = ChkAlloc<int>(sz * sizeof(int));
+
+    for (int i = 0; i < sz; ++i) {
+        sbuf[i] = i;
+    }
+
+    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    if (MPI_SUCCESS != MPI_Group_translate_ranks(MPI_GROUP_WORLD, sz, sbuf, grp, dbuf)) {
+        fprintf(stderr, "[%s:%d] %s\n",
+                __FILE__, __LINE__, "Error in MPI_Group_translate_ranks");
+        abort();
+    }
+    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+
+    for (int i = 0; i < sz; ++i) {
+        members[i] = dbuf[i];
+    }
+}
+
 x10rt_place x10rt_net_team_sz (x10rt_team team)
 {
     int sz;

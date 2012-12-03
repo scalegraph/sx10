@@ -989,6 +989,15 @@ void x10rt_lgl_allreduce (x10rt_team team, x10rt_place role,
     }
 }
 
+void x10rt_lgl_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg)
+{
+    if (has_collectives_append) {
+        x10rt_net_team_members(team, members, ch, arg);
+    } else {
+        x10rt_emu_team_members(team, members, ch, arg);
+    }
+}
+
 void x10rt_lgl_scatterv (x10rt_team team, x10rt_place role,
                     x10rt_place root, const void *sbuf, const void *soffsets, const void *scounts,
                     void *dbuf, size_t dcount,

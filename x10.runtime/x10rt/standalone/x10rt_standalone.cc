@@ -1007,6 +1007,11 @@ void x10rt_net_allreduce (x10rt_team team, x10rt_place role,
     abort();
 }
 
+void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg)
+{
+    abort();
+}
+
 void x10rt_net_scatterv (x10rt_team team, x10rt_place role, x10rt_place root, const void *sbuf, const void *soffsets, const void *scounts,
 		void *dbuf, size_t dcount, size_t el, x10rt_completion_handler *ch, void *arg)
 {

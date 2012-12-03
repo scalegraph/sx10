@@ -767,6 +767,16 @@ X10RT_C void x10rt_remote_ptr_setter (x10rt_remote_ptr v, void *arg);
  */
 
 /** \{ */
+/** Sets members to the members which the given team has.
+ * The size of the given array must not be less than the size of the specified team
+ * \param v The new pointer is passed in here
+ * \param team Team that identifies the members who are participating in this operation
+ * \param members The array that result will be stored
+ * \param ch Will be called when the operation is complete
+ * \param arg User pointer that is passed to the completion handler
+ */
+X10RT_C void x10rt_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg);
+
 X10RT_C void x10rt_scatterv (x10rt_team team, x10rt_place role,
                     x10rt_place root, const void *sbuf, const void *soffsets, const void *scounts,
                     void *dbuf, size_t dcount,

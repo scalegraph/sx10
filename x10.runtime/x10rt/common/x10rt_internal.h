@@ -149,6 +149,8 @@ X10RT_C void x10rt_emu_allreduce (x10rt_team team, x10rt_place role,
                                   size_t count,
                                   x10rt_completion_handler *ch, void *arg);
 
+X10RT_C void x10rt_emu_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg);
+
 X10RT_C void x10rt_emu_scatterv (x10rt_team team, x10rt_place role,
                     x10rt_place root, const void *sbuf, const void *soffsets, const void *scounts,
                     void *dbuf, size_t dcounts,

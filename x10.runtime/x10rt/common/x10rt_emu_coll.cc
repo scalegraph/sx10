@@ -261,6 +261,13 @@ namespace {
 
 }
 
+void x10rt_emu_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg)
+{
+    TeamObj &t = *gtdb[team];
+    memcpy(members, t.placev, t.memberc * sizeof(x10rt_place));
+    ch(arg);
+}
+
 // functions that define the shape of a balanced binary tree
 
 // return role that acts as parent to a given role r
