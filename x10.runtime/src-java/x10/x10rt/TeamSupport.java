@@ -109,6 +109,11 @@ public class TeamSupport {
         aboutToDie("nativeAllToAll");
     }
     
+    public static void nativeReduce(int id, int role, int root, IndexedMemoryChunk<?> src, int src_off, 
+                                    IndexedMemoryChunk<?> dst, int dst_off, int count, int op) {
+        aboutToDie("nativeReduce");
+    }
+
     public static void nativeAllReduce(int id, int role, IndexedMemoryChunk<?> src, int src_off, 
                                        IndexedMemoryChunk<?> dst, int dst_off, int count, int op) {
         Object srcRaw = src.getBackingArray();

@@ -2318,5 +2318,54 @@ void x10rt_net_alltoallv (x10rt_team team, x10rt_place role, const void *sbuf, c
     ch(arg);
 }
 
+static int sizeof_dtype(x10rt_red_type dtype)
+{
+    switch (dtype) {
+        #define BORING_MACRO(x) \
+        case x: return sizeof(typename x10rt_red_type_info<x>::Type);
+        BORING_MACRO(X10RT_RED_TYPE_U8);
+        BORING_MACRO(X10RT_RED_TYPE_S8);
+        BORING_MACRO(X10RT_RED_TYPE_S16);
+        BORING_MACRO(X10RT_RED_TYPE_U16);
+        BORING_MACRO(X10RT_RED_TYPE_S32);
+        BORING_MACRO(X10RT_RED_TYPE_U32);
+        BORING_MACRO(X10RT_RED_TYPE_S64);
+        BORING_MACRO(X10RT_RED_TYPE_U64);
+        BORING_MACRO(X10RT_RED_TYPE_DBL);
+        BORING_MACRO(X10RT_RED_TYPE_FLT);
+        BORING_MACRO(X10RT_RED_TYPE_DBL_S32);
+        #undef BORING_MACRO
+        default: fprintf(stderr, "Corrupted type? %x\n", dtype); abort();
+    }
+}
+
+void x10rt_net_reduce (x10rt_team team, x10rt_place role, x10rt_place root,
+                          const void *sbuf, void *dbuf,
+                          x10rt_red_op_type op, 
+                          x10rt_red_type dtype,
+                          size_t count,
+                          x10rt_completion_handler *ch, void *arg)
+{
+    int el = x10rt_red_type_length(dtype);
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%d, el=%d", team, role, count, el);
+    X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
+    X10RT_NET_DEBUG("dtype=%d sizeof(dtype)=%d", dtype, el);
+
+    MPI_Comm comm = mpi_tdb.comm(team);
+    void *buf = (role == root && sbuf == dbuf) ? ChkAlloc<void>(sizeof_dtype(dtype)) : dbuf;
+
+    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    if (MPI_SUCCESS != MPI_Reduce((void*)sbuf, buf, count, mpi_red_type(dtype), mpi_red_op_type(dtype, op), root, comm)){
+        X10RT_NET_DEBUG("%s", "Error in MPI_Reduce");
+        abort();
+    }
+    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+
+    if (sbuf == dbuf) {
+	memcpy(dbuf, buf, count * el);
+	free(buf);
+    }
+    ch(arg);
+}
 
 /** \} */

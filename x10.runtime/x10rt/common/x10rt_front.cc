@@ -265,6 +265,17 @@ void x10rt_alltoallv (x10rt_team team, x10rt_place role,
     // x10rt_lgl_alltoallv(team, role, sbuf, soffbuf, dbuf, doffbuf, el, cbuf, ch, arg);
 }
 
+void x10rt_reduce (x10rt_team team, x10rt_place role, x10rt_place root,
+                      const void *sbuf, void *dbuf,
+                      x10rt_red_op_type op, 
+                      x10rt_red_type dtype,
+                      size_t count,
+                      x10rt_completion_handler *ch, void *arg)
+{
+    // X10RT_NET_DEBUG("team=%d, role=%d, count=%d""sbuf=%"PRIxPTR" dbuf=%"PRIxPTR"dtype=%d sizeof(dtype)=%d", team, role, count, sbuf, dbuf, dtype, sizeof(dtype));
+    x10rt_lgl_reduce(team, role, root, sbuf, dbuf, op, dtype, count, ch, arg);
+}
+
 void x10rt_allreduce (x10rt_team team, x10rt_place role,
                       const void *sbuf, void *dbuf,
                       x10rt_red_op_type op, 

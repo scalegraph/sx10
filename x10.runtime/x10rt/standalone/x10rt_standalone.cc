@@ -1047,3 +1047,9 @@ void x10rt_net_alltoallv (x10rt_team team, x10rt_place role, const void *sbuf, c
 {
     abort();
 }
+
+void x10rt_net_reduce (x10rt_team team, x10rt_place role, x10rt_place root, const void *sbuf, void *dbuf,
+		x10rt_red_op_type op, x10rt_red_type dtype, size_t count, x10rt_completion_handler *ch, void *arg)
+{
+    abort();
+}

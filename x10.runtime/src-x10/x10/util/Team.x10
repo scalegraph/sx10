@@ -692,6 +692,101 @@ public struct Team {
     	Runtime.decreaseParallelism(1); // for MPI transport
     }
 
+    /** Blocks until all members have received the computed result.  Note that not all values of T are valid.
+     * The dst array is ignored when role is other than root.
+     *
+     * @param role Our role in the team
+     *
+     * @param root The member who is supplied the data
+     *
+     * @param src The data that will be sent (will only be used by the root
+     * member)
+     *
+     * @param src_off The offset into src at which to start reading
+     *
+     * @param dst The rail into which the data will be received for this member
+     *
+     * @param dst_off The offset into dst at which to start writing
+     *
+     * @param count The number of elements being transferred
+     *
+     * @param op The operation to perform
+     */
+    public def reduce[T] (role:Int, root:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int, op:Int) : void {
+        finish nativeReduce(id, role, root, src.raw(), src_off, dst.raw(), dst_off, count, op);
+    }
+
+    private static def nativeReduce[T](id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int, op:Int) : void {
+        Runtime.increaseParallelism(); // for MPI transport
+        @Native("java", "x10.x10rt.TeamSupport.nativeReduce(id, role, root, src, src_off, dst, dst_off, count, op);")
+        @Native("c++", "x10rt_reduce(id, role, root, &src->raw()[src_off], &dst->raw()[dst_off], (x10rt_red_op_type)op, x10rt_get_red_type<TPMGL(T)>(), count, x10aux::coll_handler, x10aux::coll_enter());") {}
+        Runtime.decreaseParallelism(1); // for MPI transport
+    }
+
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceSend (role:Int, root:Int, src:Byte, op:Int) { genericReduceSend(role, root, src, op); }
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceSend (role:Int, root:Int, src:UByte, op:Int) { genericReduceSend(role, root, src, op); }
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceSend (role:Int, root:Int, src:Short, op:Int) { genericReduceSend(role, root, src, op); }
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceSend (role:Int, root:Int, src:UShort, op:Int) { genericReduceSend(role, root, src, op); }
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceSend (role:Int, root:Int, src:UInt, op:Int) { genericReduceSend(role, root, src, op); }
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceSend (role:Int, root:Int, src:Int, op:Int) { genericReduceSend(role, root, src, op); }
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceSend (role:Int, root:Int, src:Long, op:Int) { genericReduceSend(role, root, src, op); }
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceSend (role:Int, root:Int, src:ULong, op:Int) { genericReduceSend(role, root, src, op); }
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceSend (role:Int, root:Int, src:Float, op:Int) { genericReduceSend(role, root, src, op); }
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceSend (role:Int, root:Int, src:Double, op:Int) { genericReduceSend(role, root, src, op); }
+
+    private def genericReduceSend[T] (role:Int, root:Int, src:T, op:Int) : void {
+        val chk = IndexedMemoryChunk.allocateUninitialized[T](1);
+        val dst = dummyChunk[T]();
+        chk(0) = src;
+        finish nativeReduce[T](id, role, root, chk, dst, op);
+    }
+
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceRecv (role:Int, root:Int, src:Byte, op:Int) = genericReduceRecv(role, root, src, op);
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceRecv (role:Int, root:Int, src:UByte, op:Int) = genericReduceRecv(role, root, src, op);
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceRecv (role:Int, root:Int, src:Short, op:Int) = genericReduceRecv(role, root, src, op);
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceRecv (role:Int, root:Int, src:UShort, op:Int) = genericReduceRecv(role, root, src, op);
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceRecv (role:Int, root:Int, src:UInt, op:Int) = genericReduceRecv(role, root, src, op);
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceRecv (role:Int, root:Int, src:Int, op:Int) = genericReduceRecv(role, root, src, op);
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceRecv (role:Int, root:Int, src:Long, op:Int) = genericReduceRecv(role, root, src, op);
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceRecv (role:Int, root:Int, src:ULong, op:Int) = genericReduceRecv(role, root, src, op);
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceRecv (role:Int, root:Int, src:Float, op:Int) = genericReduceRecv(role, root, src, op);
+    /** Performs a reduction on a single value, returning the result */
+    public def reduceRecv (role:Int, root:Int, src:Double, op:Int) = genericReduceRecv(role, root, src, op);
+
+    private def genericReduceRecv[T] (role:Int, root:Int, src:T, op:Int) : T {
+        val chk = IndexedMemoryChunk.allocateUninitialized[T](1);
+        val dst = IndexedMemoryChunk.allocateUninitialized[T](1);
+        chk(0) = src;
+        finish nativeReduce[T](id, role, root, chk, dst, op);
+        return dst(0);
+    }
+
+    private static def nativeReduce[T](id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], dst:IndexedMemoryChunk[T], op:Int) : void {
+        Runtime.increaseParallelism(); // for MPI transport
+        @Native("java", "x10.x10rt.TeamSupport.nativeReduce(id, role, root, src, 0, dst, 0, 1, op);")
+        @Native("c++", "x10rt_reduce(id, role, root, src->raw(), dst->raw(), (x10rt_red_op_type)op, x10rt_get_red_type<TPMGL(T)>(), 1, x10aux::coll_handler, x10aux::coll_enter());") {}
+        Runtime.decreaseParallelism(1); // for MPI transport
+    }
+
     /** Returns the index of the biggest double value across the team */
     public def indexOfMax (role:Int, v:Double, idx:Int) : Int {
         val src = IndexedMemoryChunk.allocateUninitialized[DoubleIdx](1);

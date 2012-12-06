@@ -1265,7 +1265,6 @@ void x10rt_net_allreduce (x10rt_team team, x10rt_place role, const void *sbuf, v
 	error("x10rt_net_allreduce not implemented");
 }
 
-
 void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg)
 {
 	error("x10rt_net_team_members not implemented");
@@ -1305,4 +1304,10 @@ void x10rt_net_alltoallv (x10rt_team team, x10rt_place role, const void *sbuf, c
 		void *dbuf, const void *doffsets, const void *dcounts, size_t el, x10rt_completion_handler *ch, void *arg)
 {
 	error("x10rt_net_alltoallv not implemented");
+}
+
+void x10rt_net_reduce (x10rt_team team, x10rt_place role, x10rt_place root, const void *sbuf, void *dbuf,
+		x10rt_red_op_type op, x10rt_red_type dtype, size_t count, x10rt_completion_handler *ch, void *arg)
+{
+	error("x10rt_net_reduce not implemented");
 }

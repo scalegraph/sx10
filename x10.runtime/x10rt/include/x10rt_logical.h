@@ -504,6 +504,25 @@ X10RT_C void x10rt_lgl_alltoallv (x10rt_team team, x10rt_place role,
                     const void *sbuf, const void *soffsets, const void *scounts,
                     void *dbuf, const void *doffsets, const void *dcounts,
                     size_t el, x10rt_completion_handler *ch, void *arg);
+
+/** \see #x10rt_reduce
+ * \param team As in #x10rt_reduce
+ * \param role As in #x10rt_reduce
+ * \param root As in #x10rt_reduce
+ * \param sbuf As in #x10rt_reduce
+ * \param dbuf As in #x10rt_reduce
+ * \param op As in #x10rt_reduce
+ * \param dtype As in #x10rt_reduce
+ * \param count As in #x10rt_reduce
+ * \param ch As in #x10rt_reduce
+ * \param arg As in #x10rt_reduce
+ */
+X10RT_C void x10rt_lgl_reduce (x10rt_team team, x10rt_place role, x10rt_place root,
+                               const void *sbuf, void *dbuf,
+                               x10rt_red_op_type op,
+                               x10rt_red_type dtype,
+                               size_t count,
+                               x10rt_completion_handler *ch, void *arg);
 #endif
 
 // vim: tabstop=4:shiftwidth=4:expandtab:textwidth=100
