@@ -1530,6 +1530,16 @@ void x10rt_emu_reduce (x10rt_team team, x10rt_place role, x10rt_place root,
                           x10rt_red_type dtype, size_t count,
                           x10rt_completion_handler *ch, void *arg)
 {
-    void *buf = (role == root) ? dbuf : static_cast<void *>(safe_malloc<char>(sizeof_dtype(dtype)));
+    fprintf(stderr, "X10RT: x10rt_emu_reduce begin.\n");
+    fprintf(stderr, "X10RT: role: %d, root: %d, op: %d, count: %d\n", role, root, op, count);
+    void *buf = (role == root) ? dbuf : static_cast<void *>(safe_malloc<char>(count * sizeof_dtype(dtype)));
+    //void *buf = dbuf;
+    fprintf(stderr, "X10RT: buf: %x, dbuf: %x, size: %d.\n", buf, dbuf, sizeof_dtype(dtype));
+    fprintf(stderr, "X10RT: x10rt_emu_reduce call allreduce.\n");
     x10rt_emu_allreduce (team, role, sbuf, buf, op, dtype, count, ch, arg);
+    fprintf(stderr, "X10RT: x10rt_emu_reduce end allreduce.\n");
+    if (buf != dbuf) {
+        safe_free(static_cast<char *>(buf));
+    }
+    fprintf(stderr, "X10RT: x10rt_emu_reduce end.\n");
 }
