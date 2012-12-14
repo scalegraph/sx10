@@ -2352,7 +2352,7 @@ void x10rt_net_reduce (x10rt_team team, x10rt_place role, x10rt_place root,
     X10RT_NET_DEBUG("dtype=%d sizeof(dtype)=%d", dtype, el);
 
     MPI_Comm comm = mpi_tdb.comm(team);
-    void *buf = (role == root && sbuf == dbuf) ? ChkAlloc<void>(sizeof_dtype(dtype)) : dbuf;
+    void *buf = (role == root && sbuf == dbuf) ? ChkAlloc<void>(count * sizeof_dtype(dtype)) : dbuf;
 
     LOCK_IF_MPI_IS_NOT_MULTITHREADED;
     if (MPI_SUCCESS != MPI_Reduce((void*)sbuf, buf, count, mpi_red_type(dtype), mpi_red_op_type(dtype, op), root, comm)){
