@@ -1508,7 +1508,7 @@ static int sizeof_dtype(x10rt_red_type dtype)
 {
     switch (dtype) {
         #define BORING_MACRO(x) \
-        case x: return sizeof(typename x10rt_red_type_info<x>::Type);
+        case x: return sizeof(x10rt_red_type_info<x>::Type);
         BORING_MACRO(X10RT_RED_TYPE_U8);
         BORING_MACRO(X10RT_RED_TYPE_S8);
         BORING_MACRO(X10RT_RED_TYPE_S16);
