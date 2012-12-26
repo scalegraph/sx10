@@ -2004,6 +2004,47 @@ MPI_Op mpi_red_op_type(x10rt_red_type dtype, x10rt_red_op_type op) {
     }
 }
 
+#if defined(MVAPICH2_NUMVERSION) && MVAPICH2_NUMVERSION == 10900002
+#define MPI_NONBLOCKING_COLLECTIVE_NAME(stem) MPIX_##stem
+#else
+#define MPI_NONBLOCKING_COLLECTIVE_NAME(stem) MPI_##stem
+#endif
+
+#if MPI_VERSION >= 3 || (defined(OPEN_MPI) && ( OMPI_MAJOR_VERSION >= 2 || (OMPI_MAJOR_VERSION == 1 && OMPI_MINOR_VERSION >= 7))) || (defined(MVAPICH2_NUMVERSION) && MVAPICH2_NUMVERSION == 10900002)
+#define MPI_COLLECTIVE(name, iname, ...) \
+    do { \
+        MPI_Request req; \
+        LOCK_IF_MPI_IS_NOT_MULTITHREADED; \
+        if (MPI_SUCCESS != MPI_NONBLOCKING_COLLECTIVE_NAME(iname)(__VA_ARGS__, &req)) { \
+            fprintf(stderr, "[%s:%d] %s\n", \
+                    __FILE__, __LINE__, "Error in MPI_" #name); \
+            abort(); \
+        } \
+        UNLOCK_IF_MPI_IS_NOT_MULTITHREADED; \
+        int complete = 0; \
+        MPI_Status msg_status; \
+        do { \
+            LOCK_IF_MPI_IS_NOT_MULTITHREADED; \
+            if (MPI_SUCCESS != MPI_Test(&req, \
+                        &complete, \
+                        &msg_status)) { \
+            } \
+            UNLOCK_IF_MPI_IS_NOT_MULTITHREADED; \
+            x10rt_net_probe_ex(true); \
+        } while (!complete); \
+    } while(0)
+#else
+#define MPI_COLLECTIVE(name, iname, ...) \
+    do { LOCK_IF_MPI_IS_NOT_MULTITHREADED; \
+        if (MPI_SUCCESS != MPI_##name(__VA_ARGS__)) { \
+            fprintf(stderr, "[%s:%d] %s\n", \
+                    __FILE__, __LINE__, "Error in MPI_" #name); \
+            abort(); \
+        } \
+        UNLOCK_IF_MPI_IS_NOT_MULTITHREADED; \
+    } while(0)
+#endif
+
 void x10rt_net_barrier (x10rt_team team, x10rt_place role,
                         x10rt_completion_handler *ch, void *arg)
 {
@@ -2013,13 +2054,7 @@ void x10rt_net_barrier (x10rt_team team, x10rt_place role,
                 __FILE__, __LINE__, team);
         return;
     }
-    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    if (MPI_SUCCESS != MPI_Barrier(mpi_tdb.comm(team))) {
-        fprintf(stderr, "[%s:%d] %s\n",
-                __FILE__, __LINE__, "Error in MPI_Barrier");
-        abort();
-    }
-    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    MPI_COLLECTIVE(Barrier, Ibarrier, mpi_tdb.comm(team));
 
     ch(arg);
     return;
@@ -2036,13 +2071,8 @@ void x10rt_net_bcast (x10rt_team team, x10rt_place role,
     void *buf = (role == root) ? (void *)sbuf : dbuf;
     MPI_Comm comm = mpi_tdb.comm(team);
 
-    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    if (MPI_SUCCESS != MPI_Bcast(buf, count * el, MPI_BYTE, root, comm)){
-        fprintf(stderr, "[%s:%d] %s\n",
-                __FILE__, __LINE__, "Error in MPI_Bcast");
-        abort();
-    }
-    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    MPI_COLLECTIVE(Bcast, Ibcast, buf, count * el, MPI_BYTE, root, comm);
+
     if (role == root) {
 	memcpy(dbuf, sbuf, count  * el);
     }
@@ -2060,13 +2090,7 @@ void x10rt_net_scatter (x10rt_team team, x10rt_place role,
     MPI_Comm comm = mpi_tdb.comm(team);
     void *buf = (sbuf == dbuf) ? ChkAlloc<void>(count * el) : dbuf;
 
-    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    if (MPI_SUCCESS != MPI_Scatter((void *)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, root, comm)){
-        fprintf(stderr, "[%s:%d] %s\n",
-                __FILE__, __LINE__, "Error in MPI_Scatter");
-        abort();
-    }
-    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    MPI_COLLECTIVE(Scatter, Iscatter, (void *)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, root, comm);
 
     if (sbuf == dbuf) {
 	memcpy(dbuf, buf, count * el);
@@ -2087,13 +2111,7 @@ void x10rt_net_alltoall (x10rt_team team, x10rt_place role,
     int gsize = x10rt_net_team_sz(team);
     void *buf = (sbuf == dbuf) ? ChkAlloc<void>(gsize * count * el) : dbuf;
 
-    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    if (MPI_SUCCESS != MPI_Alltoall((void*)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, comm)){
-        fprintf(stderr, "[%s:%d] %s\n",
-                __FILE__, __LINE__, "Error in MPI_Alltoall");
-        abort();
-    }
-    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    MPI_COLLECTIVE(Alltoall, Ialltoall, (void*)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, comm);
 
     if (sbuf == dbuf) {
 	memcpy(dbuf, buf, count * el);
@@ -2117,12 +2135,7 @@ void x10rt_net_allreduce (x10rt_team team, x10rt_place role,
     MPI_Comm comm = mpi_tdb.comm(team);
     void *buf = (sbuf == dbuf) ? ChkAlloc<void>(count * el) : dbuf;
 
-    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    if (MPI_SUCCESS != MPI_Allreduce((void*)sbuf, buf, count, mpi_red_type(dtype), mpi_red_op_type(dtype, op), comm)){
-        X10RT_NET_DEBUG("%s", "Error in MPI_Allreduce");
-        abort();
-    }
-    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    MPI_COLLECTIVE(Allreduce, Iallreduce, (void*)sbuf, buf, count, mpi_red_type(dtype), mpi_red_op_type(dtype, op), comm);
 
     if (sbuf == dbuf) {
 	memcpy(dbuf, buf, count * el);
@@ -2151,13 +2164,7 @@ void x10rt_net_scatterv (x10rt_team team, x10rt_place role, x10rt_place root, co
     }
 
     X10RT_NET_DEBUG("%s", "pre scatterv");
-    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    if (MPI_SUCCESS != MPI_Scatterv((void *)sbuf, counts, displs, MPI_BYTE, buf, dcount * el, MPI_BYTE, root, comm)){
-        fprintf(stderr, "[%s:%d] %s\n",
-                __FILE__, __LINE__, "Error in MPI_Scatterv");
-        abort();
-    }
-    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    MPI_COLLECTIVE(Scatterv, Iscatterv, (void *)sbuf, counts, displs, MPI_BYTE, buf, dcount * el, MPI_BYTE, root, comm);
     X10RT_NET_DEBUG("%s", "pro scatterv");
 
     if (sbuf == dbuf) {
@@ -2179,13 +2186,7 @@ void x10rt_net_gather (x10rt_team team, x10rt_place role, x10rt_place root, cons
     int gsize = x10rt_net_team_sz(team);
     void *buf = (sbuf == dbuf) ? ChkAlloc<void>(gsize * count * el) : dbuf;
 
-    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    if (MPI_SUCCESS != MPI_Gather((void *)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, root, comm)){
-        fprintf(stderr, "[%s:%d] %s\n",
-                __FILE__, __LINE__, "Error in MPI_Gather");
-        abort();
-    }
-    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    MPI_COLLECTIVE(Gather, Igather, (void *)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, root, comm);
 
     X10RT_NET_DEBUG("%s", "done");
     if (sbuf == dbuf) {
@@ -2210,13 +2211,7 @@ void x10rt_net_gatherv (x10rt_team team, x10rt_place role, x10rt_place root, con
 	}
     }
 
-    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    if (MPI_SUCCESS != MPI_Gatherv((void *)sbuf, scount * el, MPI_BYTE, buf, counts, displs, MPI_BYTE, root, comm)){
-        fprintf(stderr, "[%s:%d] %s\n",
-                __FILE__, __LINE__, "Error in MPI_Gatherv");
-        abort();
-    }
-    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    MPI_COLLECTIVE(Gatherv, Igatherv, (void *)sbuf, scount * el, MPI_BYTE, buf, counts, displs, MPI_BYTE, root, comm);
 
     if (sbuf == dbuf) {
 	memcpy(dbuf, buf, scount * el);
@@ -2238,13 +2233,7 @@ void x10rt_net_allgather (x10rt_team team, x10rt_place role, const void *sbuf,
     int gsize = x10rt_net_team_sz(team);
     void *buf = (sbuf == dbuf) ? ChkAlloc<void>(gsize * count * el) : dbuf;
 
-    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    if (MPI_SUCCESS != MPI_Allgather((void *)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, comm)){
-        fprintf(stderr, "[%s:%d] %s\n",
-                __FILE__, __LINE__, "Error in MPI_Allgather");
-        abort();
-    }
-    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    MPI_COLLECTIVE(Allgather, Iallgather, (void *)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, comm);
 
     if (sbuf == dbuf) {
         memcpy(dbuf, buf, count * el);
@@ -2266,13 +2255,7 @@ void x10rt_net_allgatherv (x10rt_team team, x10rt_place role, const void *sbuf, 
         doffsets_[i] = static_cast<const int*>(doffsets)[i] * el;
     }
 
-    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    if (MPI_SUCCESS != MPI_Allgatherv((void *)sbuf, scount * el, MPI_BYTE, buf, dcounts_, doffsets_, MPI_BYTE, comm)){
-        fprintf(stderr, "[%s:%d] %s\n",
-                __FILE__, __LINE__, "Error in MPI_Allgatherv");
-        abort();
-    }
-    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    MPI_COLLECTIVE(Allgatherv, Iallgatherv, (void *)sbuf, scount * el, MPI_BYTE, buf, dcounts_, doffsets_, MPI_BYTE, comm);
 
     free(dcounts_);
     free(doffsets_);
@@ -2297,13 +2280,7 @@ void x10rt_net_alltoallv (x10rt_team team, x10rt_place role, const void *sbuf, c
 	doffsets_[i] = static_cast<const int*>(doffsets)[i] * el;
     }
 
-    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    if (MPI_SUCCESS != MPI_Alltoallv((void *)sbuf, scounts_, soffsets_, MPI_BYTE, buf, dcounts_, doffsets_, MPI_BYTE, comm)){
-        fprintf(stderr, "[%s:%d] %s\n",
-                __FILE__, __LINE__, "Error in MPI_Alltoallv");
-        abort();
-    }
-    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    MPI_COLLECTIVE(Alltoallv, Ialltoallv, (void *)sbuf, scounts_, soffsets_, MPI_BYTE, buf, dcounts_, doffsets_, MPI_BYTE, comm);
 
     /*
     if (sbuf == dbuf) {
@@ -2354,12 +2331,7 @@ void x10rt_net_reduce (x10rt_team team, x10rt_place role, x10rt_place root,
     MPI_Comm comm = mpi_tdb.comm(team);
     void *buf = (role == root && sbuf == dbuf) ? ChkAlloc<void>(count * sizeof_dtype(dtype)) : dbuf;
 
-    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    if (MPI_SUCCESS != MPI_Reduce((void*)sbuf, buf, count, mpi_red_type(dtype), mpi_red_op_type(dtype, op), root, comm)){
-        X10RT_NET_DEBUG("%s", "Error in MPI_Reduce");
-        abort();
-    }
-    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    MPI_COLLECTIVE(Reduce, Ireduce, (void*)sbuf, buf, count, mpi_red_type(dtype), mpi_red_op_type(dtype, op), root, comm);
 
     if (sbuf == dbuf) {
 	memcpy(dbuf, buf, count * el);
