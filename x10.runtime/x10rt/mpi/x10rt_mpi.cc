@@ -26,6 +26,7 @@
 #include <typeinfo>
 #include <vector>
 #include <map>
+#include <list>
 
 #include <x10rt_net.h>
 
@@ -34,7 +35,7 @@
 #include <x10rt_cpp.h>
 #include <x10rt_ser.h>
 
-#if 0
+#if 1
 #define X10RT_NET_DEBUG(fmt, ...) fprintf(stderr, "[%s:%d:%s] (%"PRIu32") " fmt "\n", __FILE__, __LINE__, __func__, static_cast<uint32_t>(x10rt_net_here()), __VA_ARGS__)
 #define X10RT_NET_DEBUGV(fmt, var) fprintf(stderr, "[%s:%d:%s] (%"PRIu32") " #var " = %"fmt "\n", __FILE__, __LINE__, __func__, static_cast<uint32_t>(x10rt_net_here()), (var))
 #else
@@ -1051,6 +1052,7 @@ x10rt_remote_ptr x10rt_net_register_mem (void *ptr, size_t)
 { return (x10rt_remote_ptr)(size_t)ptr; }
 
 void x10rt_register_thread (void) { }
+void x10rt_net_team_probe (void) ;
 
 void x10rt_net_probe (void) {
     x10rt_net_probe_ex(false);
@@ -1125,6 +1127,8 @@ static void x10rt_net_probe_ex (bool network_only) {
     } while (arrived);
 
     release_lock(&global_state.lock);
+
+    x10rt_net_team_probe();
 }
 
 void x10rt_net_finalize(void) {
@@ -1345,6 +1349,147 @@ private:
         }
 
 } mpi_tdb;
+
+struct CollectivePostprocessEnvBcast;
+
+struct CollectivePostprocessEnv {
+    x10rt_completion_handler2 *ch;
+    void *arg;
+    union {
+        struct CollectivePostprocessEnvBarrier {
+            x10rt_team team; x10rt_place role;
+            x10rt_completion_handler *ch; void *arg;
+        } barrier;
+        struct CollectivePostprocessEnvBcast {
+            x10rt_team team; x10rt_place role;
+            x10rt_place root; const void *sbuf; void *dbuf;
+            size_t el; size_t count;
+            x10rt_completion_handler *ch; void *arg;
+            void *buf;
+        } bcast;
+        struct CollectivePostprocessEnvScatter {
+            x10rt_team team; x10rt_place role;
+            x10rt_place root; const void *sbuf; void *dbuf;
+            size_t el; size_t count;
+            x10rt_completion_handler *ch; void *arg;
+            void *buf;
+        } scatter;
+        struct CollectivePostprocessEnvAlltoall {
+            x10rt_team team; x10rt_place role;
+            const void *sbuf; void *dbuf;
+            size_t el; size_t count;
+            x10rt_completion_handler *ch; void *arg;
+            void *buf;
+        } alltoall;
+        struct CollectivePostprocessEnvAllreduce {
+            x10rt_team team; x10rt_place role;
+            const void *sbuf; void *dbuf;
+            x10rt_red_op_type op;
+            x10rt_red_type dtype;
+            size_t count;
+            x10rt_completion_handler *ch; void *arg;
+            size_t el;
+            void *buf;
+        } allreduce;
+        struct CollectivePostprocessEnvScatterv {
+            x10rt_team team; x10rt_place role;
+            x10rt_place root; const void *sbuf; const void *soffsets; const void *scounts;
+            void *dbuf; size_t dcount;
+            size_t el; x10rt_completion_handler *ch; void *arg;
+            int *scounts_; int *soffsets_;
+        } scatterv;
+        struct CollectivePostprocessEnvGather {
+            x10rt_team team; x10rt_place role;
+            x10rt_place root; const void *sbuf; void *dbuf;
+            size_t el; size_t count;
+            x10rt_completion_handler *ch; void *arg;
+            int gsize;
+            void *buf;
+        } gather;
+        struct CollectivePostprocessEnvGatherv {
+            x10rt_team team; x10rt_place role;
+            x10rt_place root; const void *sbuf; size_t scount;
+            void *dbuf; const void *doffsets; const void *dcounts;
+            size_t el; x10rt_completion_handler *ch; void *arg;
+            int *dcounts_; int *doffsets_;
+        } gatherv;
+        struct CollectivePostprocessEnvAllgather {
+            x10rt_team team; x10rt_place role;
+            const void *sbuf;
+            void *dbuf;
+            size_t el; size_t count; x10rt_completion_handler *ch; void *arg;
+            int gsize;
+            void *buf;
+        } allgather;
+        struct CollectivePostprocessEnvAllgatherv {
+            x10rt_team team; x10rt_place role;
+            const void *sbuf; int scount;
+            void *dbuf; const void *doffsets; const void *dcounts;
+            size_t el; x10rt_completion_handler *ch; void *arg;
+            int gsize;
+            int *dcounts_; int *doffsets_;
+        } allgatherv;
+        struct CollectivePostprocessEnvAlltoallv {
+            x10rt_team team; x10rt_place role;
+            const void *sbuf; const void *soffsets; const void *scounts;
+            void *dbuf; const void *doffsets; const void *dcounts;
+            size_t el; x10rt_completion_handler *ch; void *arg;
+            int *scounts_; int *soffsets_; int *dcounts_; int *doffsets_;
+        } alltoallv;
+        struct CollectivePostprocessEnvReduce {
+            x10rt_team team; x10rt_place role; x10rt_place root;
+            const void *sbuf; void *dbuf;
+            x10rt_red_op_type op;
+            x10rt_red_type dtype;
+            size_t count;
+            x10rt_completion_handler *ch; void *arg;
+            void *buf;
+            int el;
+        } reduce;
+    } env;
+};
+
+struct CollectivePostprocess {
+    MPI_Request req;
+    void (*handler)(struct CollectivePostprocessEnv);
+    struct CollectivePostprocessEnv env;
+};
+
+static bool test_and_call_handler(struct CollectivePostprocess & cp) {
+    int complete = 0;
+    MPI_Status msg_status;
+
+    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    if (MPI_SUCCESS != MPI_Test(&cp.req,
+                &complete,
+                &msg_status)) {
+    }
+    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+
+    if (complete) {
+        cp.handler(cp.env);
+        return true;
+    }
+    return false;
+}
+
+struct CollectivePostprocessDB {
+private:
+    std::list<struct CollectivePostprocess> coll_list;
+
+public:
+    void add_handler(struct CollectivePostprocess *cp) {
+        coll_list.push_back(*cp);
+    }
+    void poll(void) {
+//        X10RT_NET_DEBUG("registered handlers: %d", coll_list.size());
+        coll_list.remove_if(test_and_call_handler);
+    }
+} coll_pdb;
+
+void x10rt_net_team_probe() {
+    coll_pdb.poll();
+}
 
 struct CollState {
 
@@ -2011,28 +2156,40 @@ MPI_Op mpi_red_op_type(x10rt_red_type dtype, x10rt_red_op_type op) {
 #endif
 
 #if MPI_VERSION >= 3 || (defined(OPEN_MPI) && ( OMPI_MAJOR_VERSION >= 2 || (OMPI_MAJOR_VERSION == 1 && OMPI_MINOR_VERSION >= 7))) || (defined(MVAPICH2_NUMVERSION) && MVAPICH2_NUMVERSION == 10900002)
+#define CONCAT(a,b) CONCAT_I(a,b)
+#define CONCAT_I(a,b) a##b
 #define MPI_COLLECTIVE(name, iname, ...) \
-    do { \
-        MPI_Request req; \
-        LOCK_IF_MPI_IS_NOT_MULTITHREADED; \
-        if (MPI_SUCCESS != MPI_NONBLOCKING_COLLECTIVE_NAME(iname)(__VA_ARGS__, &req)) { \
-            fprintf(stderr, "[%s:%d] %s\n", \
-                    __FILE__, __LINE__, "Error in MPI_" #name); \
-            abort(); \
-        } \
-        UNLOCK_IF_MPI_IS_NOT_MULTITHREADED; \
-        int complete = 0; \
-        MPI_Status msg_status; \
-        do { \
-            LOCK_IF_MPI_IS_NOT_MULTITHREADED; \
-            if (MPI_SUCCESS != MPI_Test(&req, \
-                        &complete, \
-                        &msg_status)) { \
-            } \
-            UNLOCK_IF_MPI_IS_NOT_MULTITHREADED; \
-            x10rt_net_probe_ex(true); \
-        } while (!complete); \
-    } while(0)
+     CollectivePostprocess *cp = new CollectivePostprocess(); \
+     MPI_Request &req = cp->req; \
+     LOCK_IF_MPI_IS_NOT_MULTITHREADED; \
+     if (MPI_SUCCESS != MPI_NONBLOCKING_COLLECTIVE_NAME(iname)(__VA_ARGS__, &req)) { \
+         fprintf(stderr, "[%s:%d] %s\n", \
+                 __FILE__, __LINE__, "Error in MPI_" #name); \
+         abort(); \
+     } \
+     UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+#define MPI_COLLECTIVE_SAVE(var) \
+     cp->env.env.MPI_COLLECTIVE_NAME.var = var;
+#define MPI_COLLECTIVE_POSTPROCESS \
+     cp->handler = CONCAT(x10rt_net_handler_,MPI_COLLECTIVE_NAME); \
+    coll_pdb.add_handler(cp); \
+} \
+static void CONCAT(x10rt_net_handler_,MPI_COLLECTIVE_NAME) (struct CollectivePostprocessEnv cpe) {
+#define SAVED(var) \
+     cpe.env.MPI_COLLECTIVE_NAME.var
+#define MPI_COLLECTIVE_POSTPROCESS_END //}
+static void x10rt_net_handler_barrier(CollectivePostprocessEnv);
+static void x10rt_net_handler_bcast(CollectivePostprocessEnv);
+static void x10rt_net_handler_scatter(CollectivePostprocessEnv);
+static void x10rt_net_handler_scatterv(CollectivePostprocessEnv);
+static void x10rt_net_handler_gather(CollectivePostprocessEnv);
+static void x10rt_net_handler_gatherv(CollectivePostprocessEnv);
+static void x10rt_net_handler_alltoall(CollectivePostprocessEnv);
+static void x10rt_net_handler_alltoallv(CollectivePostprocessEnv);
+static void x10rt_net_handler_allgather(CollectivePostprocessEnv);
+static void x10rt_net_handler_allgatherv(CollectivePostprocessEnv);
+static void x10rt_net_handler_reduce(CollectivePostprocessEnv);
+static void x10rt_net_handler_allreduce(CollectivePostprocessEnv);
 #else
 #define MPI_COLLECTIVE(name, iname, ...) \
     do { LOCK_IF_MPI_IS_NOT_MULTITHREADED; \
@@ -2043,21 +2200,38 @@ MPI_Op mpi_red_op_type(x10rt_red_type dtype, x10rt_red_op_type op) {
         } \
         UNLOCK_IF_MPI_IS_NOT_MULTITHREADED; \
     } while(0)
+#define MPI_COLLECTIVE_SAVE(var)
+#define MPI_COLLECTIVE_POSTPROCESS
+#define SAVED(var) var
+#define MPI_COLLECTIVE_POSTPROCESS_END
 #endif
 
 void x10rt_net_barrier (x10rt_team team, x10rt_place role,
                         x10rt_completion_handler *ch, void *arg)
 {
+#define MPI_COLLECTIVE_NAME barrier
     X10RT_NET_DEBUG("team=%d, role=%d", team, role);
     if (!mpi_tdb.isValidTeam(team)) {
         fprintf(stderr, "[%s:%d] %d is not valid team!)\n",
                 __FILE__, __LINE__, team);
         return;
     }
-    MPI_COLLECTIVE(Barrier, Ibarrier, mpi_tdb.comm(team));
 
-    ch(arg);
-    return;
+    X10RT_NET_DEBUG("%s","before barrier");
+    MPI_COLLECTIVE(Barrier, Ibarrier, mpi_tdb.comm(team));
+    X10RT_NET_DEBUG("%s","after barrier");
+
+    MPI_COLLECTIVE_SAVE(team);
+    MPI_COLLECTIVE_SAVE(role);
+    MPI_COLLECTIVE_SAVE(ch);
+    MPI_COLLECTIVE_SAVE(arg);
+
+    MPI_COLLECTIVE_POSTPROCESS
+    X10RT_NET_DEBUG("%s","before postprocess");
+    SAVED(ch)(SAVED(arg));
+    X10RT_NET_DEBUG("%s","after postprocess");
+    MPI_COLLECTIVE_POSTPROCESS_END
+#undef MPI_COLLECTIVE_NAME
 }
 
 void x10rt_net_bcast (x10rt_team team, x10rt_place role,
@@ -2065,18 +2239,35 @@ void x10rt_net_bcast (x10rt_team team, x10rt_place role,
                       size_t el, size_t count,
                       x10rt_completion_handler *ch, void *arg)
 {
-    X10RT_NET_DEBUG("team=%d, role=%d, count=%d, el=%d", team, role, count, el);
+#define MPI_COLLECTIVE_NAME bcast
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%zd, el=%zd", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
-    void *buf = (role == root) ? (void *)sbuf : dbuf;
+    void *buf = (role == root) ? ChkAlloc<void>(count * el) : dbuf;
     MPI_Comm comm = mpi_tdb.comm(team);
 
     MPI_COLLECTIVE(Bcast, Ibcast, buf, count * el, MPI_BYTE, root, comm);
 
-    if (role == root) {
-	memcpy(dbuf, sbuf, count  * el);
+    MPI_COLLECTIVE_SAVE(team);
+    MPI_COLLECTIVE_SAVE(role);
+    MPI_COLLECTIVE_SAVE(root);
+    MPI_COLLECTIVE_SAVE(sbuf);
+    MPI_COLLECTIVE_SAVE(dbuf);
+    MPI_COLLECTIVE_SAVE(el);
+    MPI_COLLECTIVE_SAVE(count);
+    MPI_COLLECTIVE_SAVE(ch);
+    MPI_COLLECTIVE_SAVE(arg);
+
+    MPI_COLLECTIVE_SAVE(buf);
+
+    MPI_COLLECTIVE_POSTPROCESS
+    if (SAVED(role) == SAVED(root)) {
+	memcpy(SAVED(dbuf), SAVED(buf), SAVED(count) * SAVED(el));
+	free(SAVED(buf));
     }
-    ch(arg);
+    SAVED(ch)(SAVED(arg));
+    MPI_COLLECTIVE_POSTPROCESS_END
+#undef MPI_COLLECTIVE_NAME
 }
 
 void x10rt_net_scatter (x10rt_team team, x10rt_place role,
@@ -2084,7 +2275,8 @@ void x10rt_net_scatter (x10rt_team team, x10rt_place role,
                         size_t el, size_t count,
                         x10rt_completion_handler *ch, void *arg)
 {
-    X10RT_NET_DEBUG("team=%d, role=%d, count=%d, el=%d", team, role, count, el);
+#define MPI_COLLECTIVE_NAME scatter
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%zd, el=%zd", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
     MPI_Comm comm = mpi_tdb.comm(team);
@@ -2092,11 +2284,28 @@ void x10rt_net_scatter (x10rt_team team, x10rt_place role,
 
     MPI_COLLECTIVE(Scatter, Iscatter, (void *)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, root, comm);
 
-    if (sbuf == dbuf) {
-	memcpy(dbuf, buf, count * el);
-	free(buf);
+    MPI_COLLECTIVE_SAVE(team);
+    MPI_COLLECTIVE_SAVE(role);
+    MPI_COLLECTIVE_SAVE(root);
+    MPI_COLLECTIVE_SAVE(sbuf);
+    MPI_COLLECTIVE_SAVE(dbuf);
+    MPI_COLLECTIVE_SAVE(el);
+    MPI_COLLECTIVE_SAVE(count);
+    MPI_COLLECTIVE_SAVE(ch);
+    MPI_COLLECTIVE_SAVE(arg);
+
+    MPI_COLLECTIVE_SAVE(buf);
+
+    MPI_COLLECTIVE_POSTPROCESS
+    X10RT_NET_DEBUG("post: team=%d, role=%d\n", SAVED(team), SAVED(role));
+
+    if (SAVED(sbuf) == SAVED(dbuf)) {
+	memcpy(SAVED(dbuf), SAVED(buf), SAVED(count) * SAVED(el));
+	free(SAVED(buf));
     }
-    ch(arg);
+    SAVED(ch)(SAVED(arg));
+    MPI_COLLECTIVE_POSTPROCESS_END
+#undef MPI_COLLECTIVE_NAME
 }
 
 void x10rt_net_alltoall (x10rt_team team, x10rt_place role,
@@ -2104,7 +2313,8 @@ void x10rt_net_alltoall (x10rt_team team, x10rt_place role,
                          size_t el, size_t count,
                          x10rt_completion_handler *ch, void *arg)
 {
-    X10RT_NET_DEBUG("team=%d, role=%d, count=%d, el=%d", team, role, count, el);
+#define MPI_COLLECTIVE_NAME alltoall
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%zd, el=%zd", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
     MPI_Comm comm = mpi_tdb.comm(team);
@@ -2113,11 +2323,25 @@ void x10rt_net_alltoall (x10rt_team team, x10rt_place role,
 
     MPI_COLLECTIVE(Alltoall, Ialltoall, (void*)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, comm);
 
-    if (sbuf == dbuf) {
-	memcpy(dbuf, buf, count * el);
-	free(buf);
+    MPI_COLLECTIVE_SAVE(team);
+    MPI_COLLECTIVE_SAVE(role);
+    MPI_COLLECTIVE_SAVE(sbuf);
+    MPI_COLLECTIVE_SAVE(dbuf);
+    MPI_COLLECTIVE_SAVE(el);
+    MPI_COLLECTIVE_SAVE(count);
+    MPI_COLLECTIVE_SAVE(ch);
+    MPI_COLLECTIVE_SAVE(arg);
+
+    MPI_COLLECTIVE_SAVE(buf);
+
+    MPI_COLLECTIVE_POSTPROCESS
+    if (SAVED(sbuf) == SAVED(dbuf)) {
+	memcpy(SAVED(dbuf), SAVED(buf), SAVED(count) * SAVED(el));
+	free(SAVED(buf));
     }
-    ch(arg);
+    SAVED(ch)(SAVED(arg));
+    MPI_COLLECTIVE_POSTPROCESS_END
+#undef MPI_COLLECTIVE_NAME
 }
 
 void x10rt_net_allreduce (x10rt_team team, x10rt_place role,
@@ -2127,8 +2351,9 @@ void x10rt_net_allreduce (x10rt_team team, x10rt_place role,
                           size_t count,
                           x10rt_completion_handler *ch, void *arg)
 {
-    int el = x10rt_red_type_length(dtype);
-    X10RT_NET_DEBUG("team=%d, role=%d, count=%d, el=%d", team, role, count, el);
+#define MPI_COLLECTIVE_NAME allreduce
+    size_t el = x10rt_red_type_length(dtype);
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%zd, el=%zd", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
     X10RT_NET_DEBUG("dtype=%d sizeof(dtype)=%d", dtype, el);
 
@@ -2137,49 +2362,84 @@ void x10rt_net_allreduce (x10rt_team team, x10rt_place role,
 
     MPI_COLLECTIVE(Allreduce, Iallreduce, (void*)sbuf, buf, count, mpi_red_type(dtype), mpi_red_op_type(dtype, op), comm);
 
-    if (sbuf == dbuf) {
-	memcpy(dbuf, buf, count * el);
-	free(buf);
+    MPI_COLLECTIVE_SAVE(team);
+    MPI_COLLECTIVE_SAVE(role);
+    MPI_COLLECTIVE_SAVE(sbuf);
+    MPI_COLLECTIVE_SAVE(dbuf);
+    MPI_COLLECTIVE_SAVE(op);
+    MPI_COLLECTIVE_SAVE(dtype);
+    MPI_COLLECTIVE_SAVE(count);
+    MPI_COLLECTIVE_SAVE(ch);
+    MPI_COLLECTIVE_SAVE(arg);
+
+    MPI_COLLECTIVE_SAVE(el);
+    MPI_COLLECTIVE_SAVE(buf);
+
+    MPI_COLLECTIVE_POSTPROCESS
+    if (SAVED(sbuf) == SAVED(dbuf)) {
+	memcpy(SAVED(dbuf), SAVED(buf), SAVED(count) * SAVED(el));
+	free(SAVED(buf));
     }
-    ch(arg);
+    SAVED(ch)(SAVED(arg));
+    MPI_COLLECTIVE_POSTPROCESS_END
+#undef MPI_COLLECTIVE_NAME
 }
 
 void x10rt_net_scatterv (x10rt_team team, x10rt_place role, x10rt_place root, const void *sbuf, const void *soffsets, const void *scounts,
 		void *dbuf, size_t dcount, size_t el, x10rt_completion_handler *ch, void *arg)
 {
-    X10RT_NET_DEBUG("team=%d, role=%d, root=%d, el=%d", team, role, root, el);
+#define MPI_COLLECTIVE_NAME scatterv
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%zd, el=%zd", team, role, dcount, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
     X10RT_NET_DEBUG("dcount=%d", dcount);
     MPI_Comm comm = mpi_tdb.comm(team);
     int gsize = x10rt_net_team_sz(team);
     void *buf = dbuf;
-    int *counts = (role == root) ? ChkAlloc<int>(gsize * el) : NULL;
-    int *displs = (role == root) ? ChkAlloc<int>(gsize * el) : NULL;
-    X10RT_NET_DEBUG("buf=%x, counts=%x, displs=%x", buf, counts, displs);
+    int *scounts_ = (role == root) ? ChkAlloc<int>(gsize * el) : NULL;
+    int *soffsets_ = (role == root) ? ChkAlloc<int>(gsize * el) : NULL;
+    X10RT_NET_DEBUG("buf=%x, counts="PRIxPTR", displs="PRIxPTR, buf, scounts_, soffsets_);
     if (role == root) {
 	for (int i = 0; i < gsize; ++i) {
-		counts[i] = static_cast<const int*>(scounts)[i] * el;
-		displs[i] = static_cast<const int*>(soffsets)[i] * el;
+		scounts_[i] = static_cast<const int*>(scounts)[i] * el;
+		soffsets_[i] = static_cast<const int*>(soffsets)[i] * el;
 	}
     }
 
     X10RT_NET_DEBUG("%s", "pre scatterv");
-    MPI_COLLECTIVE(Scatterv, Iscatterv, (void *)sbuf, counts, displs, MPI_BYTE, buf, dcount * el, MPI_BYTE, root, comm);
+    MPI_COLLECTIVE(Scatterv, Iscatterv, (void *)sbuf, scounts_, soffsets_, MPI_BYTE, buf, dcount * el, MPI_BYTE, root, comm);
     X10RT_NET_DEBUG("%s", "pro scatterv");
 
-    if (sbuf == dbuf) {
-	memcpy(dbuf, buf, dcount * el);
-	free(buf);
+    MPI_COLLECTIVE_SAVE(team);
+    MPI_COLLECTIVE_SAVE(role);
+    MPI_COLLECTIVE_SAVE(sbuf);
+    MPI_COLLECTIVE_SAVE(dbuf);
+    MPI_COLLECTIVE_SAVE(dcount);
+    MPI_COLLECTIVE_SAVE(el);
+    MPI_COLLECTIVE_SAVE(ch);
+    MPI_COLLECTIVE_SAVE(arg);
+
+    MPI_COLLECTIVE_SAVE(scounts_);
+    MPI_COLLECTIVE_SAVE(soffsets_);
+
+    MPI_COLLECTIVE_POSTPROCESS
+    /*
+    if (SAVED(sbuf) == SAVED(dbuf)) {
+	memcpy(SAVED(dbuf), SAVED(buf), SAVED(count) * SAVED(el));
+	free(SAVED(buf));
     }
-    free(counts);
-    free(displs);
-    ch(arg);
+    */
+    free(SAVED(scounts_));
+    free(SAVED(soffsets_));
+    SAVED(ch)(SAVED(arg));
+    MPI_COLLECTIVE_POSTPROCESS_END
+#undef MPI_COLLECTIVE_NAME
 }
 
 void x10rt_net_gather (x10rt_team team, x10rt_place role, x10rt_place root, const void *sbuf,
 		void *dbuf, size_t el, size_t count, x10rt_completion_handler *ch, void *arg)
 {
-    X10RT_NET_DEBUG("team=%d, role=%d, count=%d, el=%d", team, role, count, el);
+#define MPI_COLLECTIVE_NAME gather
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%zd, el=%zd", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
     MPI_Comm comm = mpi_tdb.comm(team);
@@ -2188,45 +2448,81 @@ void x10rt_net_gather (x10rt_team team, x10rt_place role, x10rt_place root, cons
 
     MPI_COLLECTIVE(Gather, Igather, (void *)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, root, comm);
 
+    MPI_COLLECTIVE_SAVE(team);
+    MPI_COLLECTIVE_SAVE(role);
+    MPI_COLLECTIVE_SAVE(root);
+    MPI_COLLECTIVE_SAVE(sbuf);
+    MPI_COLLECTIVE_SAVE(dbuf);
+    MPI_COLLECTIVE_SAVE(el);
+    MPI_COLLECTIVE_SAVE(count);
+    MPI_COLLECTIVE_SAVE(ch);
+    MPI_COLLECTIVE_SAVE(arg);
+
+    MPI_COLLECTIVE_SAVE(buf);
+    MPI_COLLECTIVE_SAVE(gsize);
+
+    MPI_COLLECTIVE_POSTPROCESS
     X10RT_NET_DEBUG("%s", "done");
-    if (sbuf == dbuf) {
-	memcpy(dbuf, buf, count * el);
-	free(buf);
+    if (SAVED(sbuf) == SAVED(dbuf)) {
+	memcpy(SAVED(dbuf), SAVED(buf), SAVED(gsize) * SAVED(count) * SAVED(el));
+	free(SAVED(buf));
     }
-    ch(arg);
+    SAVED(ch)(SAVED(arg));
+    MPI_COLLECTIVE_POSTPROCESS_END
+#undef MPI_COLLECTIVE_NAME
 }
 
 void x10rt_net_gatherv (x10rt_team team, x10rt_place role, x10rt_place root, const void *sbuf, size_t scount,
 		void *dbuf, const void *doffsets, const void *dcounts, size_t el, x10rt_completion_handler *ch, void *arg)
 {
+#define MPI_COLLECTIVE_NAME gatherv
     MPI_Comm comm = mpi_tdb.comm(team);
     int gsize = x10rt_net_team_sz(team);
     void *buf = dbuf;
-    int *counts = (role == root) ? ChkAlloc<int>(gsize * el) : NULL;
-    int *displs = (role == root) ? ChkAlloc<int>(gsize * el) : NULL;
+    int *dcounts_ = (role == root) ? ChkAlloc<int>(gsize * el) : NULL;
+    int *doffsets_ = (role == root) ? ChkAlloc<int>(gsize * el) : NULL;
     if (role == root) {
 	for (int i = 0; i < gsize; ++i) {
-		counts[i] = static_cast<const int*>(dcounts)[i] * el;
-		displs[i] = static_cast<const int*>(doffsets)[i] * el;
+		dcounts_[i] = static_cast<const int*>(dcounts)[i] * el;
+		doffsets_[i] = static_cast<const int*>(doffsets)[i] * el;
 	}
     }
 
-    MPI_COLLECTIVE(Gatherv, Igatherv, (void *)sbuf, scount * el, MPI_BYTE, buf, counts, displs, MPI_BYTE, root, comm);
+    MPI_COLLECTIVE(Gatherv, Igatherv, (void *)sbuf, scount * el, MPI_BYTE, buf, dcounts_, doffsets_, MPI_BYTE, root, comm);
 
-    if (sbuf == dbuf) {
-	memcpy(dbuf, buf, scount * el);
-	free(buf);
+    MPI_COLLECTIVE_SAVE(team);
+    MPI_COLLECTIVE_SAVE(role);
+    MPI_COLLECTIVE_SAVE(root);
+    MPI_COLLECTIVE_SAVE(sbuf);
+    MPI_COLLECTIVE_SAVE(dbuf);
+    MPI_COLLECTIVE_SAVE(el);
+    MPI_COLLECTIVE_SAVE(scount);
+    MPI_COLLECTIVE_SAVE(ch);
+    MPI_COLLECTIVE_SAVE(arg);
+
+    MPI_COLLECTIVE_SAVE(dcounts_);
+    MPI_COLLECTIVE_SAVE(doffsets_);
+
+    MPI_COLLECTIVE_POSTPROCESS
+    /*
+    if (SAVED(sbuf) == SAVED(dbuf)) {
+	memcpy(SAVED(dbuf), SAVED(buf), SAVED(count) * SAVED(el));
+	free(SAVED(buf));
     }
-    free(counts);
-    free(displs);
-    ch(arg);
+    */
+    free(SAVED(dcounts_));
+    free(SAVED(doffsets_));
+    SAVED(ch)(SAVED(arg));
+    MPI_COLLECTIVE_POSTPROCESS_END
+#undef MPI_COLLECTIVE_NAME
 }
 
 
 void x10rt_net_allgather (x10rt_team team, x10rt_place role, const void *sbuf,
 		void *dbuf, size_t el, size_t count, x10rt_completion_handler *ch, void *arg)
 {
-    X10RT_NET_DEBUG("team=%d, role=%d, count=%d, el=%d", team, role, count, el);
+#define MPI_COLLECTIVE_NAME allgather
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%zd, el=%zd", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
     MPI_Comm comm = mpi_tdb.comm(team);
@@ -2235,15 +2531,31 @@ void x10rt_net_allgather (x10rt_team team, x10rt_place role, const void *sbuf,
 
     MPI_COLLECTIVE(Allgather, Iallgather, (void *)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, comm);
 
-    if (sbuf == dbuf) {
-        memcpy(dbuf, buf, count * el);
-        free(buf);
+    MPI_COLLECTIVE_SAVE(team);
+    MPI_COLLECTIVE_SAVE(role);
+    MPI_COLLECTIVE_SAVE(sbuf);
+    MPI_COLLECTIVE_SAVE(dbuf);
+    MPI_COLLECTIVE_SAVE(el);
+    MPI_COLLECTIVE_SAVE(count);
+    MPI_COLLECTIVE_SAVE(ch);
+    MPI_COLLECTIVE_SAVE(arg);
+
+    MPI_COLLECTIVE_SAVE(buf);
+    MPI_COLLECTIVE_SAVE(gsize);
+
+    MPI_COLLECTIVE_POSTPROCESS
+    if (SAVED(sbuf) == SAVED(dbuf)) {
+	memcpy(SAVED(dbuf), SAVED(buf), SAVED(gsize) * SAVED(count) * SAVED(el));
+	free(SAVED(buf));
     }
-    ch(arg);
+    SAVED(ch)(SAVED(arg));
+    MPI_COLLECTIVE_POSTPROCESS_END
+#undef MPI_COLLECTIVE_NAME
 }
 void x10rt_net_allgatherv (x10rt_team team, x10rt_place role, const void *sbuf, int scount,
 		void *dbuf, const void *doffsets, const void *dcounts, size_t el, x10rt_completion_handler *ch, void *arg)
 {
+#define MPI_COLLECTIVE_NAME allgatherv
     MPI_Comm comm = mpi_tdb.comm(team);
     int gsize = x10rt_net_team_sz(team);
 //    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(scount * el) : dbuf;
@@ -2257,14 +2569,30 @@ void x10rt_net_allgatherv (x10rt_team team, x10rt_place role, const void *sbuf, 
 
     MPI_COLLECTIVE(Allgatherv, Iallgatherv, (void *)sbuf, scount * el, MPI_BYTE, buf, dcounts_, doffsets_, MPI_BYTE, comm);
 
-    free(dcounts_);
-    free(doffsets_);
-    ch(arg);
+    MPI_COLLECTIVE_SAVE(team);
+    MPI_COLLECTIVE_SAVE(role);
+    MPI_COLLECTIVE_SAVE(sbuf);
+    MPI_COLLECTIVE_SAVE(dbuf);
+    MPI_COLLECTIVE_SAVE(el);
+    MPI_COLLECTIVE_SAVE(scount);
+    MPI_COLLECTIVE_SAVE(ch);
+    MPI_COLLECTIVE_SAVE(arg);
+
+    MPI_COLLECTIVE_SAVE(dcounts_);
+    MPI_COLLECTIVE_SAVE(doffsets_);
+
+    MPI_COLLECTIVE_POSTPROCESS
+    free(SAVED(dcounts_));
+    free(SAVED(doffsets_));
+    SAVED(ch)(SAVED(arg));
+    MPI_COLLECTIVE_POSTPROCESS_END
+#undef MPI_COLLECTIVE_NAME
 }
 
 void x10rt_net_alltoallv (x10rt_team team, x10rt_place role, const void *sbuf, const void *soffsets, const void *scounts,
 		void *dbuf, const void *doffsets, const void *dcounts, size_t el, x10rt_completion_handler *ch, void *arg)
 {
+#define MPI_COLLECTIVE_NAME alltoallv
     MPI_Comm comm = mpi_tdb.comm(team);
     int gsize = x10rt_net_team_sz(team);
 //    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(scount * el) : dbuf;
@@ -2282,17 +2610,33 @@ void x10rt_net_alltoallv (x10rt_team team, x10rt_place role, const void *sbuf, c
 
     MPI_COLLECTIVE(Alltoallv, Ialltoallv, (void *)sbuf, scounts_, soffsets_, MPI_BYTE, buf, dcounts_, doffsets_, MPI_BYTE, comm);
 
+    MPI_COLLECTIVE_SAVE(team);
+    MPI_COLLECTIVE_SAVE(role);
+    MPI_COLLECTIVE_SAVE(sbuf);
+    MPI_COLLECTIVE_SAVE(dbuf);
+    MPI_COLLECTIVE_SAVE(el);
+    MPI_COLLECTIVE_SAVE(ch);
+    MPI_COLLECTIVE_SAVE(arg);
+
+    MPI_COLLECTIVE_SAVE(scounts_);
+    MPI_COLLECTIVE_SAVE(soffsets_);
+    MPI_COLLECTIVE_SAVE(dcounts_);
+    MPI_COLLECTIVE_SAVE(doffsets_);
+
+    MPI_COLLECTIVE_POSTPROCESS
     /*
     if (sbuf == dbuf) {
 	memcpy(dbuf, buf, scount * el);
 	free(buf);
     }
     */
-    free(scounts_);
-    free(soffsets_);
-    free(dcounts_);
-    free(doffsets_);
-    ch(arg);
+    free(SAVED(scounts_));
+    free(SAVED(soffsets_));
+    free(SAVED(dcounts_));
+    free(SAVED(doffsets_));
+    SAVED(ch)(SAVED(arg));
+    MPI_COLLECTIVE_POSTPROCESS_END
+#undef MPI_COLLECTIVE_NAME
 }
 
 static int sizeof_dtype(x10rt_red_type dtype)
@@ -2323,21 +2667,39 @@ void x10rt_net_reduce (x10rt_team team, x10rt_place role, x10rt_place root,
                           size_t count,
                           x10rt_completion_handler *ch, void *arg)
 {
+#define MPI_COLLECTIVE_NAME reduce
     int el = x10rt_red_type_length(dtype);
-    X10RT_NET_DEBUG("team=%d, role=%d, count=%d, el=%d", team, role, count, el);
+    X10RT_NET_DEBUG("team=%d, role=%d, count=%zd, el=%zd", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
     X10RT_NET_DEBUG("dtype=%d sizeof(dtype)=%d", dtype, el);
 
     MPI_Comm comm = mpi_tdb.comm(team);
-    void *buf = (role == root && sbuf == dbuf) ? ChkAlloc<void>(count * sizeof_dtype(dtype)) : dbuf;
+    void *buf = (role == root && sbuf == dbuf) ? ChkAlloc<void>(count * el) : dbuf;
 
     MPI_COLLECTIVE(Reduce, Ireduce, (void*)sbuf, buf, count, mpi_red_type(dtype), mpi_red_op_type(dtype, op), root, comm);
 
-    if (sbuf == dbuf) {
-	memcpy(dbuf, buf, count * el);
-	free(buf);
+    MPI_COLLECTIVE_SAVE(team);
+    MPI_COLLECTIVE_SAVE(role);
+    MPI_COLLECTIVE_SAVE(root);
+    MPI_COLLECTIVE_SAVE(sbuf);
+    MPI_COLLECTIVE_SAVE(dbuf);
+    MPI_COLLECTIVE_SAVE(op);
+    MPI_COLLECTIVE_SAVE(dtype);
+    MPI_COLLECTIVE_SAVE(count);
+    MPI_COLLECTIVE_SAVE(ch);
+    MPI_COLLECTIVE_SAVE(arg);
+
+    MPI_COLLECTIVE_SAVE(el);
+    MPI_COLLECTIVE_SAVE(buf);
+
+    MPI_COLLECTIVE_POSTPROCESS
+    if (SAVED(role) == SAVED(root) && SAVED(sbuf) == SAVED(dbuf)) {
+	memcpy(SAVED(dbuf), SAVED(buf), SAVED(count) * sizeof_dtype(SAVED(dtype)));
+	free(SAVED(buf));
     }
-    ch(arg);
+    SAVED(ch)(SAVED(arg));
+    MPI_COLLECTIVE_POSTPROCESS_END
+#undef MPI_COLLECTIVE_NAME
 }
 
 /** \} */
