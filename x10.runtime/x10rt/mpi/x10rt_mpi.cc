@@ -1353,7 +1353,7 @@ private:
 struct CollectivePostprocessEnvBcast;
 
 struct CollectivePostprocessEnv {
-    x10rt_completion_handler2 *ch;
+    x10rt_completion_handler *ch;
     void *arg;
     union {
         struct CollectivePostprocessEnvBarrier {
