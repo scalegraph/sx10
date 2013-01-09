@@ -1479,15 +1479,43 @@ static bool test_and_call_handler(struct CollectivePostprocess & cp) {
 
 struct CollectivePostprocessDB {
 private:
+    bool isPolling;
+    pthread_mutex_t lock;
     std::list<struct CollectivePostprocess> coll_list;
 
+    bool canStartPolling() {
+        get_lock(&this->lock);
+        bool status = isPolling;
+        isPolling = true;
+        release_lock(&this->lock);
+
+        return !status;
+    }
+
+    void finishPolling() {
+        get_lock(&this->lock);
+        isPolling  = false;
+        release_lock(&this->lock);
+    }
+
 public:
+    void init() {
+        if (pthread_mutex_init(&this->lock, NULL)) {
+            perror("pthread_mutex_init");
+            abort();
+        }
+        isPolling  = false;
+        //isPolling  = true;
+    }
+
     void add_handler(struct CollectivePostprocess *cp) {
         coll_list.push_back(*cp);
     }
     void poll(void) {
-//        X10RT_NET_DEBUG("registered handlers: %d", coll_list.size());
-        coll_list.remove_if(test_and_call_handler);
+        if (canStartPolling()) {
+            coll_list.remove_if(test_and_call_handler);
+            finishPolling();
+        }
     }
 } coll_pdb;
 
@@ -1792,6 +1820,8 @@ static void x10rt_net_coll_init(int *argc, char ** *argv, x10rt_msg_type *counte
     coll_state.TEAM_NEW_FINISHED_ID = (*counter)++;
     coll_state.TEAM_SPLIT_ALLOCATE_TEAM_ID = (*counter)++;
     coll_state.TEAM_ALLOCATE_NEW_TEAMS_ID = (*counter)++;
+
+    coll_pdb.init();
 
     X10RT_NET_DEBUGV("d",coll_state.TEAM_NEW_ALLOCATE_TEAM_ID);
     X10RT_NET_DEBUGV("d",coll_state.TEAM_NEW_ID);
