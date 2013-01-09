@@ -1468,6 +1468,10 @@ static bool test_and_call_handler(struct CollectivePostprocess & cp) {
 
     if (complete) {
         cp.handler(cp.env);
+        LOCK_IF_MPI_IS_NOT_MULTITHREADED;
+        if (MPI_SUCCESS != MPI_Request_free(&cp.req)) {
+        }
+        UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
         return true;
     }
     return false;
