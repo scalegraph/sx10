@@ -1551,15 +1551,9 @@ static CounterWithLock *new_counter(int count) {
 }
 
 static void decrement_counter(CounterWithLock *c) {
-	if (pthread_mutex_lock(&c->lock)) {
-		perror("pthread_mutex_lock");
-		abort();
-	}
+	get_lock(&c->lock);
 	c->counter--;
-    if(pthread_mutex_unlock(&c->lock)) {
-		perror("pthread_mutex_unlock");
-		abort();
-    }
+	release_lock(&c->lock);
 }
 
 static void destroy_counter(CounterWithLock *c) {
