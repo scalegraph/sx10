@@ -38,6 +38,7 @@
 #if 1
 #define X10RT_NET_DEBUG(fmt, ...) fprintf(stderr, "[%s:%d:%s] (%"PRIu32") " fmt "\n", __FILE__, __LINE__, __func__, static_cast<uint32_t>(x10rt_net_here()), __VA_ARGS__)
 #define X10RT_NET_DEBUGV(fmt, var) fprintf(stderr, "[%s:%d:%s] (%"PRIu32") " #var " = %"fmt "\n", __FILE__, __LINE__, __func__, static_cast<uint32_t>(x10rt_net_here()), (var))
+#define pthread_mutex_destroy(lock) (fprintf(stderr, "[%s:%d:%s] (%"PRIu32") pthread_mutex_destroy(" #lock ")\n", __FILE__, __LINE__, __func__, static_cast<uint32_t>(x10rt_net_here())), pthread_mutex_destroy(lock))
 #else
 #define X10RT_NET_DEBUG(fmt, ...)
 #define X10RT_NET_DEBUGV(fmt, ...)
@@ -2204,10 +2205,12 @@ MPI_Op mpi_red_op_type(x10rt_red_type dtype, x10rt_red_op_type op) {
      cp->env.arg = arg; \
     coll_pdb.add_handler(cp); \
 } \
-static void CONCAT(x10rt_net_handler_,MPI_COLLECTIVE_NAME) (struct CollectivePostprocessEnv cpe) {
+static void CONCAT(x10rt_net_handler_,MPI_COLLECTIVE_NAME) (struct CollectivePostprocessEnv cpe) { \
+	X10RT_NET_DEBUG("%s: %"PRIxPTR"_%"PRIxPTR,"begin postprocess", SAVED(ch), SAVED(arg));
+ //}
 #define SAVED(var) \
      cpe.env.MPI_COLLECTIVE_NAME.var
-#define MPI_COLLECTIVE_POSTPROCESS_END //}
+#define MPI_COLLECTIVE_POSTPROCESS_END X10RT_NET_DEBUG("%s: %"PRIxPTR"_%"PRIxPTR,"end postprocess", SAVED(ch), SAVED(arg));
 static void x10rt_net_handler_barrier(CollectivePostprocessEnv);
 static void x10rt_net_handler_bcast(CollectivePostprocessEnv);
 static void x10rt_net_handler_scatter(CollectivePostprocessEnv);
