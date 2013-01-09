@@ -2206,6 +2206,8 @@ MPI_Op mpi_red_op_type(x10rt_red_type dtype, x10rt_red_op_type op) {
      cp->env.env.MPI_COLLECTIVE_NAME.var = var;
 #define MPI_COLLECTIVE_POSTPROCESS \
      cp->handler = CONCAT(x10rt_net_handler_,MPI_COLLECTIVE_NAME); \
+     cp->env.ch = ch; \
+     cp->env.arg = arg; \
     coll_pdb.add_handler(cp); \
 } \
 static void CONCAT(x10rt_net_handler_,MPI_COLLECTIVE_NAME) (struct CollectivePostprocessEnv cpe) {
