@@ -1263,6 +1263,9 @@ struct TeamDB {
 
     void releaseTeam (x10rt_team t)
     {
+        assert(global_state.init);
+        assert(!global_state.finalized);
+
         X10RT_NET_DEBUG("t = %d", t);
         LOCK_IF_MPI_IS_NOT_MULTITHREADED;
         MPI_Comm_free(&(this->teamv[t]));
@@ -1276,6 +1279,9 @@ struct TeamDB {
 
     void allocTeam (x10rt_team t, MPI_Comm comm)
     {
+        assert(global_state.init);
+        assert(!global_state.finalized);
+
         X10RT_NET_DEBUG("t = %d", t);
         ensureIndex(t, true);
 
@@ -1319,6 +1325,9 @@ private:
 
         void allocTeam_ (x10rt_team t, x10rt_place members, x10rt_place *placev)
         {
+            assert(global_state.init);
+            assert(!global_state.finalized);
+
             X10RT_NET_DEBUG("t = %d, members = %d", t, members);
             ensureIndex(t, true);
 //            this->teamv[t] = new (safe_malloc<TeamObj>()) TeamObj(t, members, placev);
@@ -1458,6 +1467,9 @@ struct CollectivePostprocess {
 };
 
 static bool test_and_call_handler(struct CollectivePostprocess & cp) {
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
     int complete = 0;
     MPI_Status msg_status;
 
@@ -1470,10 +1482,13 @@ static bool test_and_call_handler(struct CollectivePostprocess & cp) {
 
     if (complete) {
         cp.handler(cp.env);
+        cp.req = MPI_REQUEST_NULL;
+        /*
         LOCK_IF_MPI_IS_NOT_MULTITHREADED;
         if (MPI_SUCCESS != MPI_Request_free(&cp.req)) {
         }
         UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+        */
         return true;
     }
     return false;
@@ -1882,6 +1897,9 @@ void x10rt_net_team_del (x10rt_team team, x10rt_place role,
 
 void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg)
 {
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
     MPI_Comm comm = mpi_tdb[team];
     MPI_Group grp, MPI_GROUP_WORLD;
     MPI_Comm_group(comm, &grp);
@@ -1909,6 +1927,9 @@ void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_comple
 
 x10rt_place x10rt_net_team_sz (x10rt_team team)
 {
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
     int sz;
 
     MPI_Comm comm = mpi_tdb[team];
@@ -1926,6 +1947,9 @@ void x10rt_net_team_split (x10rt_team parent, x10rt_place parent_role,
                            x10rt_place color, x10rt_place new_role,
                            x10rt_completion_handler2 *ch, void *arg)
 {
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
     X10RT_NET_DEBUG("parent=%d, parent_role=%d, color=%d, new_role=%d", parent, parent_role, color, new_role);
 
     MPI_Comm comm = mpi_tdb[parent];
@@ -2185,7 +2209,8 @@ MPI_Op mpi_red_op_type(x10rt_red_type dtype, x10rt_red_op_type op) {
 #define MPI_NONBLOCKING_COLLECTIVE_NAME(stem) MPI_##stem
 #endif
 
-#if MPI_VERSION >= 3 || (defined(OPEN_MPI) && ( OMPI_MAJOR_VERSION >= 2 || (OMPI_MAJOR_VERSION == 1 && OMPI_MINOR_VERSION >= 7))) || (defined(MVAPICH2_NUMVERSION) && MVAPICH2_NUMVERSION == 10900002)
+//#if MPI_VERSION >= 3 || (defined(OPEN_MPI) && ( OMPI_MAJOR_VERSION >= 2 || (OMPI_MAJOR_VERSION == 1 && OMPI_MINOR_VERSION >= 7))) || (defined(MVAPICH2_NUMVERSION) && MVAPICH2_NUMVERSION == 10900002)
+#if 0
 #define CONCAT(a,b) CONCAT_I(a,b)
 #define CONCAT_I(a,b) a##b
 #define MPI_COLLECTIVE(name, iname, ...) \
@@ -2244,6 +2269,9 @@ void x10rt_net_barrier (x10rt_team team, x10rt_place role,
                         x10rt_completion_handler *ch, void *arg)
 {
 #define MPI_COLLECTIVE_NAME barrier
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
     X10RT_NET_DEBUG("team=%d, role=%d", team, role);
     if (!mpi_tdb.isValidTeam(team)) {
         fprintf(stderr, "[%s:%d] %d is not valid team!)\n",
@@ -2274,10 +2302,14 @@ void x10rt_net_bcast (x10rt_team team, x10rt_place role,
                       x10rt_completion_handler *ch, void *arg)
 {
 #define MPI_COLLECTIVE_NAME bcast
-    X10RT_NET_DEBUG("team=%d, role=%d, count=%zd, el=%zd", team, role, count, el);
-    X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
+    X10RT_NET_DEBUG("mp: team=%d, role=%d, count=%zd, el=%zd", team, role, count, el);
 
     void *buf = (role == root) ? ChkAlloc<void>(count * el) : dbuf;
+    X10RT_NET_DEBUG("mp: sbuf=%"PRIxPTR" dbuf=%"PRIxPTR" buf=%"PRIxPTR, sbuf, dbuf, buf);
+
     MPI_Comm comm = mpi_tdb.comm(team);
 
     MPI_COLLECTIVE(Bcast, Ibcast, buf, count * el, MPI_BYTE, root, comm);
@@ -2295,6 +2327,9 @@ void x10rt_net_bcast (x10rt_team team, x10rt_place role,
     MPI_COLLECTIVE_SAVE(buf);
 
     MPI_COLLECTIVE_POSTPROCESS
+    X10RT_NET_DEBUG("pp: team=%d, role=%d, count=%zd, el=%zd", SAVED(team), SAVED(role), SAVED(count), SAVED(el));
+    X10RT_NET_DEBUG("pp: sbuf=%"PRIxPTR" dbuf=%"PRIxPTR" buf=%"PRIxPTR, SAVED(sbuf), SAVED(dbuf), SAVED(buf));
+
     if (SAVED(role) == SAVED(root)) {
 	memcpy(SAVED(dbuf), SAVED(buf), SAVED(count) * SAVED(el));
 	free(SAVED(buf));
@@ -2310,6 +2345,9 @@ void x10rt_net_scatter (x10rt_team team, x10rt_place role,
                         x10rt_completion_handler *ch, void *arg)
 {
 #define MPI_COLLECTIVE_NAME scatter
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
     X10RT_NET_DEBUG("team=%d, role=%d, count=%zd, el=%zd", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
@@ -2348,6 +2386,9 @@ void x10rt_net_alltoall (x10rt_team team, x10rt_place role,
                          x10rt_completion_handler *ch, void *arg)
 {
 #define MPI_COLLECTIVE_NAME alltoall
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
     X10RT_NET_DEBUG("team=%d, role=%d, count=%zd, el=%zd", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
@@ -2386,6 +2427,9 @@ void x10rt_net_allreduce (x10rt_team team, x10rt_place role,
                           x10rt_completion_handler *ch, void *arg)
 {
 #define MPI_COLLECTIVE_NAME allreduce
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
     size_t el = x10rt_red_type_length(dtype);
     X10RT_NET_DEBUG("team=%d, role=%d, count=%zd, el=%zd", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
@@ -2423,6 +2467,9 @@ void x10rt_net_scatterv (x10rt_team team, x10rt_place role, x10rt_place root, co
 		void *dbuf, size_t dcount, size_t el, x10rt_completion_handler *ch, void *arg)
 {
 #define MPI_COLLECTIVE_NAME scatterv
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
     X10RT_NET_DEBUG("team=%d, role=%d, count=%zd, el=%zd", team, role, dcount, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
     X10RT_NET_DEBUG("dcount=%d", dcount);
@@ -2473,6 +2520,9 @@ void x10rt_net_gather (x10rt_team team, x10rt_place role, x10rt_place root, cons
 		void *dbuf, size_t el, size_t count, x10rt_completion_handler *ch, void *arg)
 {
 #define MPI_COLLECTIVE_NAME gather
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
     X10RT_NET_DEBUG("team=%d, role=%d, count=%zd, el=%zd", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
@@ -2510,6 +2560,9 @@ void x10rt_net_gatherv (x10rt_team team, x10rt_place role, x10rt_place root, con
 		void *dbuf, const void *doffsets, const void *dcounts, size_t el, x10rt_completion_handler *ch, void *arg)
 {
 #define MPI_COLLECTIVE_NAME gatherv
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
     MPI_Comm comm = mpi_tdb.comm(team);
     int gsize = x10rt_net_team_sz(team);
     void *buf = dbuf;
@@ -2556,6 +2609,9 @@ void x10rt_net_allgather (x10rt_team team, x10rt_place role, const void *sbuf,
 		void *dbuf, size_t el, size_t count, x10rt_completion_handler *ch, void *arg)
 {
 #define MPI_COLLECTIVE_NAME allgather
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
     X10RT_NET_DEBUG("team=%d, role=%d, count=%zd, el=%zd", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
 
@@ -2590,6 +2646,9 @@ void x10rt_net_allgatherv (x10rt_team team, x10rt_place role, const void *sbuf, 
 		void *dbuf, const void *doffsets, const void *dcounts, size_t el, x10rt_completion_handler *ch, void *arg)
 {
 #define MPI_COLLECTIVE_NAME allgatherv
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
     MPI_Comm comm = mpi_tdb.comm(team);
     int gsize = x10rt_net_team_sz(team);
 //    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(scount * el) : dbuf;
@@ -2627,6 +2686,9 @@ void x10rt_net_alltoallv (x10rt_team team, x10rt_place role, const void *sbuf, c
 		void *dbuf, const void *doffsets, const void *dcounts, size_t el, x10rt_completion_handler *ch, void *arg)
 {
 #define MPI_COLLECTIVE_NAME alltoallv
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
     MPI_Comm comm = mpi_tdb.comm(team);
     int gsize = x10rt_net_team_sz(team);
 //    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(scount * el) : dbuf;
@@ -2702,6 +2764,9 @@ void x10rt_net_reduce (x10rt_team team, x10rt_place role, x10rt_place root,
                           x10rt_completion_handler *ch, void *arg)
 {
 #define MPI_COLLECTIVE_NAME reduce
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
     int el = x10rt_red_type_length(dtype);
     X10RT_NET_DEBUG("team=%d, role=%d, count=%zd, el=%zd", team, role, count, el);
     X10RT_NET_DEBUG("sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, sbuf, dbuf);
