@@ -165,26 +165,23 @@ public struct Team {
      * @return received array
      *
      */
+    public def scatter[T] (role:Int, root:Int, src:Array[T], count:Int) {
+        val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
+        finish nativeScatter(id, role, root, src.raw(), 0, dst_raw, 0, count);
+        return new Array[T](dst_raw);
+    }
+
+    /**
+     * @depreceted use {@link #scatter(Int, Int, Array[T], Int)} instead
+     */
     public def scatterSend[T] (role:Int, root:Int, src:Array[T], count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
         finish nativeScatter(id, role, root, src.raw(), 0, dst_raw, 0, count);
         return new Array[T](dst_raw);
     }
 
-    /** Receives the scattered array, called by all members excluding the root.
-     * Blocks until all members have received their part of root's array.
-     *
-     * @see #scatter
-     * @see #scatterSend
-     *
-     * @param role Our role in the team
-     *
-     * @param root The member who is supplying the data
-     *
-     * @param count The number of elements being transferred
-     *
-     * @return received array
-     *
+    /**
+     * @depreceted use {@link #scatter(Int, Int, Array[T], Int)} instead
      */
     public def scatterRecv[T] (role:Int, root:Int, count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
