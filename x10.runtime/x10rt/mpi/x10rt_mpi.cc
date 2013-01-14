@@ -36,7 +36,7 @@
 #include <x10rt_ser.h>
 
 
-#if 1
+#if 0
 #define X10RT_NET_DEBUG(fmt, ...) fprintf(stderr, "[%s:%d:%s] (%"PRIu32") " fmt "\n", __FILE__, __LINE__, __func__, static_cast<uint32_t>((global_state.init && !global_state.finalized)? x10rt_net_here() : -1), __VA_ARGS__)
 #define X10RT_NET_DEBUGV(fmt, var) fprintf(stderr, "[%s:%d:%s] (%"PRIu32") " #var " = %"fmt "\n", __FILE__, __LINE__, __func__, static_cast<uint32_t>((global_state.init && !global_state.finalized)? x10rt_net_here() : -1), (var))
 //#define pthread_mutex_destroy(lock) (fprintf(stderr, "[%s:%d:%s] (%"PRIu32") pthread_mutex_destroy(" #lock ")\n", __FILE__, __LINE__, __func__, static_cast<uint32_t>((global_state.init && !global_state.finalized)? x10rt_net_here() : -1)(x10rt_net_here())), pthread_mutex_destroy(lock))
