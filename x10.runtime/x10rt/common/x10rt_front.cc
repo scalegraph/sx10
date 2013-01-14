@@ -10,8 +10,6 @@
 
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
-#define X10RT_NET_DEBUG(fmt, ...) fprintf(stderr, "[%s:%d:%s] " fmt "\n", __FILE__, __LINE__, __func__, __VA_ARGS__)
-//#define X10RT_NET_DEBUG(fmt, ...)
 
 static x10rt_msg_type counter = 0;
 
@@ -156,14 +154,12 @@ void x10rt_finalize (void)
 void x10rt_team_new (x10rt_place placec, x10rt_place *placev,
                      x10rt_completion_handler2 *ch, void *arg)
 {
-    X10RT_NET_DEBUG("team=%d", placec);
     x10rt_lgl_team_new(placec, placev, ch, arg);
 }
 
 void x10rt_team_del (x10rt_team team, x10rt_place role,
                      x10rt_completion_handler *ch, void *arg)
 {
-    X10RT_NET_DEBUG("team=%d, role=%d", team, role);
     x10rt_lgl_team_del(team, role, ch, arg);
 }
 
@@ -176,14 +172,12 @@ void x10rt_team_split (x10rt_team parent, x10rt_place parent_role,
                        x10rt_place color, x10rt_place new_role,
                        x10rt_completion_handler2 *ch, void *arg)
 {
-    // X10RT_NET_DEBUG("parent=%d, parent_role=%d, color=%d, new_role=%d", parent, parent_role, color, new_role);
     x10rt_lgl_team_split(parent, parent_role, color, new_role, ch, arg);
 }
 
 void x10rt_barrier (x10rt_team team, x10rt_place role,
                     x10rt_completion_handler *ch, void *arg)
 {
-    // X10RT_NET_DEBUG("team=%d, role=%d", team, role);
     x10rt_lgl_barrier(team, role, ch, arg);
 }
 
@@ -192,7 +186,6 @@ void x10rt_bcast (x10rt_team team, x10rt_place role,
                   size_t el, size_t count,
                   x10rt_completion_handler *ch, void *arg)
 {
-    // X10RT_NET_DEBUG("team=%d, role=%d, count=%d, sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, team, role, count, sbuf, dbuf);
     x10rt_lgl_bcast(team, role, root, sbuf, dbuf, el, count, ch, arg);
 }
 
@@ -201,7 +194,6 @@ void x10rt_scatter (x10rt_team team, x10rt_place role,
                     size_t el, size_t count,
                     x10rt_completion_handler *ch, void *arg)
 {
-    // X10RT_NET_DEBUG("team=%d, role=%d, count=%d, sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, team, role, count, sbuf, dbuf);
     x10rt_lgl_scatter(team, role, root, sbuf, dbuf, el, count, ch, arg);
 }
 
@@ -210,7 +202,6 @@ void x10rt_scatterv (x10rt_team team, x10rt_place role,
                     void *dbuf, size_t dcount,
                     size_t el, x10rt_completion_handler *ch, void *arg)
 {
-	// X10RT_NET_DEBUG("team=%d, role=%d, root=%d, sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, team, role, root, sbuf, dbuf);
     x10rt_lgl_scatterv(team, role, root, sbuf, soffsets, scounts, dbuf, dcount, el, ch, arg);
 }
 
@@ -219,7 +210,6 @@ void x10rt_gather (x10rt_team team, x10rt_place role,
                     size_t el, size_t count,
                     x10rt_completion_handler *ch, void *arg)
 {
-    // X10RT_NET_DEBUG("team=%d, role=%d, count=%d, sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, team, role, count, sbuf, dbuf);
     x10rt_lgl_gather(team, role, root, sbuf, dbuf, el, count, ch, arg);
 }
 
@@ -251,7 +241,6 @@ void x10rt_alltoall (x10rt_team team, x10rt_place role,
                      size_t el, size_t count,
                      x10rt_completion_handler *ch, void *arg)
 {
-    // X10RT_NET_DEBUG("team=%d, role=%d, count=%d, sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, team, role, count, sbuf, dbuf);
     x10rt_lgl_alltoall(team, role, sbuf, dbuf, el, count, ch, arg);
 }
 
@@ -260,7 +249,6 @@ void x10rt_alltoallv (x10rt_team team, x10rt_place role,
                     void *dbuf, const void *doffsets, const void *dcounts,
                     size_t el, x10rt_completion_handler *ch, void *arg)
 {
-    // X10RT_NET_DEBUG("team=%d, role=%d, count=%d, sbuf=%"PRIxPTR" dbuf=%"PRIxPTR, team, role, count, sbuf, dbuf);
 	x10rt_lgl_alltoallv(team, role, sbuf, soffsets, scounts, dbuf, doffsets, dcounts, el, ch, arg);
     // x10rt_lgl_alltoallv(team, role, sbuf, soffbuf, dbuf, doffbuf, el, cbuf, ch, arg);
 }
@@ -272,7 +260,6 @@ void x10rt_reduce (x10rt_team team, x10rt_place role, x10rt_place root,
                       size_t count,
                       x10rt_completion_handler *ch, void *arg)
 {
-    // X10RT_NET_DEBUG("team=%d, role=%d, count=%d""sbuf=%"PRIxPTR" dbuf=%"PRIxPTR"dtype=%d sizeof(dtype)=%d", team, role, count, sbuf, dbuf, dtype, sizeof(dtype));
     x10rt_lgl_reduce(team, role, root, sbuf, dbuf, op, dtype, count, ch, arg);
 }
 
@@ -283,7 +270,6 @@ void x10rt_allreduce (x10rt_team team, x10rt_place role,
                       size_t count,
                       x10rt_completion_handler *ch, void *arg)
 {
-    // X10RT_NET_DEBUG("team=%d, role=%d, count=%d""sbuf=%"PRIxPTR" dbuf=%"PRIxPTR"dtype=%d sizeof(dtype)=%d", team, role, count, sbuf, dbuf, dtype, sizeof(dtype));
     x10rt_lgl_allreduce(team, role, sbuf, dbuf, op, dtype, count, ch, arg);
 }
 
