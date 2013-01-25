@@ -181,7 +181,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #scatter(Int, Int, Array[T], Int)} instead
+     * @deprecated use {@link #scatter(Int, Int, Array[T], Int)} instead
      */
     public def scatterSend[T] (role:Int, root:Int, src:Array[T], count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
@@ -190,7 +190,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #scatter(Int, Int, Array[T], Int)} instead
+     * @deprecated use {@link #scatter(Int, Int, Array[T], Int)} instead
      */
     public def scatterRecv[T] (role:Int, root:Int, count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
@@ -260,7 +260,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #scatterv(Int, Int, Array[T], Array[Int], Array[Int], Int)} instead
+     * @deprecated use {@link #scatterv(Int, Int, Array[T], Array[Int], Array[Int], Int)} instead
      */
     public def scattervSend[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int], dst_count:Int) {
     	assert(src_counts.size == size());
@@ -271,7 +271,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #scatterv(Int, Int, Array[T], Array[Int], Array[Int], Int)} instead
+     * @deprecated use {@link #scatterv(Int, Int, Array[T], Array[Int], Array[Int], Int)} instead
      */
     public def scattervRecv[T] (role:Int, root:Int, dst_count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](dst_count);
@@ -337,14 +337,14 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #gather(Int, Int, Array[T], Int)} instead
+     * @deprecated use {@link #gather(Int, Int, Array[T], Int)} instead
      */
     public def gatherSend[T] (role:Int, root:Int, src:Array[T], count:Int) : void {
         finish nativeGather(id, role, root, src.raw(), 0, dummyChunk[T](), 0, count);
     }
 
     /**
-     * @depreceted use {@link #gather(Int, Int, Array[T], Int)} instead
+     * @deprecated use {@link #gather(Int, Int, Array[T], Int)} instead
      */
     public def gatherRecv[T] (role:Int, root:Int, src:Array[T], count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
@@ -374,7 +374,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #gather1(Int, Int, T)} instead
+     * @deprecated use {@link #gather1(Int, Int, T)} instead
      */
     public def gatherSend1[T] (role:Int, root:Int, src:T) : void {
     	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
@@ -383,7 +383,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #gather1(Int, Int, T)} instead
+     * @deprecated use {@link #gather1(Int, Int, T)} instead
      */
     public def gatherRecv1[T] (role:Int, root:Int, src:T) {
     	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
@@ -429,14 +429,14 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #gatherv(Int, Int, Array[T], Array[Int], Array[Int])} instead
+     * @deprecated use {@link #gatherv(Int, Int, Array[T], Array[Int], Array[Int])} instead
      */
     public def gathervSend[T] (role:Int, root:Int, src:Array[T]) : void {
     	finish nativeGatherv(id, role, root, src.raw(), 0, src.size, dummyChunk[T](), dummyChunk[Int](), dummyChunk[Int]());
     }
     
     /**
-     * @depreceted use {@link #gatherv(Int, Int, Array[T], Array[Int], Array[Int])} instead
+     * @deprecated use {@link #gatherv(Int, Int, Array[T], Array[Int], Array[Int])} instead
      */
     public def gathervRecv[T] (role:Int, root:Int, src:Array[T], dst_offs:Array[Int], dst_counts:Array[Int] ) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0));
@@ -459,7 +459,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #gatherv(Int, Int, Array[T], Array[Int], Array[Int])} instead
+     * @deprecated use {@link #gatherv(Int, Int, Array[T], Array[Int], Array[Int])} instead
      */
     public def gathervRecv[T] (role:Int, root:Int, src:Array[T], dst_counts:Array[Int](1) ) {
     	val dst_offs = countsToOffs(dst_counts);
@@ -500,7 +500,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #bcast1(Int, Int, T)} instead
+     * @deprecated use {@link #bcast1(Int, Int, T)} instead
      */
     public def bcastSend1[T] (role:Int, root:Int, src:T) : T {
     	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
@@ -511,7 +511,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #bcast1(Int, Int, T)} instead
+     * @deprecated use {@link #bcast1(Int, Int, T)} instead
      */
     public def bcastRecv1[T] (role:Int, root:Int) : T {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
@@ -526,7 +526,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #bcast(Int, Int, Array[T], Int)} instead
+     * @deprecated use {@link #bcast(Int, Int, Array[T], Int)} instead
      */
     public def bcastSend[T] (role:Int, root:Int, src:Array[T], count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
@@ -535,7 +535,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #bcast(Int, Int, Array[T], Int)} instead
+     * @deprecated use {@link #bcast(Int, Int, Array[T], Int)} instead
      */
     public def bcastRecv[T] (role:Int, root:Int, count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
@@ -746,25 +746,25 @@ public struct Team {
         @Native("c++", "x10rt_reduce(id, role, root, &src->raw()[src_off], &dst->raw()[dst_off], (x10rt_red_op_type)op, x10rt_get_red_type<TPMGL(T)>(), count, x10aux::coll_handler, x10aux::coll_enter());") {}
     }
 
-    /** Performs a reduction on a single value, returning the result @depreceted */
+    /** Performs a reduction on a single value, returning the result @deprecated */
     public def reduceSend (role:Int, root:Int, src:Byte, op:Int) { genericReduceSend(role, root, src, op); }
-    /** Performs a reduction on a single value, returning the result @depreceted */
+    /** Performs a reduction on a single value, returning the result @deprecated */
     public def reduceSend (role:Int, root:Int, src:UByte, op:Int) { genericReduceSend(role, root, src, op); }
-    /** Performs a reduction on a single value, returning the result @depreceted */
+    /** Performs a reduction on a single value, returning the result @deprecated */
     public def reduceSend (role:Int, root:Int, src:Short, op:Int) { genericReduceSend(role, root, src, op); }
-    /** Performs a reduction on a single value, returning the result @depreceted */
+    /** Performs a reduction on a single value, returning the result @deprecated */
     public def reduceSend (role:Int, root:Int, src:UShort, op:Int) { genericReduceSend(role, root, src, op); }
-    /** Performs a reduction on a single value, returning the result @depreceted */
+    /** Performs a reduction on a single value, returning the result @deprecated */
     public def reduceSend (role:Int, root:Int, src:UInt, op:Int) { genericReduceSend(role, root, src, op); }
-    /** Performs a reduction on a single value, returning the result @depreceted */
+    /** Performs a reduction on a single value, returning the result @deprecated */
     public def reduceSend (role:Int, root:Int, src:Int, op:Int) { genericReduceSend(role, root, src, op); }
-    /** Performs a reduction on a single value, returning the result @depreceted */
+    /** Performs a reduction on a single value, returning the result @deprecated */
     public def reduceSend (role:Int, root:Int, src:Long, op:Int) { genericReduceSend(role, root, src, op); }
-    /** Performs a reduction on a single value, returning the result @depreceted */
+    /** Performs a reduction on a single value, returning the result @deprecated */
     public def reduceSend (role:Int, root:Int, src:ULong, op:Int) { genericReduceSend(role, root, src, op); }
-    /** Performs a reduction on a single value, returning the result @depreceted */
+    /** Performs a reduction on a single value, returning the result @deprecated */
     public def reduceSend (role:Int, root:Int, src:Float, op:Int) { genericReduceSend(role, root, src, op); }
-    /** Performs a reduction on a single value, returning the result @depreceted */
+    /** Performs a reduction on a single value, returning the result @deprecated */
     public def reduceSend (role:Int, root:Int, src:Double, op:Int) { genericReduceSend(role, root, src, op); }
 
     private def genericReduceSend[T] (role:Int, root:Int, src:T, op:Int) : void {
@@ -951,7 +951,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #scatter(Int, Int, Array[T])} instead
+     * @deprecated use {@link #scatter(Int, Int, Array[T])} instead
      */
     public def scatterSendAuto[T] (role:Int, root:Int, src:Array[T]) {
         val team_size = size();
@@ -961,7 +961,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #scatter(Int, Int, Array[T])} instead
+     * @deprecated use {@link #scatter(Int, Int, Array[T])} instead
      */
     public def scatterRecvAuto[T] (role:Int, root:Int) {
         val count = bcastRecv1[Int](role, root);
@@ -977,7 +977,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #scatter(Int, Int, Array[T], Array[Int], Array[Int])} instead
+     * @deprecated use {@link #scatter(Int, Int, Array[T], Array[Int], Array[Int])} instead
      */
     public def scattervSendAuto[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int]) {
         val team_size = size();
@@ -993,7 +993,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #scatter(Int, Int, Array[T], Array[Int])} instead
+     * @deprecated use {@link #scatter(Int, Int, Array[T], Array[Int])} instead
      */
     public def scattervSendAuto[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int](1)) {
         val src_offs = countsToOffs(src_counts);
@@ -1013,7 +1013,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #scatter(Int, Int, Array[Array[T]])} instead
+     * @deprecated use {@link #scatter(Int, Int, Array[Array[T]])} instead
      */
     public def scattervSendAuto[T] (role:Int, root:Int, src:Array[Array[T](1)](1)) {
         val flatten_src_tuple = flatten(src);
@@ -1024,7 +1024,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use scatterv instead
+     * @deprecated use scatterv instead
      */
     public def scattervRecvAuto[T] (role:Int, root:Int) {
         val dst_count = scatterRecv[Int](role, root, 1)(0);
@@ -1039,7 +1039,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #gatherv(Int, Int, Array[Array[T]])} instead
+     * @deprecated use {@link #gatherv(Int, Int, Array[Array[T]])} instead
      */
     public def gathervSendAuto[T] (role:Int, root:Int, src:Array[T]) : void {
         gatherSend1(role, root, src.size);
@@ -1047,7 +1047,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #gatherv(Int, Int, Array[Array[T]])} instead
+     * @deprecated use {@link #gatherv(Int, Int, Array[Array[T]])} instead
      */
     public def gathervRecvAuto[T] (role:Int, root:Int, src:Array[T]) {
         val dst_counts = gatherRecv1[Int](role, root, src.size);
@@ -1062,7 +1062,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #bcast(Int, Int, Array[T])} instead
+     * @deprecated use {@link #bcast(Int, Int, Array[T])} instead
      */
     public def bcastSendAuto[T] (role:Int, root:Int, src:Array[T]) {
         val count = bcastSend1(role, root, src.size);
@@ -1070,7 +1070,7 @@ public struct Team {
     }
 
     /**
-     * @depreceted use {@link #bcast(Int, Int, Array[T])} instead
+     * @deprecated use {@link #bcast(Int, Int, Array[T])} instead
      */
     public def bcastRecvAuto[T] (role:Int, root:Int) {
         val count = bcastRecv1[Int](role, root);
