@@ -53,6 +53,7 @@ static void x10rt_net_coll_init(int *argc, char ** *argv, x10rt_msg_type *counte
 #define X10RT_CB_TBL_SIZE               (128)
 #define X10RT_MAX_PEEK_DEPTH            (16)
 #define X10RT_MAX_OUTSTANDING_SENDS     (256)
+#define X10RT_DATATYPE_TBL_SIZE         (256)
 
 /* Generic utility funcs */
 template <class T> T* ChkAlloc(size_t len) {
@@ -1361,8 +1362,6 @@ private:
 
 } mpi_tdb;
 
-struct CollectivePostprocessEnvBcast;
-
 struct CollectivePostprocessEnv {
     x10rt_completion_handler *ch;
     void *arg;
@@ -1541,13 +1540,42 @@ void x10rt_net_team_probe() {
 }
 
 struct CollState {
-
     int TEAM_NEW_ALLOCATE_TEAM_ID;
     int TEAM_NEW_ID;
     int TEAM_NEW_FINISHED_ID;
     int TEAM_SPLIT_ALLOCATE_TEAM_ID;
     int TEAM_ALLOCATE_NEW_TEAMS_ID;
+
+    MPI_Datatype * datatypeTbl;
+
+    void init () {
+        datatypeTbl =
+            ChkAlloc<MPI_Datatype>(sizeof(MPI_Datatype) * X10RT_DATATYPE_TBL_SIZE);
+        for (int i = 1; i < X10RT_DATATYPE_TBL_SIZE; i++) {
+            LOCK_IF_MPI_IS_NOT_MULTITHREADED;
+            if (MPI_SUCCESS != MPI_Type_contiguous(i, MPI_BYTE, &datatypeTbl[i])) {
+                fprintf(stderr, "[%s:%d] %s\n",
+                        __FILE__, __LINE__, "Error in MPI_Type_contiguous");
+                abort();
+            }
+            UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+        }
+    }
+
+    ~CollState() {
+        free(datatypeTbl);
+    }
 } coll_state;
+
+inline MPI_Datatype get_mpi_datatype(size_t len) {
+    if (len < X10RT_DATATYPE_TBL_SIZE) {
+        return coll_state.datatypeTbl[len];
+    } else {
+        fprintf(stderr, "[%s:%d] %s\n",
+                __FILE__, __LINE__, "Element size is too big");
+        abort();
+    }
+}
 
 struct CounterWithLock {
     int counter;
@@ -2306,7 +2334,13 @@ void x10rt_net_bcast (x10rt_team team, x10rt_place role,
 
     X10RT_NET_DEBUG("mp: team=%d, role=%d, count=%zd, el=%zd", team, role, count, el);
 
-    void *buf = (role == root) ? ChkAlloc<void>(count * el) : dbuf;
+    int gsize = x10rt_net_team_sz(team);
+    char *buf = (role == root) ? ChkAlloc<char>(count * el * gsize) : reinterpret_cast<char *>(dbuf);
+    if (role == root) {
+        for (int i = 0; i < count * el * gsize; i++) {
+            buf[i] = reinterpret_cast<const char *>(sbuf)[i];
+        }
+    }
     X10RT_NET_DEBUG("mp: sbuf=%"PRIxPTR" dbuf=%"PRIxPTR" buf=%"PRIxPTR, sbuf, dbuf, buf);
 
     MPI_Comm comm = mpi_tdb.comm(team);
