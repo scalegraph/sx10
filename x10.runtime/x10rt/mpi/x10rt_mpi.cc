@@ -1361,8 +1361,6 @@ private:
 
 } mpi_tdb;
 
-struct CollectivePostprocessEnvBcast;
-
 struct CollectivePostprocessEnv {
     x10rt_completion_handler *ch;
     void *arg;
