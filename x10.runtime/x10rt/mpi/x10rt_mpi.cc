@@ -2699,14 +2699,14 @@ void x10rt_net_allgatherv (x10rt_team team, x10rt_place role, const void *sbuf, 
     int gsize = x10rt_net_team_sz(team);
 //    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(scount * el) : dbuf;
     void *buf = dbuf;
-    int *dcounts_ = ChkAlloc<int>(gsize * el);
-    int *doffsets_ = ChkAlloc<int>(gsize * el);
+    int *dcounts_ = ChkAlloc<int>(gsize);
+    int *doffsets_ = ChkAlloc<int>(gsize);
     for (int i = 0; i < gsize; ++i) {
-        dcounts_[i] = static_cast<const int*>(dcounts)[i] * el;
-        doffsets_[i] = static_cast<const int*>(doffsets)[i] * el;
+        dcounts_[i] = static_cast<const int*>(dcounts)[i];
+        doffsets_[i] = static_cast<const int*>(doffsets)[i];
     }
 
-    MPI_COLLECTIVE(Allgatherv, Iallgatherv, (void *)sbuf, scount, get_mpi_datatype(el), buf, dcounts_, doffsets_, MPI_BYTE, comm);
+    MPI_COLLECTIVE(Allgatherv, Iallgatherv, (void *)sbuf, scount, get_mpi_datatype(el), buf, dcounts_, doffsets_, get_mpi_datatype(el), comm);
 
     MPI_COLLECTIVE_SAVE(team);
     MPI_COLLECTIVE_SAVE(role);
@@ -2739,18 +2739,18 @@ void x10rt_net_alltoallv (x10rt_team team, x10rt_place role, const void *sbuf, c
     int gsize = x10rt_net_team_sz(team);
 //    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(scount * el) : dbuf;
     void *buf = dbuf;
-    int *scounts_ = ChkAlloc<int>(gsize * el);
-    int *soffsets_ = ChkAlloc<int>(gsize * el);
-    int *dcounts_ = ChkAlloc<int>(gsize * el);
-    int *doffsets_ = ChkAlloc<int>(gsize * el);
+    int *scounts_ = ChkAlloc<int>(gsize);
+    int *soffsets_ = ChkAlloc<int>(gsize);
+    int *dcounts_ = ChkAlloc<int>(gsize);
+    int *doffsets_ = ChkAlloc<int>(gsize);
     for (int i = 0; i < gsize; ++i) {
-	scounts_[i] = static_cast<const int*>(scounts)[i] * el;
-	soffsets_[i] = static_cast<const int*>(soffsets)[i] * el;
-	dcounts_[i] = static_cast<const int*>(dcounts)[i] * el;
-	doffsets_[i] = static_cast<const int*>(doffsets)[i] * el;
+	scounts_[i] = static_cast<const int*>(scounts)[i];
+	soffsets_[i] = static_cast<const int*>(soffsets)[i];
+	dcounts_[i] = static_cast<const int*>(dcounts)[i];
+	doffsets_[i] = static_cast<const int*>(doffsets)[i];
     }
 
-    MPI_COLLECTIVE(Alltoallv, Ialltoallv, (void *)sbuf, scounts_, soffsets_, MPI_BYTE, buf, dcounts_, doffsets_, MPI_BYTE, comm);
+    MPI_COLLECTIVE(Alltoallv, Ialltoallv, (void *)sbuf, scounts_, soffsets_, get_mpi_datatype(el), buf, dcounts_, doffsets_, get_mpi_datatype(el), comm);
 
     MPI_COLLECTIVE_SAVE(team);
     MPI_COLLECTIVE_SAVE(role);
