@@ -53,6 +53,7 @@ static void x10rt_net_coll_init(int *argc, char ** *argv, x10rt_msg_type *counte
 #define X10RT_CB_TBL_SIZE               (128)
 #define X10RT_MAX_PEEK_DEPTH            (16)
 #define X10RT_MAX_OUTSTANDING_SENDS     (256)
+#define X10RT_DATATYPE_TBL_SIZE         (256)
 
 /* Generic utility funcs */
 template <class T> T* ChkAlloc(size_t len) {
@@ -1539,13 +1540,42 @@ void x10rt_net_team_probe() {
 }
 
 struct CollState {
-
     int TEAM_NEW_ALLOCATE_TEAM_ID;
     int TEAM_NEW_ID;
     int TEAM_NEW_FINISHED_ID;
     int TEAM_SPLIT_ALLOCATE_TEAM_ID;
     int TEAM_ALLOCATE_NEW_TEAMS_ID;
+
+    MPI_Datatype * datatypeTbl;
+
+    void init () {
+        datatypeTbl =
+            ChkAlloc<MPI_Datatype>(sizeof(MPI_Datatype) * X10RT_DATATYPE_TBL_SIZE);
+        for (int i = 1; i < X10RT_DATATYPE_TBL_SIZE; i++) {
+            LOCK_IF_MPI_IS_NOT_MULTITHREADED;
+            if (MPI_SUCCESS != MPI_Type_contiguous(i, MPI_BYTE, &datatypeTbl[i])) {
+                fprintf(stderr, "[%s:%d] %s\n",
+                        __FILE__, __LINE__, "Error in MPI_Type_contiguous");
+                abort();
+            }
+            UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+        }
+    }
+
+    ~CollState() {
+        free(datatypeTbl);
+    }
 } coll_state;
+
+inline MPI_Datatype get_mpi_datatype(size_t len) {
+    if (len < X10RT_DATATYPE_TBL_SIZE) {
+        return coll_state.datatypeTbl[len];
+    } else {
+        fprintf(stderr, "[%s:%d] %s\n",
+                __FILE__, __LINE__, "Element size is too big");
+        abort();
+    }
+}
 
 struct CounterWithLock {
     int counter;
