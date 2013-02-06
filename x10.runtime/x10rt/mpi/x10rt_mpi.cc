@@ -615,8 +615,6 @@ void x10rt_net_send_get(x10rt_msg_params *p, void *buf, x10rt_copy_sz len) {
     assert(!global_state.finalized);
     get_req.type       = p->type;
     get_req.dest_place = p->dest_place;
-    get_req.msg        = p->msg;
-    get_req.msg_len    = p->len;
     get_req.len        = len;
 
     /*      GET Message
@@ -631,6 +629,9 @@ void x10rt_net_send_get(x10rt_msg_params *p, void *buf, x10rt_copy_sz len) {
     get_msg->msg_len    = p->len;
     get_msg->len        = len;
 
+    get_req.msg        = &get_msg[1];
+    get_req.msg_len    = p->len;
+
     /* pre-post a recv that matches the GET request */
     req = global_state.free_list.popNoFail();
     LOCK_IF_MPI_IS_NOT_MULTITHREADED;
@@ -642,7 +643,7 @@ void x10rt_net_send_get(x10rt_msg_params *p, void *buf, x10rt_copy_sz len) {
                 req->getMPIRequest())) {
     }
     UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    req->setBuf(NULL);
+    req->setBuf(get_msg);
     req->setUserGetReq(&get_req);
     req->setType(X10RT_REQ_TYPE_GET_INCOMING_DATA);
     global_state.pending_recv_list.enqueue(req);
@@ -812,7 +813,7 @@ static void get_incoming_data_completion(x10rt_req_queue * q,
     cb(&p, get_req->len);
     get_lock(&global_state.lock);
 
-    free(get_req->msg);
+    free(req->getBuf());
     global_state.free_list.enqueue(req);
 }
 
