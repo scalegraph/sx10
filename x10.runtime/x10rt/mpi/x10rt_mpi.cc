@@ -53,6 +53,7 @@ static void x10rt_net_coll_init(int *argc, char ** *argv, x10rt_msg_type *counte
 #define X10RT_CB_TBL_SIZE               (128)
 #define X10RT_MAX_PEEK_DEPTH            (16)
 #define X10RT_MAX_OUTSTANDING_SENDS     (256)
+#define X10RT_DATATYPE_TBL_SIZE         (256)
 
 /* Generic utility funcs */
 template <class T> T* ChkAlloc(size_t len) {
@@ -1362,8 +1363,6 @@ private:
 
 } mpi_tdb;
 
-struct CollectivePostprocessEnvBcast;
-
 struct CollectivePostprocessEnv {
     x10rt_completion_handler *ch;
     void *arg;
@@ -1542,13 +1541,54 @@ void x10rt_net_team_probe() {
 }
 
 struct CollState {
-
     int TEAM_NEW_ALLOCATE_TEAM_ID;
     int TEAM_NEW_ID;
     int TEAM_NEW_FINISHED_ID;
     int TEAM_SPLIT_ALLOCATE_TEAM_ID;
     int TEAM_ALLOCATE_NEW_TEAMS_ID;
+
+    MPI_Datatype * datatypeTbl;
+
+    void init () {
+        datatypeTbl =
+            ChkAlloc<MPI_Datatype>(sizeof(MPI_Datatype) * X10RT_DATATYPE_TBL_SIZE);
+        for (int i = 1; i < X10RT_DATATYPE_TBL_SIZE; i++) {
+            LOCK_IF_MPI_IS_NOT_MULTITHREADED;
+            if (MPI_SUCCESS != MPI_Type_contiguous(i, MPI_BYTE, &datatypeTbl[i])) {
+                fprintf(stderr, "[%s:%d] %s\n",
+                        __FILE__, __LINE__, "Error in MPI_Type_contiguous");
+                abort();
+            }
+            if (MPI_SUCCESS != MPI_Type_commit(&datatypeTbl[i])) {
+                fprintf(stderr, "[%s:%d] %s\n",
+                        __FILE__, __LINE__, "Error in MPI_Type_commit");
+                abort();
+            }
+            UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+        }
+    }
+
+    ~CollState() {
+        /*
+        for (int i = 1; i < X10RT_DATATYPE_TBL_SIZE; i++) {
+            LOCK_IF_MPI_IS_NOT_MULTITHREADED;
+            MPI_Type_free(&datatypeTbl[i]);
+            UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+        }
+        */
+        free(datatypeTbl);
+    }
 } coll_state;
+
+inline MPI_Datatype get_mpi_datatype(size_t len) {
+    if (len < X10RT_DATATYPE_TBL_SIZE) {
+        return coll_state.datatypeTbl[len];
+    } else {
+        fprintf(stderr, "[%s:%d] %s\n",
+                __FILE__, __LINE__, "Element size is too big");
+        abort();
+    }
+}
 
 struct CounterWithLock {
     int counter;
@@ -1827,6 +1867,7 @@ static void team_allocate_new_teams_recv (const x10rt_msg_params *p)
 static void x10rt_net_coll_init(int *argc, char ** *argv, x10rt_msg_type *counter) {
 
     mpi_tdb.allocTeam(MPI_COMM_WORLD); // t = 0
+    coll_state.init();
     coll_state.TEAM_NEW_ALLOCATE_TEAM_ID = (*counter)++;
     coll_state.TEAM_NEW_ID = (*counter)++;
     coll_state.TEAM_NEW_FINISHED_ID = (*counter)++;
@@ -2307,12 +2348,18 @@ void x10rt_net_bcast (x10rt_team team, x10rt_place role,
 
     X10RT_NET_DEBUG("mp: team=%d, role=%d, count=%zd, el=%zd", team, role, count, el);
 
-    void *buf = (role == root) ? ChkAlloc<void>(count * el) : dbuf;
+    int gsize = x10rt_net_team_sz(team);
+    char *buf = (role == root) ? ChkAlloc<char>(count * el * gsize) : reinterpret_cast<char *>(dbuf);
+    if (role == root) {
+        for (int i = 0; i < count * el * gsize; i++) {
+            buf[i] = reinterpret_cast<const char *>(sbuf)[i];
+        }
+    }
     X10RT_NET_DEBUG("mp: sbuf=%"PRIxPTR" dbuf=%"PRIxPTR" buf=%"PRIxPTR, sbuf, dbuf, buf);
 
     MPI_Comm comm = mpi_tdb.comm(team);
 
-    MPI_COLLECTIVE(Bcast, Ibcast, buf, count * el, MPI_BYTE, root, comm);
+    MPI_COLLECTIVE(Bcast, Ibcast, buf, count, get_mpi_datatype(el), root, comm);
 
     MPI_COLLECTIVE_SAVE(team);
     MPI_COLLECTIVE_SAVE(role);
@@ -2354,7 +2401,7 @@ void x10rt_net_scatter (x10rt_team team, x10rt_place role,
     MPI_Comm comm = mpi_tdb.comm(team);
     void *buf = (sbuf == dbuf) ? ChkAlloc<void>(count * el) : dbuf;
 
-    MPI_COLLECTIVE(Scatter, Iscatter, (void *)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, root, comm);
+    MPI_COLLECTIVE(Scatter, Iscatter, (void *)sbuf, count, get_mpi_datatype(el), buf, count, get_mpi_datatype(el), root, comm);
 
     MPI_COLLECTIVE_SAVE(team);
     MPI_COLLECTIVE_SAVE(role);
@@ -2396,7 +2443,7 @@ void x10rt_net_alltoall (x10rt_team team, x10rt_place role,
     int gsize = x10rt_net_team_sz(team);
     void *buf = (sbuf == dbuf) ? ChkAlloc<void>(gsize * count * el) : dbuf;
 
-    MPI_COLLECTIVE(Alltoall, Ialltoall, (void*)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, comm);
+    MPI_COLLECTIVE(Alltoall, Ialltoall, (void*)sbuf, count, get_mpi_datatype(el), buf, count, get_mpi_datatype(el), comm);
 
     MPI_COLLECTIVE_SAVE(team);
     MPI_COLLECTIVE_SAVE(role);
@@ -2476,18 +2523,18 @@ void x10rt_net_scatterv (x10rt_team team, x10rt_place role, x10rt_place root, co
     MPI_Comm comm = mpi_tdb.comm(team);
     int gsize = x10rt_net_team_sz(team);
     void *buf = dbuf;
-    int *scounts_ = (role == root) ? ChkAlloc<int>(gsize * el) : NULL;
-    int *soffsets_ = (role == root) ? ChkAlloc<int>(gsize * el) : NULL;
+    int *scounts_ = (role == root) ? ChkAlloc<int>(gsize * sizeof(int)) : NULL;
+    int *soffsets_ = (role == root) ? ChkAlloc<int>(gsize * sizeof(int)) : NULL;
     X10RT_NET_DEBUG("buf=%x, counts="PRIxPTR", displs="PRIxPTR, buf, scounts_, soffsets_);
     if (role == root) {
 	for (int i = 0; i < gsize; ++i) {
-		scounts_[i] = static_cast<const int*>(scounts)[i] * el;
-		soffsets_[i] = static_cast<const int*>(soffsets)[i] * el;
+		scounts_[i] = static_cast<const int32_t*>(scounts)[i];
+		soffsets_[i] = static_cast<const int32_t*>(soffsets)[i];
 	}
     }
 
     X10RT_NET_DEBUG("%s", "pre scatterv");
-    MPI_COLLECTIVE(Scatterv, Iscatterv, (void *)sbuf, scounts_, soffsets_, MPI_BYTE, buf, dcount * el, MPI_BYTE, root, comm);
+    MPI_COLLECTIVE(Scatterv, Iscatterv, (void *)sbuf, scounts_, soffsets_, get_mpi_datatype(el), buf, dcount * el, get_mpi_datatype(el), root, comm);
     X10RT_NET_DEBUG("%s", "pro scatterv");
 
     MPI_COLLECTIVE_SAVE(team);
@@ -2530,7 +2577,7 @@ void x10rt_net_gather (x10rt_team team, x10rt_place role, x10rt_place root, cons
     int gsize = x10rt_net_team_sz(team);
     void *buf = (sbuf == dbuf) ? ChkAlloc<void>(gsize * count * el) : dbuf;
 
-    MPI_COLLECTIVE(Gather, Igather, (void *)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, root, comm);
+    MPI_COLLECTIVE(Gather, Igather, (void *)sbuf, count, get_mpi_datatype(el), buf, count, get_mpi_datatype(el), root, comm);
 
     MPI_COLLECTIVE_SAVE(team);
     MPI_COLLECTIVE_SAVE(role);
@@ -2566,16 +2613,16 @@ void x10rt_net_gatherv (x10rt_team team, x10rt_place role, x10rt_place root, con
     MPI_Comm comm = mpi_tdb.comm(team);
     int gsize = x10rt_net_team_sz(team);
     void *buf = dbuf;
-    int *dcounts_ = (role == root) ? ChkAlloc<int>(gsize * el) : NULL;
-    int *doffsets_ = (role == root) ? ChkAlloc<int>(gsize * el) : NULL;
+    int *dcounts_ = (role == root) ? ChkAlloc<int>(gsize * sizeof(int)) : NULL;
+    int *doffsets_ = (role == root) ? ChkAlloc<int>(gsize * sizeof(int)) : NULL;
     if (role == root) {
 	for (int i = 0; i < gsize; ++i) {
-		dcounts_[i] = static_cast<const int*>(dcounts)[i] * el;
-		doffsets_[i] = static_cast<const int*>(doffsets)[i] * el;
+		dcounts_[i] = static_cast<const int32_t*>(dcounts)[i];
+		doffsets_[i] = static_cast<const int32_t*>(doffsets)[i];
 	}
     }
 
-    MPI_COLLECTIVE(Gatherv, Igatherv, (void *)sbuf, scount * el, MPI_BYTE, buf, dcounts_, doffsets_, MPI_BYTE, root, comm);
+    MPI_COLLECTIVE(Gatherv, Igatherv, (void *)sbuf, scount, get_mpi_datatype(el), buf, dcounts_, doffsets_, get_mpi_datatype(el), root, comm);
 
     MPI_COLLECTIVE_SAVE(team);
     MPI_COLLECTIVE_SAVE(role);
@@ -2619,7 +2666,7 @@ void x10rt_net_allgather (x10rt_team team, x10rt_place role, const void *sbuf,
     int gsize = x10rt_net_team_sz(team);
     void *buf = (sbuf == dbuf) ? ChkAlloc<void>(gsize * count * el) : dbuf;
 
-    MPI_COLLECTIVE(Allgather, Iallgather, (void *)sbuf, count * el, MPI_BYTE, buf, count * el, MPI_BYTE, comm);
+    MPI_COLLECTIVE(Allgather, Iallgather, (void *)sbuf, count, get_mpi_datatype(el), buf, count, get_mpi_datatype(el), comm);
 
     MPI_COLLECTIVE_SAVE(team);
     MPI_COLLECTIVE_SAVE(role);
@@ -2653,14 +2700,14 @@ void x10rt_net_allgatherv (x10rt_team team, x10rt_place role, const void *sbuf, 
     int gsize = x10rt_net_team_sz(team);
 //    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(scount * el) : dbuf;
     void *buf = dbuf;
-    int *dcounts_ = ChkAlloc<int>(gsize * el);
-    int *doffsets_ = ChkAlloc<int>(gsize * el);
+    int *dcounts_ = ChkAlloc<int>(gsize * sizeof(int));
+    int *doffsets_ = ChkAlloc<int>(gsize * sizeof(int));
     for (int i = 0; i < gsize; ++i) {
-        dcounts_[i] = static_cast<const int*>(dcounts)[i] * el;
-        doffsets_[i] = static_cast<const int*>(doffsets)[i] * el;
+        dcounts_[i] = static_cast<const int32_t*>(dcounts)[i];
+        doffsets_[i] = static_cast<const int32_t*>(doffsets)[i];
     }
 
-    MPI_COLLECTIVE(Allgatherv, Iallgatherv, (void *)sbuf, scount * el, MPI_BYTE, buf, dcounts_, doffsets_, MPI_BYTE, comm);
+    MPI_COLLECTIVE(Allgatherv, Iallgatherv, (void *)sbuf, scount, get_mpi_datatype(el), buf, dcounts_, doffsets_, get_mpi_datatype(el), comm);
 
     MPI_COLLECTIVE_SAVE(team);
     MPI_COLLECTIVE_SAVE(role);
@@ -2693,18 +2740,18 @@ void x10rt_net_alltoallv (x10rt_team team, x10rt_place role, const void *sbuf, c
     int gsize = x10rt_net_team_sz(team);
 //    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(scount * el) : dbuf;
     void *buf = dbuf;
-    int *scounts_ = ChkAlloc<int>(gsize * el);
-    int *soffsets_ = ChkAlloc<int>(gsize * el);
-    int *dcounts_ = ChkAlloc<int>(gsize * el);
-    int *doffsets_ = ChkAlloc<int>(gsize * el);
+    int *scounts_ = ChkAlloc<int>(gsize * sizeof(int));
+    int *soffsets_ = ChkAlloc<int>(gsize * sizeof(int));
+    int *dcounts_ = ChkAlloc<int>(gsize * sizeof(int));
+    int *doffsets_ = ChkAlloc<int>(gsize * sizeof(int));
     for (int i = 0; i < gsize; ++i) {
-	scounts_[i] = static_cast<const int*>(scounts)[i] * el;
-	soffsets_[i] = static_cast<const int*>(soffsets)[i] * el;
-	dcounts_[i] = static_cast<const int*>(dcounts)[i] * el;
-	doffsets_[i] = static_cast<const int*>(doffsets)[i] * el;
+	scounts_[i] = static_cast<const int32_t*>(scounts)[i];
+	soffsets_[i] = static_cast<const int32_t*>(soffsets)[i];
+	dcounts_[i] = static_cast<const int32_t*>(dcounts)[i];
+	doffsets_[i] = static_cast<const int32_t*>(doffsets)[i];
     }
 
-    MPI_COLLECTIVE(Alltoallv, Ialltoallv, (void *)sbuf, scounts_, soffsets_, MPI_BYTE, buf, dcounts_, doffsets_, MPI_BYTE, comm);
+    MPI_COLLECTIVE(Alltoallv, Ialltoallv, (void *)sbuf, scounts_, soffsets_, get_mpi_datatype(el), buf, dcounts_, doffsets_, get_mpi_datatype(el), comm);
 
     MPI_COLLECTIVE_SAVE(team);
     MPI_COLLECTIVE_SAVE(role);
