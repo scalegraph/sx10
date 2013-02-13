@@ -1997,6 +1997,12 @@ void x10rt_net_team_split (x10rt_team parent, x10rt_place parent_role,
     MPI_Comm comm = mpi_tdb[parent];
     int gsize = x10rt_net_team_sz(parent);
 
+    {
+	int finished = 0;
+	x10rt_net_barrier(parent, parent_role, x10rt_net_one_setter, &finished);
+	while (!finished) x10rt_net_probe_ex(true);
+    }
+
     MPI_Comm new_comm;
     LOCK_IF_MPI_IS_NOT_MULTITHREADED;
     if (MPI_SUCCESS != MPI_Comm_split(comm, color, new_role, &new_comm)) {
