@@ -39,14 +39,17 @@
 #include <x10rt_ser.h>
 
 
-#if 0
-#define X10RT_NET_DEBUG(fmt, ...) fprintf(stderr, "[%s:%d:%s] (%"PRIu32") " fmt "\n", __FILE__, __LINE__, __func__, static_cast<uint32_t>((global_state.init && !global_state.finalized)? x10rt_net_here() : -1), __VA_ARGS__)
-#define X10RT_NET_DEBUGV(fmt, var) fprintf(stderr, "[%s:%d:%s] (%"PRIu32") " #var " = %"fmt "\n", __FILE__, __LINE__, __func__, static_cast<uint32_t>((global_state.init && !global_state.finalized)? x10rt_net_here() : -1), (var))
-//#define pthread_mutex_destroy(lock) (fprintf(stderr, "[%s:%d:%s] (%"PRIu32") pthread_mutex_destroy(" #lock ")\n", __FILE__, __LINE__, __func__, static_cast<uint32_t>((global_state.init && !global_state.finalized)? x10rt_net_here() : -1)(x10rt_net_here())), pthread_mutex_destroy(lock))
-#else
-#define X10RT_NET_DEBUG(fmt, ...)
-#define X10RT_NET_DEBUGV(fmt, ...)
-#endif
+#define X10RT_NET_DEBUG(fmt, ...) do { \
+    if(coll_state.is_enabled_debug_print) { \
+        fprintf(stderr, "[%s:%d:%s] (%"PRIu32") " fmt "\n", __FILE__, __LINE__, __func__, static_cast<uint32_t>((global_state.init && !global_state.finalized)? x10rt_net_here() : -1), __VA_ARGS__); \
+    } \
+}while(false)
+
+#define X10RT_NET_DEBUGV(fmt, var) do { \
+    if(coll_state.is_enabled_debug_print) { \
+        fprintf(stderr, "[%s:%d:%s] (%"PRIu32") " #var " = %"fmt "\n", __FILE__, __LINE__, __func__, static_cast<uint32_t>((global_state.init && !global_state.finalized)? x10rt_net_here() : -1), (var)); \
+    } \
+}while(false)
 
 static void x10rt_net_coll_init(int *argc, char ** *argv, x10rt_msg_type *counter);
 
@@ -404,6 +407,50 @@ class x10rt_internal_state {
 };
 
 static x10rt_internal_state     global_state;
+
+struct CollState {
+    int TEAM_NEW_ALLOCATE_TEAM_ID;
+    int TEAM_NEW_ID;
+    int TEAM_NEW_FINISHED_ID;
+    int TEAM_SPLIT_ALLOCATE_TEAM_ID;
+    int TEAM_ALLOCATE_NEW_TEAMS_ID;
+    int is_enabled_debug_print;
+
+    MPI_Datatype * datatypeTbl;
+
+    void init () {
+        datatypeTbl =
+            ChkAlloc<MPI_Datatype>(sizeof(MPI_Datatype) * X10RT_DATATYPE_TBL_SIZE);
+        for (int i = 1; i < X10RT_DATATYPE_TBL_SIZE; i++) {
+            LOCK_IF_MPI_IS_NOT_MULTITHREADED;
+            if (MPI_SUCCESS != MPI_Type_contiguous(i, MPI_BYTE, &datatypeTbl[i])) {
+                fprintf(stderr, "[%s:%d] %s\n",
+                        __FILE__, __LINE__, "Error in MPI_Type_contiguous");
+                abort();
+            }
+            if (MPI_SUCCESS != MPI_Type_commit(&datatypeTbl[i])) {
+                fprintf(stderr, "[%s:%d] %s\n",
+                        __FILE__, __LINE__, "Error in MPI_Type_commit");
+                abort();
+            }
+            UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+        }
+        is_enabled_debug_print = getenv("X10RT_MPI_DEBUG_PRINT")!=NULL;
+    }
+
+    ~CollState() {
+        /*
+        for (int i = 1; i < X10RT_DATATYPE_TBL_SIZE; i++) {
+            LOCK_IF_MPI_IS_NOT_MULTITHREADED;
+            MPI_Type_free(&datatypeTbl[i]);
+            UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+        }
+        */
+        free(datatypeTbl);
+    }
+};
+
+static CollState     coll_state;
 
 x10rt_error x10rt_net_init(int *argc, char ** *argv, x10rt_msg_type *counter) {
     assert(!global_state.finalized);
@@ -1547,46 +1594,6 @@ public:
 void x10rt_net_team_probe() {
     coll_pdb.poll();
 }
-
-struct CollState {
-    int TEAM_NEW_ALLOCATE_TEAM_ID;
-    int TEAM_NEW_ID;
-    int TEAM_NEW_FINISHED_ID;
-    int TEAM_SPLIT_ALLOCATE_TEAM_ID;
-    int TEAM_ALLOCATE_NEW_TEAMS_ID;
-
-    MPI_Datatype * datatypeTbl;
-
-    void init () {
-        datatypeTbl =
-            ChkAlloc<MPI_Datatype>(sizeof(MPI_Datatype) * X10RT_DATATYPE_TBL_SIZE);
-        for (int i = 1; i < X10RT_DATATYPE_TBL_SIZE; i++) {
-            LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-            if (MPI_SUCCESS != MPI_Type_contiguous(i, MPI_BYTE, &datatypeTbl[i])) {
-                fprintf(stderr, "[%s:%d] %s\n",
-                        __FILE__, __LINE__, "Error in MPI_Type_contiguous");
-                abort();
-            }
-            if (MPI_SUCCESS != MPI_Type_commit(&datatypeTbl[i])) {
-                fprintf(stderr, "[%s:%d] %s\n",
-                        __FILE__, __LINE__, "Error in MPI_Type_commit");
-                abort();
-            }
-            UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
-        }
-    }
-
-    ~CollState() {
-        /*
-        for (int i = 1; i < X10RT_DATATYPE_TBL_SIZE; i++) {
-            LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-            MPI_Type_free(&datatypeTbl[i]);
-            UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
-        }
-        */
-        free(datatypeTbl);
-    }
-} coll_state;
 
 inline MPI_Datatype get_mpi_datatype(size_t len) {
     if (len < X10RT_DATATYPE_TBL_SIZE) {
