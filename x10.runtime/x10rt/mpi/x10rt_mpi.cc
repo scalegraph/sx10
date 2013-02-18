@@ -2370,9 +2370,9 @@ void x10rt_net_bcast (x10rt_team team, x10rt_place role,
     X10RT_NET_DEBUG("mp: team=%d, role=%d, count=%zd, el=%zd", team, role, count, el);
 
     int gsize = x10rt_net_team_sz(team);
-    char *buf = (role == root) ? ChkAlloc<char>(count * el * gsize) : reinterpret_cast<char *>(dbuf);
+    char *buf = (role == root) ? ChkAlloc<char>(count * el) : reinterpret_cast<char *>(dbuf);
     if (role == root) {
-        for (int i = 0; i < count * el * gsize; i++) {
+        for (int i = 0; i < count * el; i++) {
             buf[i] = reinterpret_cast<const char *>(sbuf)[i];
         }
     }
