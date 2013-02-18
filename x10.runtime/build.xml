@@ -2,11 +2,7 @@
 <!DOCTYPE project [<!ENTITY buildfile SYSTEM "./build-user.xml">]>
 <project name="x10.runtime" default="dist" basedir=".">
     &buildfile;
-    <condition property="bdwgc.version" value="7.2d" else="7.1">
-      <or>
-        <os family="mac"/>
-      </or>
-    </condition>
+    <property name="bdwgc.version" value="7.2d"/>
     <property name="x10.home" value="${basedir}/.."/>
     <property name="x10.dist.location" value="${x10.home}/x10.dist"/>
     <property name="x10.constraints.location" location="${x10.home}/x10.constraints"/>
@@ -414,7 +410,25 @@
         </exec>
     </target>
 
-    <target name="build-cpp" depends="init,dist-bdwgc,available-procs">
+    <target name="x10rt-headers" depends="init,init-x10rt">
+        <exec executable="${make.exe}" failonerror="true" dir="${basedir}/x10rt">
+            <env key="ANT_JAVA_HOME" value="${java.home}" />
+            <arg value="-j1" />
+            <arg value="headers" />
+            <arg value="${cppmake.optimize}" />
+            <arg value="${cppmake.homogeneous}" />
+            <arg value="${cppmake.debug}" />
+            <arg value="${cppmake.gcc_symbols}" />
+            <arg value="${cppmake.x10rt_mpi}" />
+       	    <arg value="${cppmake.x10rt_pami}" />
+            <arg value="${cppmake.x10rt_pgas}" />
+            <arg value="${cppmake.x10rt_cuda}" />
+            <arg value="${cppmake.cross_compile_bgp}" />
+            <arg value="${cppmake.cross_compile_bgq}" />
+        </exec>
+    </target>
+
+    <target name="build-cpp" depends="init,dist-bdwgc,available-procs,x10rt-headers">
         <exec executable="${make.exe}" failonerror="true" dir="${basedir}/src-cpp">
             <env key="ANT_JAVA_HOME" value="${java.home}" />
             <arg value="-j${available.procs}" />
@@ -451,6 +465,7 @@
                     <istrue value="${CROSS_COMPILE_BGP}" />
                   </conditions>
                   <then>
+                    <echo message="Configuring BDWGC for BGP cross compile"/>
                     <exec executable="${bash.exe}" dir="${bdwgc.dir}/src" failonerror="true">
                       <env key="CXX" value="/bgsys/drivers/ppcfloor/gnu-linux/bin/powerpc-bgp-linux-g++"/>
                       <env key="CC" value="/bgsys/drivers/ppcfloor/gnu-linux/bin/powerpc-bgp-linux-gcc"/>
@@ -472,6 +487,7 @@
                         </or>
                       </conditions>
                       <then>
+                        <echo message="Configuring BDWGC for PPC linux"/>
                         <exec executable="${bash.exe}" dir="${bdwgc.dir}/src" failonerror="true">
                           <arg value="${bdwgc.dir}/src/configure" />
                           <arg value="-enable-threads=posix" />
@@ -483,7 +499,9 @@
                         </exec>
                       </then>
                       <else>
+                        <echo message="Configuring BDWGC for generic linux"/>
                         <exec executable="${bash.exe}" dir="${bdwgc.dir}/src" failonerror="true">
+                          <env key="CONFIG_SHELL" value="/bin/bash" />
                           <arg value="${bdwgc.dir}/src/configure" />
                           <arg value="-enable-threads=posix" />
                           <arg value="-enable-thread-local-alloc" />
@@ -502,6 +520,7 @@
                 <os family="mac"/>
               </conditions>
               <then>
+                <echo message="Configuring BDWGC for mac"/>
                 <exec executable="${bash.exe}" dir="${bdwgc.dir}/src" failonerror="true">
                   <arg value="${bdwgc.dir}/src/configure" />
                   <arg value="-enable-threads=posix" />
@@ -521,6 +540,7 @@
                 <os family="unix" name="aix"/>
               </conditions>
               <then>
+                <echo message="Configuring BDWGC for aix"/>
                 <exec executable="${bash.exe}" dir="${bdwgc.dir}/src" failonerror="true">
                   <env key="OBJECT_MODE" value="32_64" />
                   <env key="CFLAGS" value="-Wa,-mppc64 -Wa,-a64 -maix64 -D__ppc64__" />
@@ -539,6 +559,7 @@
                 <os family="windows"/>
               </conditions>
               <then>
+                <echo message="Configuring BDWGC for windows"/>
                 <exec executable="${bash.exe}" dir="${bdwgc.dir}/src" failonerror="true">
                   <arg value="${bdwgc.dir}/src/configure" />
                   <arg value="-enable-threads=posix" />
@@ -554,6 +575,7 @@
                 <os family="unix" name="freebsd"/>
               </conditions>
               <then>
+                <echo message="Configuring BDWGC for freebsd"/>
                 <exec executable="${bash.exe}" dir="${bdwgc.dir}/src" failonerror="true">
                   <arg value="${bdwgc.dir}/src/configure" />
                   <arg value="-enable-threads=posix" />
@@ -564,10 +586,12 @@
                 </exec>
               </then>
             </if>
+            <echo message="Running make"/>
             <exec executable="${make.exe}" dir="${bdwgc.dir}/src" failonerror="true">
                 <env key="OBJECT_MODE" value="32_64" />
                 <arg value="-j${available.procs}" />
             </exec>
+            <echo message="Running make install"/>
             <exec executable="${make.exe}" dir="${bdwgc.dir}/src" failonerror="true">
                 <env key="OBJECT_MODE" value="32_64" />
                 <arg value="install" />
@@ -605,34 +629,6 @@
                 <arg value="xzf" />
                 <arg value="${bdwgc.platform.dir}/${bdwgc.tar}" />
             </exec>
-
-	    <!-- Patches to apply for bdwgc version 7.1 -->
-	    <if>
-	      <conditions>
-		<equals arg1="${bdwgc.version}" arg2="7.1" />
-	      </conditions>
-	      <then>
-		<if>
-		  <conditions>
-                    <os family="unix" name="aix"/>
-		  </conditions>
-		  <then>
-                    <patch patchfile="${basedir}/src-cpp/bdwgc-patches-${bdwgc.version}/fixPPCHeaderFiles.patch.txt"
-			   dir="${bdwgc.dir}/src" strip="0" />
-                    <patch patchfile="${basedir}/src-cpp/bdwgc-patches-${bdwgc.version}/linkerHackConfigure.patch.txt"
-			   dir="${bdwgc.dir}/src" strip="0" />
-		  </then>
-		</if>
-		<patch patchfile="${basedir}/src-cpp/bdwgc-patches-${bdwgc.version}/enableRTSignals.patch.txt"
-                       dir="${bdwgc.dir}/src" strip="0" />
-		<patch patchfile="${basedir}/src-cpp/bdwgc-patches-${bdwgc.version}/pthread_support.patch.txt"
-                       dir="${bdwgc.dir}/src" strip="0" />
-		<patch patchfile="${basedir}/src-cpp/bdwgc-patches-${bdwgc.version}/bluegeneStackHeuristic.patch.txt"
-                       dir="${bdwgc.dir}/src" strip="0" />
-		<patch patchfile="${basedir}/src-cpp/bdwgc-patches-${bdwgc.version}/unsigned_char.patch.txt"
-                       dir="${bdwgc.dir}/src" strip="0" />
-	      </then>
-	    </if>
 
 	    <!-- Patches to apply for bdwgc version 7.2d -->
 	    <if>

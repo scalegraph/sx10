@@ -1,9 +1,25 @@
+/*
+ *  This file is part of the X10 project (http://x10-lang.org).
+ *
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2006-2013.
+ */
+
 #ifndef X10RT_INTERNAL_H
 #define X10RT_INTERNAL_H
 
 #include <cstring>
+#include <cstdarg>
+#include <cstdio>
 
 #include <x10rt_types.h>
+
+// set false to remove abort
+#define ABORT_NEEDED	true
 
 #if 1
 #include <pthread.h>
@@ -20,6 +36,26 @@ namespace {
 #else
 // win32 implementation
 #endif
+
+static inline void vfatal (char *&err_msg, const char *format, va_list va_args)
+{
+    //TODO: make build allow vsnprintf
+    int sz = vsnprintf(NULL, 0, format, va_args);
+    //int sz = 1024;
+    free(err_msg);
+    err_msg = (char*)malloc(sz);
+    vsprintf(err_msg, format, va_args);
+}
+
+static inline void fatal (char *&err_msg, const char *format, ...)
+{
+    va_list va_args;
+    va_start(va_args, format);
+
+    vfatal(err_msg, format, va_args);
+
+    va_end(va_args);
+}
 
 template<class T> static inline T* safe_malloc (size_t f=1, size_t a=0) {
     size_t sz = f*sizeof(T) + a;
@@ -142,12 +178,13 @@ X10RT_C void x10rt_emu_alltoall (x10rt_team team, x10rt_place role,
                                  size_t el, size_t count,
                                  x10rt_completion_handler *ch, void *arg);
 
-X10RT_C void x10rt_emu_allreduce (x10rt_team team, x10rt_place role,
-                                  const void *sbuf, void *dbuf,
-                                  x10rt_red_op_type op,
-                                  x10rt_red_type dtype,
-                                  size_t count,
-                                  x10rt_completion_handler *ch, void *arg);
+X10RT_C void x10rt_emu_reduce (x10rt_team team, x10rt_place role,
+                                x10rt_place root, const void *sbuf, void *dbuf,
+                                x10rt_red_op_type op,
+                                x10rt_red_type dtype,
+                                size_t count,
+                                x10rt_completion_handler *ch, void *arg,
+                                bool allreduce);
 
 X10RT_C void x10rt_emu_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg);
 
@@ -180,14 +217,6 @@ X10RT_C void x10rt_emu_alltoallv (x10rt_team team, x10rt_place role,
                     const void *sbuf, const void *soffsets, const void *scounts,
                     void *dbuf, const void *doffsets, const void *dcounts,
                     size_t el, x10rt_completion_handler *ch, void *arg);
-
-X10RT_C void x10rt_emu_reduce (x10rt_team team, x10rt_place role, x10rt_place root,
-                               const void *sbuf, void *dbuf,
-                               x10rt_red_op_type op,
-                               x10rt_red_type dtype,
-                               size_t count,
-                               x10rt_completion_handler *ch, void *arg);
-
 
 X10RT_C bool x10rt_emu_coll_probe (void);
 

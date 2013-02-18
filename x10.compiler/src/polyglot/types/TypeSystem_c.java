@@ -2390,6 +2390,29 @@ public class TypeSystem_c implements TypeSystem
             reducibleType_ = load("x10.lang.Reducible"); // java file
         return reducibleType_;
     }
+        
+    protected X10ClassType arithmeticType_;
+    public X10ClassType Arithmetic() {
+        if (arithmeticType_ == null)
+            arithmeticType_ = load("x10.lang.Arithmetic");
+        return arithmeticType_;
+    }
+     
+    protected X10ClassType bitwiseType_;
+    public X10ClassType Bitwise() {
+        if (bitwiseType_ == null)
+            bitwiseType_ = load("x10.lang.Bitwise");
+        return bitwiseType_;
+    }
+  
+    protected X10ClassType orderedType_;
+    public X10ClassType Ordered() {
+        if (orderedType_ == null)
+            orderedType_ = load("x10.util.Ordered");
+        return orderedType_;
+    }
+
+    
 
     protected X10ClassType nativeRepType_;
     public X10ClassType NativeRep() {
@@ -2547,6 +2570,12 @@ public class TypeSystem_c implements TypeSystem
         return perProcessType_;
     }
 
+    protected X10ClassType remoteInvocationType_;
+    public X10ClassType RemoteInvocation() {
+        if (remoteInvocationType_ == null)
+            remoteInvocationType_ = load("x10.compiler.RemoteInvocation");
+        return remoteInvocationType_;
+    }
 
     protected X10ClassType arrayType_ = null;
     public X10ClassType Array() {
@@ -4093,6 +4122,12 @@ public class TypeSystem_c implements TypeSystem
             //typeEquals(me, Struct(), emptyContext());
     }
 
+    public boolean isHandOptimizedInterface(Type me) {
+        return hasSameClassDef(me, Any()) ||
+                hasSameClassDef(me, Arithmetic()) ||
+                hasSameClassDef(me, Ordered()) ||
+                hasSameClassDef(me, Bitwise());
+    }
 
     public boolean isString(Type me) {
         return finalSubtype(me,String());

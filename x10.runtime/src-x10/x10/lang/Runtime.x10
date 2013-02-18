@@ -248,8 +248,8 @@ public final class Runtime {
         // check max thread count has not been reached
         def check(i:Int):void {
             if (i >= MAX_THREADS) {
-                println(here+": TOO MANY THREADS... ABORTING");
-                System.exit(1);
+                println(here+": TOO MANY THREADS");
+                throw new InternalError(here+": TOO MANY THREADS");
             }
             if (WARN_ON_THREAD_CREATION) {
                 println(here+": WARNING: A new OS-level thread was discovered (there are now "+i+" threads).");
@@ -626,51 +626,47 @@ public final class Runtime {
      * @param body Main activity
      */
     public static def start(body:()=>void):void {
-        try {
-            // initialize thread pool for the current process
-            // initialize runtime
-            x10rtInit();
+        // initialize thread pool for the current process
+        // initialize runtime
+        x10rtInit();
 
-            if (hereInt() == 0) {
-                val rootFinish = new FinishState.Finish(pool.latch);
-                // in place 0 schedule the execution of the main activity
-                executeLocal(new Activity(body, rootFinish));
+        if (hereInt() == 0) {
+            val rootFinish = new FinishState.Finish(pool.latch);
+            // in place 0 schedule the execution of the main activity
+            executeLocal(new Activity(body, rootFinish));
 
-                // wait for thread pool to die
-                // (happens when main activity terminates)
-                pool(NTHREADS);
+            // wait for thread pool to die
+            // (happens when main activity terminates)
+            pool(NTHREADS);
 
-                // we need to call waitForFinish here to see the exceptions thrown by main if any
-                try {
-                    rootFinish.waitForFinish();
-                } finally {
-                    // root finish has terminated, kill remote processes if any
-                    if (Place.MAX_PLACES >= 1024) {
-                        val cl1 = ()=> @x10.compiler.RemoteInvocation {
-                            val h = hereInt();
-                            val cl = ()=> @x10.compiler.RemoteInvocation {pool.latch.release();};
-                            for (var j:Int=Math.max(1, h-31); j<h; ++j) {
-                                x10rtSendMessage(j, cl, null);
-                            }
-                            pool.latch.release();
-                        };
-                        for(var i:Int=Place.MAX_PLACES-1; i>0; i-=32) {
-                            x10rtSendMessage(i, cl1, null);
+            // we need to call waitForFinish here to see the exceptions thrown by main if any
+            try {
+                rootFinish.waitForFinish();
+            } finally {
+                // root finish has terminated, kill remote processes if any
+                if (Place.MAX_PLACES >= 1024) {
+                    val cl1 = ()=> @x10.compiler.RemoteInvocation("start_1") {
+                        val h = hereInt();
+                        val cl = ()=> @x10.compiler.RemoteInvocation("start_2") {pool.latch.release();};
+                        for (var j:Int=Math.max(1, h-31); j<h; ++j) {
+                            x10rtSendMessage(j, cl, null);
                         }
-                    } else {
-                        val cl = ()=> @x10.compiler.RemoteInvocation {pool.latch.release();};
-                        for (var i:Int=Place.MAX_PLACES-1; i>0; --i) {
-                            x10rtSendMessage(i, cl, null);
-                        }
+                        pool.latch.release();
+                    };
+                    for(var i:Int=Place.MAX_PLACES-1; i>0; i-=32) {
+                        x10rtSendMessage(i, cl1, null);
+                    }
+                } else {
+                    val cl = ()=> @x10.compiler.RemoteInvocation("start_3") {pool.latch.release();};
+                    for (var i:Int=Place.MAX_PLACES-1; i>0; --i) {
+                        x10rtSendMessage(i, cl, null);
                     }
                 }
-            } else {
-                // wait for thread pool to die
-                // (happens when a kill signal is received from place 0)
-                pool(NTHREADS);
             }
-        } finally {
-            GlobalCounters.printStats();
+        } else {
+            // wait for thread pool to die
+            // (happens when a kill signal is received from place 0)
+            pool(NTHREADS);
         }
     }
 
@@ -694,7 +690,7 @@ public final class Runtime {
         if (place.id == hereInt()) {
             executeLocal(new Activity(deepCopy(body, prof), state, clockPhases));
         } else {
-            val closure = ()=> @x10.compiler.RemoteInvocation { execute(new Activity(body, state, clockPhases)); };
+            val closure = ()=> @x10.compiler.RemoteInvocation("runAsync") { execute(new Activity(body, state, clockPhases)); };
             x10rtSendMessage(place.id, closure, prof);
             dealloc(closure);
         }
@@ -755,7 +751,7 @@ public final class Runtime {
         if (place.id == hereInt()) {
             executeLocal(new Activity(deepCopy(body, prof), FinishState.UNCOUNTED_FINISH));
         } else {
-            val closure = ()=> @x10.compiler.RemoteInvocation { execute(new Activity(body, FinishState.UNCOUNTED_FINISH)); };
+            val closure = ()=> @x10.compiler.RemoteInvocation("runUncountedAsync") { execute(new Activity(body, FinishState.UNCOUNTED_FINISH)); };
             x10rtSendMessage(place.id, closure, prof);
             dealloc(closure);
         }
@@ -841,7 +837,7 @@ public final class Runtime {
             try {
                 try {
                     body();
-                    val closure = ()=> @x10.compiler.RemoteInvocation { 
+                    val closure = ()=> @x10.compiler.RemoteInvocation("runAt_1") { 
                         val me2 = (box as GlobalRef[RemoteControl]{home==here})();
                         me2.clockPhases = clockPhases;
                         me2.release();
@@ -852,7 +848,7 @@ public final class Runtime {
                     throw e.getCheckedCause();
                 }
             } catch (e:CheckedThrowable) {
-                val closure = ()=> @x10.compiler.RemoteInvocation { 
+                val closure = ()=> @x10.compiler.RemoteInvocation("runAt_2") { 
                     val me2 = (box as GlobalRef[RemoteControl]{home==here})();
                     me2.e = e;
                     me2.clockPhases = clockPhases;
@@ -885,9 +881,9 @@ public final class Runtime {
       if (toWait) { // synchronous exec
         @StackAllocate val me = @StackAllocate new RemoteControl();
         val box:GlobalRef[RemoteControl] = GlobalRef(me as RemoteControl);
-        val latchedBody = () => @x10.compiler.RemoteInvocation {
+        val latchedBody = () => @x10.compiler.RemoteInvocation("runAtSimple_1") {
                 body();
-                val closure = ()=> @x10.compiler.RemoteInvocation { 
+                val closure = ()=> @x10.compiler.RemoteInvocation("runAtSimple_2") { 
                     val me2 = (box as GlobalRef[RemoteControl]{home==here})();
                     me2.release();
                 };
@@ -898,7 +894,7 @@ public final class Runtime {
         dealloc(latchedBody);
         me.await(); // wait until body is executed at remote place
       } else { // asynchronous exec
-        val simpleBody = () => @x10.compiler.RemoteInvocation { body(); };
+        val simpleBody = () => @x10.compiler.RemoteInvocation("runAtSimple_3") { body(); };
         x10rtSendMessage(place.id, simpleBody, null);
         dealloc(simpleBody);
         // *not* wait until body is executed at remote place
@@ -960,7 +956,7 @@ public final class Runtime {
             try {
                 try {
                     val result = eval();
-                    val closure = ()=> @x10.compiler.RemoteInvocation { 
+                    val closure = ()=> @x10.compiler.RemoteInvocation("evalAt_1") { 
                         val me2 = (box as GlobalRef[Remote[T]]{home==here})();
                         // me2 has type Box[T{box.home==here}]... weird
                         me2.t = new Box[T{box.home==here}](result as T{box.home==here});
@@ -973,7 +969,7 @@ public final class Runtime {
                     throw t.getCheckedCause();
                 }
             } catch (e:CheckedThrowable) {
-                val closure = ()=> @x10.compiler.RemoteInvocation { 
+                val closure = ()=> @x10.compiler.RemoteInvocation("evalAt_2") { 
                     val me2 = (box as GlobalRef[Remote[T]]{home==here})();
                     me2.e = e;
                     me2.clockPhases = clockPhases;

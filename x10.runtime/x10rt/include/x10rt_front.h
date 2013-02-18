@@ -1,3 +1,14 @@
+/*
+ *  This file is part of the X10 project (http://x10-lang.org).
+ *
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2006-2013.
+ */
+
 #ifndef X10RT_FRONT_H
 #define X10RT_FRONT_H
 
@@ -153,6 +164,27 @@
 
 /** \{ */
 
+
+/**
+ * This preinit method allows the runtime network code to be partially initialized ahead of the 
+ * rest of the runtime.  The return value is a connection string (likely hostname:port), which can 
+ * be used by other runtimes to find this one.  When this method is called ahead of the regular 
+ * x10rt_init(), it puts the runtime into a library mode, so that the runtime can be used more as 
+ * a library in other programs, by using less CPU, and not calling system exit when errors occur.
+ */
+X10RT_C char* x10rt_preinit();
+
+/** Whether or not X10 is running as library.
+ * \returns Whether or not X10 is running as library.
+ */
+X10RT_C bool x10rt_run_as_library (void);
+
+
+/** Get a detailed user-readable error about the fatal error that has rendered X10RT inoperable. 
+ * \returns Text describing the error, or NULL if no error has occured.
+ */
+X10RT_C const char *x10rt_error_msg (void);
+
 /** Initialize the X10RT API.
  *
  * This should be the first call made by a process into X10RT.  This allows the X10RT implementation
@@ -172,17 +204,11 @@
  * \param argc A pointer to the argc parameter from the application's ``main'' function.
  *
  * \param argv A pointer to the argv parameter from the application's ``main'' function.
+ *
+ * \returns X10RT_ERR_OK if successful, otherwise some other error code.  Upon failure, an error
+ * string is available via x10rt_error_msg() and x10rt_finalize must be called to shut down.
 */
-X10RT_C void x10rt_init (int *argc, char ***argv);
-
-/**
- * This initialization is similar to the above, but causes the runtime to initialize in a more 
- * library-friendly way (no calls to exit, non-main arguments, etc).  
- * 
- * \param placeID Which Place this specific runtime will be in the X10 computation
- * \param numPlaces The total number of places in the X10 computation
- */
-X10RT_C int x10rt_library_init (int placeID, int numPlaces);
+X10RT_C x10rt_error x10rt_init (int *argc, char ***argv);
 
 /** Register a new type of 'plain' message.  Messages are used to send serialized object graphs to
  * another place.  They are intended for when the data is not organized in a sequential fashion and
@@ -403,10 +429,6 @@ X10RT_C void x10rt_send_get (x10rt_msg_params *p, void *buf, x10rt_copy_sz len);
  */
 X10RT_C void x10rt_send_put (x10rt_msg_params *p, void *buf, x10rt_copy_sz len);
 
-X10RT_C void x10rt_get_stats (x10rt_stats *s);
-X10RT_C void x10rt_set_stats (x10rt_stats *s);
-X10RT_C void x10rt_zero_stats (x10rt_stats *s);
-
 /** Asynchronously allocate memory at a remote place.
  *
  * \param place The location where memory will be allocated.
@@ -445,10 +467,8 @@ X10RT_C void x10rt_remote_ops (x10rt_remote_op_params *ops, size_t num_ops);
 /** Prepare memory for use by #x10rt_remote_op.
  * \param ptr Some memory at the local place.
  * \param len The amount of memory to register (should be a multiple of 8).
- * \returns An integer that should be used by remote places in calls to #x10rt_remote_op (can be
- * offset in the positive direction my a multiple of 8, up to len).
  */
-X10RT_C x10rt_remote_ptr x10rt_register_mem (void *ptr, size_t len);
+X10RT_C void x10rt_register_mem (void *ptr, size_t len);
 
 /** Automatically configure a CUDA kernel.  By studying the characteristics of the hardware upon
  * which the kernel will be executed, and the kernel itself, we can traverse a list of supported
@@ -503,9 +523,12 @@ X10RT_C void x10rt_blocks_threads (x10rt_place d, x10rt_msg_type type, int dyn_s
  * In all cases X10RT is responsible for freeing the buffer within the x10rt_msg_params structure
  * after the callbacks have used it.
  *
+ * \returns X10RT_ERR_OK if successful, otherwise some other error code.  Upon failure, an error
+ * string is available via x10rt_error_msg() and x10rt_finalize must be called to shut down.
+ *
  * \see \ref callbacks
  */
-X10RT_C void x10rt_probe (void);
+X10RT_C x10rt_error x10rt_probe (void);
 
 
 /** Handle outstanding incoming messages, and block on the network if nothing is available.
@@ -513,7 +536,7 @@ X10RT_C void x10rt_probe (void);
  * available from the network.  This mechanism allows an X10 program to go idle on the CPU.  The
  * network probe will attempt to block if possible, but this is not guaranteed.
  */
-X10RT_C void x10rt_blocking_probe (void);
+X10RT_C x10rt_error x10rt_blocking_probe (void);
 
 /** \} */
 
@@ -709,6 +732,37 @@ X10RT_C void x10rt_alltoall (x10rt_team team, x10rt_place role,
                              const void *sbuf, void *dbuf,
                              size_t el, size_t count,
                              x10rt_completion_handler *ch, void *arg);
+
+/** Asynchronously blocks until root has received data from each member.
+ * Data are combined using the specified reduction operation, and the result
+ * is available at root only.
+ *
+ * \param team Team that identifies the members who are participating in this operation
+ *
+ * \param role Our role in the team
+ *
+ * \param root The member who is receiving the data
+ *
+ * \param sbuf The data that is offered by each member
+ *
+ * \param dbuf The array into which the data will be received at root
+ *
+ * \param op The operation to perform
+ *
+ * \param dtype The type of data being supplied
+ *
+ * \param count The number of elements being transferred
+ *
+ * \param ch Will be called when the operation is complete
+ *
+ * \param arg User pointer that is passed to the completion handler
+ */
+X10RT_C void x10rt_reduce (x10rt_team team, x10rt_place role,
+                          x10rt_place root, const void *sbuf, void *dbuf,
+                          x10rt_red_op_type op,
+                          x10rt_red_type dtype,
+                          size_t count,
+                          x10rt_completion_handler *ch, void *arg);
 
 /** Asynchronously blocks until all members have received the computed results.  This call is
  * similar to #x10rt_alltoall except that instead of each member receiving the data from each other

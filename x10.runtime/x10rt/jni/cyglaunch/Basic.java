@@ -5,9 +5,6 @@ import java.io.*;
 
 public class Basic {
 
-    private static final short _RunnableWithBuf_id = x10.serialization.DeserializationDispatcher.addDispatcher(RunnableWithBuf.class);
-    private static final short _Handler_id = x10.serialization.DeserializationDispatcher.addDispatcher(Handler.class);
-
     private static class RunnableWithBuf implements Serializable, x10.serialization.X10JavaSerializable {
         public static final int Ping = 1;
         public static final int Pong = 2;
@@ -33,7 +30,6 @@ public class Basic {
             deserializer.record_reference(_obj);
             return $_deserialize_body(_obj, deserializer);
         }
-        public short $_get_serialization_id() { return _RunnableWithBuf_id; }
         public void $_serialize(x10.serialization.X10JavaSerializer serializer) throws java.io.IOException {
             serializer.write(this.id);
         }
@@ -261,7 +257,6 @@ public class Basic {
             deserializer.record_reference(_obj);
             return $_deserialize_body(_obj, deserializer);
         }
-        public short $_get_serialization_id() { return _Handler_id; }
         public void $_serialize(x10.serialization.X10JavaSerializer serializer) throws java.io.IOException {
             serializer.write((x10.serialization.X10JavaSerializable) this.id);
             if (this.buf == null) {
@@ -275,12 +270,10 @@ public class Basic {
     public static void sendMsg(int place, RunnableWithBuf runner, byte[] buf, int len) {
         try {
             VoidFun_0_0 body = new Handler(runner, buf, len);
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            DataOutputStream objStream = new DataOutputStream(baos); // TODO: use Runtime.serialize()
-            x10.serialization.X10JavaSerializer serializer = new x10.serialization.X10JavaSerializer(objStream);
+            x10.serialization.X10JavaSerializer serializer = new x10.serialization.X10JavaSerializer();
             serializer.write((x10.serialization.X10JavaSerializable) body);
-            byte[] msg = baos.toByteArray();
-            int msgLen = baos.size();
+            byte[] msg = serializer.toMessage();
+            int msgLen = msg.length;
             //System.err.println(X10RT.here()+": About to send a message to place "+place);
             x10.x10rt.MessageHandlers.runClosureAtSend(place, msgLen, msg);
             //System.err.println(X10RT.here()+": Sent a message to place "+place);

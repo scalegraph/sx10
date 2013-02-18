@@ -16,7 +16,7 @@ import java.lang.reflect.Array;
 import java.util.concurrent.ConcurrentHashMap;
 
 import x10.core.Any;
-import x10.serialization.DeserializationDispatcher;
+import x10.serialization.SerializationConstants;
 import x10.serialization.X10JavaDeserializer;
 import x10.serialization.X10JavaSerializable;
 import x10.serialization.X10JavaSerializer;
@@ -24,7 +24,6 @@ import x10.serialization.X10JavaSerializer;
 public class RuntimeType<T> implements Type<T>, X10JavaSerializable {
 
     private static final long serialVersionUID = 1L;
-    private static final short _serialization_id = x10.serialization.DeserializationDispatcher.addDispatcher(RuntimeType.class);
 
     public enum Variance {INVARIANT, COVARIANT, CONTRAVARIANT}
     private static final Variance[][] invariants = {
@@ -469,42 +468,45 @@ public class RuntimeType<T> implements Type<T>, X10JavaSerializable {
 
     protected final String typeNameForFun(Object o) {
         int numParams = numParams();
-        String str = "(";
+        StringBuilder sb = new StringBuilder();
+        sb.append("(");
         int i;
         for (i = 0; i < numParams - 1; i++) {
-            if (i != 0) str += ",";
-            str += ((Any) o).$getParam(i).typeName();
+            if (i != 0) sb.append(",");
+            sb.append(((Any) o).$getParam(i).typeName());
         }
-        str += ")=>";
-        str += ((Any) o).$getParam(i).typeName();
-        return str;
+        sb.append(")=>");
+        sb.append(((Any) o).$getParam(i).typeName());
+        return sb.toString();
     }
     protected final String typeNameForVoidFun(Object o) {
         int numParams = numParams();
-        String str = "(";
+        StringBuilder sb = new StringBuilder();
+        sb.append("(");
         if (numParams > 0) {
             for (int i = 0; i < numParams; i++) {
-                if (i != 0) str += ",";
-                str += ((Any) o).$getParam(i).typeName();
+                if (i != 0) sb.append(",");
+                sb.append(((Any) o).$getParam(i).typeName());
             }
         }
-        str += ")=>void";
-        return str;
+        sb.append(")=>void");
+        return sb.toString();
     }
     protected final String typeNameForOthers(Object o) {
         int numParams = numParams();
-        String str = typeName();
+        StringBuilder sb = new StringBuilder();
+        sb.append(typeName());
         if (numParams > 0) {
             if (o instanceof Any) {
-                str += "[";
+                sb.append("[");
                 for (int i = 0; i < numParams; i++) {
-                    if (i != 0) str += ",";
-                    str += Types.getParam(o, i).typeName();
+                    if (i != 0) sb.append(",");
+                    sb.append(Types.getParam(o, i).typeName());
                 }
-                str += "]";
+                sb.append("]");
             }
         }
-        return str;
+        return sb.toString();
     }
     // should be overridden by RTT of all function types
     public String typeName(Object o) {
@@ -611,9 +613,13 @@ public class RuntimeType<T> implements Type<T>, X10JavaSerializable {
         }
     }
 
+    public short $_get_serialization_id() {
+        return SerializationConstants.NO_PREASSIGNED_ID;
+    }
+    
     public void $_serialize(X10JavaSerializer serializer) throws IOException {
-        String name = javaClass.getName();
-        serializer.writeClassID(name);
+        short sid = serializer.getSerializationId(javaClass, null);
+        serializer.write(sid);
     }
 
     public static X10JavaSerializable $_deserializer(X10JavaDeserializer deserializer) throws IOException {
@@ -626,49 +632,10 @@ public class RuntimeType<T> implements Type<T>, X10JavaSerializable {
         return x10JavaSerializable;
     }
 
-    public short $_get_serialization_id() {
-        return _serialization_id;
-    }
-
     public static X10JavaSerializable $_deserialize_body(RuntimeType rt, X10JavaDeserializer deserializer) throws IOException {
         short classId = deserializer.readShort();
-        String className = DeserializationDispatcher.getClassNameForID(classId, deserializer);
-        if (className == null) {
-            return null;
-        } else if ("x10.core.Boolean".equals(className)) {
-            return Types.BOOLEAN;
-        } else if ("x10.core.Byte".equals(className)) {
-            return Types.BYTE;
-        } else if ("x10.core.Char".equals(className)) {
-            return Types.CHAR;
-        } else if ("x10.core.Double".equals(className)) {
-            return Types.DOUBLE;
-        } else if ("x10.core.Float".equals(className)) {
-            return Types.FLOAT;
-        } else if ("x10.core.Int".equals(className)) {
-            return Types.INT;
-        } else if ("x10.core.Long".equals(className)) {
-            return Types.LONG;
-        } else if ("x10.core.Short".equals(className)) {
-            return Types.SHORT;
-        } else if ("x10.core.String".equals(className)) {
-            return Types.STRING;
-        } else if ("x10.core.UByte".equals(className)) {
-            return Types.UBYTE;
-        } else if ("x10.core.UInt".equals(className)) {
-            return Types.UINT;
-        } else if ("x10.core.ULong".equals(className)) {
-            return Types.ULONG;
-        } else if ("x10.core.UShort".equals(className)) {
-            return Types.USHORT;
-        }
-        try {
-            Class<?> aClass = Class.forName(className);
-            rt.javaClass = aClass;
-        } catch (ClassNotFoundException e) {
-            // This should not happen though
-            throw new RuntimeException(e);
-        }
+        Class<?> clazz = deserializer.getClassForID(classId);
+        rt.javaClass = clazz;
         return rt;
     }
 }

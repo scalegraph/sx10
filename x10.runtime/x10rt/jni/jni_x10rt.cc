@@ -1,3 +1,14 @@
+/*
+ *  This file is part of the X10 project (http://x10-lang.org).
+ *
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2006-2013.
+ */
+
 #ifndef __int64
 #define __int64 __int64_t
 #endif
@@ -18,6 +29,19 @@
 #include "x10rt_jni_helpers.h"
 
 #include <x10rt_front.h>
+#include <string.h>
+
+
+/*
+ * Class:     x10_x10rt_X10RT
+ * Method:    x10rt_net_preinit
+ * Signature: ()java/lang/String
+ */
+JNIEXPORT jstring JNICALL Java_x10_x10rt_X10RT_x10rt_1preinit(JNIEnv *env, jclass) {
+    initCachedJVM(env);
+    char* connInfo = x10rt_preinit();
+    return env->NewStringUTF(connInfo);
+}
 
 /*
  * Class:     x10_x10rt_X10RT
@@ -26,8 +50,6 @@
  */
 JNIEXPORT jint JNICALL Java_x10_x10rt_X10RT_x10rt_1init(JNIEnv *env, jclass, jint numArgs, jobjectArray args) {
     initCachedJVM(env);
-
-    assert(numArgs == 0);
 #ifdef __CYGWIN__
     char exe[MAX_PATH];
     long res = GetModuleFileName(NULL, exe, MAX_PATH);
@@ -40,7 +62,12 @@ JNIEXPORT jint JNICALL Java_x10_x10rt_X10RT_x10rt_1init(JNIEnv *env, jclass, jin
     char *argv_0[] = { exe, NULL };
     int argc = 1;
     char** argv = argv_0;
-    x10rt_init(&argc, &argv);
+    x10rt_error err = x10rt_init(&argc, &argv);
+    if (err != X10RT_ERR_OK) {
+        if (x10rt_error_msg() != NULL)
+            fprintf(stderr,"X10RT fatal initialization error: %s\n", x10rt_error_msg());
+        abort();
+    }
     return 0;
 }
     
@@ -93,7 +120,12 @@ JNIEXPORT jint JNICALL Java_x10_x10rt_X10RT_x10rt_1here(JNIEnv *, jclass) {
  * Signature: ()V
  */
 JNIEXPORT void JNICALL Java_x10_x10rt_X10RT_x10rt_1probe(JNIEnv *, jclass) {
-    x10rt_probe();
+    x10rt_error err = x10rt_probe();
+    if (err != X10RT_ERR_OK) {
+        if (x10rt_error_msg() != NULL)
+            fprintf(stderr,"X10RT fatal error: %s\n", x10rt_error_msg());
+        abort();
+    }
 }
 
 
@@ -103,5 +135,18 @@ JNIEXPORT void JNICALL Java_x10_x10rt_X10RT_x10rt_1probe(JNIEnv *, jclass) {
  * Signature: ()V
  */
 JNIEXPORT void JNICALL Java_x10_x10rt_X10RT_x10rt_1blocking_1probe(JNIEnv *, jclass) {
-    x10rt_blocking_probe();
+    x10rt_error err = x10rt_blocking_probe();
+    if (err != X10RT_ERR_OK) {
+        if (x10rt_error_msg() != NULL)
+            fprintf(stderr,"X10RT fatal error: %s\n", x10rt_error_msg());
+        abort();
+    }
 }
+
+
+/*
+ * Following functions are optionally called by JVM to determine
+ * what level of JNI functions are used with this library.
+ */
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *, void *) { return JNI_VERSION_1_4; }
+/*JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *, void *) {}*/

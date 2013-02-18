@@ -53,8 +53,25 @@ namespace x10aux {
     inline place child_index (place p)        { return x10rt_child_index(p); }
     inline x10_boolean is_spe (place p)       { return x10rt_is_spe(p); }
     inline x10_boolean is_cuda (place p)      { return x10rt_is_cuda(p); }
-    inline void event_probe (void)            { x10rt_probe(); }
-    inline void blocking_probe (void)         { x10rt_blocking_probe(); }
+
+    inline void event_probe (void)
+    {
+        x10rt_error err = x10rt_probe();
+        if (err != X10RT_ERR_OK) {
+            if (x10rt_error_msg() != NULL)
+                fprintf(stderr, "X10RT fatal error: %s\n", x10rt_error_msg());
+            abort();
+        }
+    }
+    inline void blocking_probe (void)
+    {
+        x10rt_error err = x10rt_blocking_probe();
+        if (err != X10RT_ERR_OK) {
+            if (x10rt_error_msg() != NULL)
+                fprintf(stderr, "X10RT fatal error: %s\n", x10rt_error_msg());
+            abort();
+        }
+    }
 
     extern const int cuda_cfgs[];
     void blocks_threads (place p, msg_type t, int shm, x10_ubyte &bs, x10_ubyte &ts, const int *cfgs=cuda_cfgs);
@@ -122,21 +139,13 @@ namespace x10aux {
         return U::_make(m.bytes_sent, m.messages_sent, m.bytes_received, m.messages_received);
     }
 
-    template<class T, class U> T get_X10RTStats (void)
-    {
-        x10rt_stats s;
-        x10rt_get_stats(&s);
-        return T::_make(x10aux::get_X10RTMessageStats<U>(s.msg),
-                        x10aux::get_X10RTMessageStats<U>(s.put),
-                        s.put_copied_bytes_sent,
-                        s.put_copied_bytes_received,
-                        x10aux::get_X10RTMessageStats<U>(s.get),
-                        s.get_copied_bytes_sent,
-                        s.get_copied_bytes_received);
-    }
-
     extern x10_int platform_max_threads;
     extern x10_boolean default_static_threads;
+
+    inline static void register_mem(void *obj, size_t size)
+    {
+        x10rt_register_mem(obj, size);
+    }
 
     inline void shutdown() {
         _X_("X10RT shutdown starting");

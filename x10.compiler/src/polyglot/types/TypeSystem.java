@@ -955,6 +955,7 @@ public interface TypeSystem {
     X10ClassType SuppressTransientError();
     X10ClassType Embed();
     X10ClassType PerProcess();
+    X10ClassType RemoteInvocation();
 
     //Type Value();
 
@@ -1209,6 +1210,8 @@ public interface TypeSystem {
     boolean isObjectOrInterfaceType(Type t, Context context);
 
     boolean isInterfaceType(Type t, Context context);
+    
+    public boolean isHandOptimizedInterface(Type t);
 
     boolean isParameterType(Type toType);
 

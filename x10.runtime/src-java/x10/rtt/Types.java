@@ -301,6 +301,8 @@ public class Types {
                     return NUMBER_FORMAT_EXCEPTION;
                 } else if (java.lang.IllegalArgumentException.class.equals(javaClass)) {
                     return ILLEGAL_ARGUMENT_EXCEPTION;
+                } else if (java.lang.IllegalStateException.class.equals(javaClass)) {
+                    return ILLEGAL_STATE_EXCEPTION;
                 } else if (java.lang.RuntimeException.class.equals(javaClass)) {
                     return EXCEPTION;
                 }
@@ -309,7 +311,9 @@ public class Types {
                     return CHECKED_EXCEPTION;
                 }
             } else if (java.lang.Error.class.isAssignableFrom(javaClass)) {
-                if (java.lang.OutOfMemoryError.class.equals(javaClass)) {
+                if (java.lang.InternalError.class.equals(javaClass)) {
+                    return INTERNAL_ERROR;
+                } else if (java.lang.OutOfMemoryError.class.equals(javaClass)) {
                     return OUT_OF_MEMORY_ERROR;
                 } else if (java.lang.StackOverflowError.class.equals(javaClass)) {
                     return STACK_OVERFLOW_ERROR;
@@ -444,6 +448,17 @@ public class Types {
 	    return ARITHMETIC_EXCEPTION;
 	}
     };
+    public static final RuntimeType<java.lang.IllegalStateException> ILLEGAL_STATE_EXCEPTION = new NamedType<java.lang.IllegalStateException>(
+        "x10.lang.IllegalStateException",
+        java.lang.IllegalStateException.class,
+        null,
+        new Type[] { EXCEPTION }
+    ) {
+        // make sure deserialized RTT object is not duplicated
+        private Object readResolve() throws java.io.ObjectStreamException {
+            return ILLEGAL_STATE_EXCEPTION;
+        }
+    };
     public static final RuntimeType<java.lang.IllegalArgumentException> ILLEGAL_ARGUMENT_EXCEPTION = new NamedType<java.lang.IllegalArgumentException>(
 	"x10.lang.IllegalArgumentException",
 	java.lang.IllegalArgumentException.class,
@@ -531,6 +546,17 @@ public class Types {
 	private Object readResolve() throws java.io.ObjectStreamException {
 	    return OUT_OF_MEMORY_ERROR;
 	}
+    };
+    public static final RuntimeType<java.lang.InternalError> INTERNAL_ERROR = new NamedType<java.lang.InternalError>(
+        "x10.lang.InternalError",
+        java.lang.InternalError.class,
+        null,
+        new Type[] { ERROR }
+    ) {
+        // make sure deserialized RTT object is not duplicated
+        private Object readResolve() throws java.io.ObjectStreamException {
+            return INTERNAL_ERROR;
+        }
     };
 
     public static final RuntimeType<x10.core.Boolean> BOOLEAN = new BooleanType();
@@ -694,7 +720,7 @@ public class Types {
         if (isNumericType(origRTT)) {
         	return ((java.lang.Number) typeParamOrAny).intValue();
         } else {
-        	if (typeParamOrAny instanceof x10.core.UInt) {return x10.core.UInt.$unbox((x10.core.Byte)typeParamOrAny);}
+        	if (typeParamOrAny instanceof x10.core.UInt) {return x10.core.UInt.$unbox((x10.core.UInt)typeParamOrAny);}
         	else if (typeParamOrAny instanceof java.lang.Integer) {return (java.lang.Integer)typeParamOrAny;}
         }
         throw new java.lang.ClassCastException("x10.lang.UInt");

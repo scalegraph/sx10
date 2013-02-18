@@ -1,9 +1,12 @@
 /*
- * (c) Copyright IBM Corporation 2009
- * 
- * $Id$
+ *  This file is part of the X10 project (http://x10-lang.org).
  *
- * This file is part of X10 Runtime on MPI layer implementation.
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2006-2013.
  */
 
 /* MPICH2 mpi.h wants to not have SEEK_SET etc defined for C++ bindings */
@@ -402,7 +405,7 @@ class x10rt_internal_state {
 
 static x10rt_internal_state     global_state;
 
-void x10rt_net_init(int *argc, char ** *argv, x10rt_msg_type *counter) {
+x10rt_error x10rt_net_init(int *argc, char ** *argv, x10rt_msg_type *counter) {
     assert(!global_state.finalized);
     assert(!global_state.init);
 
@@ -482,6 +485,8 @@ void x10rt_net_init(int *argc, char ** *argv, x10rt_msg_type *counter) {
     }
 
     x10rt_net_coll_init(argc, argv, counter);
+
+    return X10RT_ERR_OK;
 }
 
 void x10rt_net_register_msg_receiver(x10rt_msg_type msg_type, x10rt_handler *cb) {
@@ -1052,20 +1057,23 @@ static void check_pending_receives() {
     }
 }
 
-x10rt_remote_ptr x10rt_net_register_mem (void *ptr, size_t)
-{ return (x10rt_remote_ptr)(size_t)ptr; }
+void x10rt_net_register_mem (void *ptr, size_t)
+{
+    // nothing to do
+}
 
 void x10rt_register_thread (void) { }
 void x10rt_net_team_probe (void) ;
 
-void x10rt_net_probe (void) {
+x10rt_error x10rt_net_probe (void) {
     x10rt_net_probe_ex(false);
+    return X10RT_ERR_OK;
 }
 
-void x10rt_net_blocking_probe (void)
-{
-	// TODO: make this blocking.  For now, just call probe.
-	x10rt_net_probe_ex(false);
+x10rt_error x10rt_net_blocking_probe (void) {
+    // TODO: make this blocking.  For now, just call probe.
+    x10rt_net_probe_ex(false);
+    return X10RT_ERR_OK;
 }
 
 static void x10rt_net_probe_ex (bool network_only) {
@@ -2855,3 +2863,5 @@ void x10rt_net_reduce (x10rt_team team, x10rt_place role, x10rt_place root,
 }
 
 /** \} */
+
+const char *x10rt_net_error_msg (void) { return NULL; }

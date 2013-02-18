@@ -1,3 +1,14 @@
+/*
+ *  This file is part of the X10 project (http://x10-lang.org).
+ *
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2006-2013.
+ */
+
 #ifndef X10RT_NET_H
 #define X10RT_NET_H
 
@@ -22,7 +33,12 @@
  *
  * \param counter As in x10rt_lgl_init.
  */
-X10RT_C void x10rt_net_init (int *argc, char ***argv, x10rt_msg_type *counter);
+X10RT_C x10rt_error x10rt_net_init (int *argc, char ***argv, x10rt_msg_type *counter);
+
+/** Get a detailed user-readable error about the fatal error that has rendered X10RT inoperable. 
+ * \returns Text describing the error, or NULL if no error has occured.
+ */
+X10RT_C const char *x10rt_net_error_msg (void);
 
 /** Register handlers for a plain message.
  *
@@ -92,13 +108,13 @@ X10RT_C void x10rt_net_send_put (x10rt_msg_params *p, void *buf, x10rt_copy_sz l
 
 /** Handle any oustanding message from the network by calling the registered callbacks.  \see #x10rt_lgl_probe
  */
-X10RT_C void x10rt_net_probe (void);
+X10RT_C x10rt_error x10rt_net_probe (void);
 
 
 /** Handle any oustanding message from the network by calling the registered callbacks, blocking if nothing is available.
  * \see #x10rt_lgl_probe
  */
-X10RT_C void x10rt_net_blocking_probe (void);
+X10RT_C x10rt_error x10rt_net_blocking_probe (void);
 
 
 /** \see #x10rt_lgl_remote_op
@@ -120,9 +136,8 @@ X10RT_C void x10rt_net_remote_ops (x10rt_remote_op_params *ops, size_t num_ops);
 /** \see #x10rt_lgl_register_mem
  * \param ptr As in #x10rt_lgl_register_mem
  * \param len As in #x10rt_lgl_register_mem
- * \returns As in #x10rt_lgl_register_mem
  */
-X10RT_C x10rt_remote_ptr x10rt_net_register_mem (void *ptr, size_t len);
+X10RT_C void x10rt_net_register_mem (void *ptr, size_t len);
 
 /** Shut down the network layer.  \see #x10rt_lgl_finalize
  */
@@ -224,6 +239,24 @@ X10RT_C void x10rt_net_alltoall (x10rt_team team, x10rt_place role,
                                  const void *sbuf, void *dbuf,
                                  size_t el, size_t count,
                                  x10rt_completion_handler *ch, void *arg);
+
+/** \see #x10rt_lgl_reduce
+ * \param team As in #x10rt_lgl_reduce
+ * \param role As in #x10rt_lgl_reduce
+ * \param root As in #x10rt_lgl_reduce
+ * \param sbuf As in #x10rt_lgl_reduce
+ * \param dbuf As in #x10rt_lgl_reduce
+ * \param el As in #x10rt_lgl_reduce
+ * \param count As in #x10rt_lgl_reduce
+ * \param ch As in #x10rt_lgl_reduce
+ * \param arg As in #x10rt_lgl_reduce
+ */
+X10RT_C void x10rt_net_reduce (x10rt_team team, x10rt_place role,
+                                x10rt_place root, const void *sbuf, void *dbuf,
+                                x10rt_red_op_type op,
+                                x10rt_red_type dtype,
+                                size_t count,
+                                x10rt_completion_handler *ch, void *arg);
 
 /** \see #x10rt_lgl_allreduce
  * \param team As in #x10rt_lgl_allreduce
