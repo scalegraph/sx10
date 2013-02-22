@@ -414,6 +414,9 @@ struct CollState {
     int TEAM_NEW_FINISHED_ID;
     int TEAM_SPLIT_ALLOCATE_TEAM_ID;
     int TEAM_ALLOCATE_NEW_TEAMS_ID;
+    int TEAM_BLOCKING_MSG_ID;
+    int TEAM_BLOCKING_FINISHED_ID;
+    int TEAM_CALLBACK_ID;
     int is_enabled_debug_print;
 
     MPI_Datatype * datatypeTbl;
@@ -447,6 +450,13 @@ struct CollState {
         }
         */
         free(datatypeTbl);
+    }
+
+    bool startBlockingMessagte(x10rt_place placec, x10rt_place *placev) {
+        return true;
+    }
+
+    void finishBlockingMessage(x10rt_place placec, x10rt_place *placev) {
     }
 };
 
@@ -483,15 +493,6 @@ x10rt_error x10rt_net_init(int *argc, char ** *argv, x10rt_msg_type *counter) {
             }
         }
     } else {
-        if (getenv("X10RT_EMULATE_COLLECTIVES") == NULL) {
-            fprintf(stderr, "[%s:%d] Collective communications might go wrong\n", __FILE__, __LINE__);
-            fprintf(stderr, "[%s:%d] To use native implimentations of collective communications correctly,"
-                    " you need to set env var X10RT_MPI_THREAD_MULTIPLE\n",
-                    __FILE__, __LINE__);
-            fprintf(stderr, "[%s:%d] Alternatively, you could set env var"
-                    " X10RT_EMULATE_COLLECTIVES\n",
-                    __FILE__, __LINE__);
-        }
         global_state.is_mpi_multithread = false;
         if (MPI_SUCCESS != MPI_Init(argc, argv)) {
             fprintf(stderr, "[%s:%d] Error in MPI_Init\n", __FILE__, __LINE__);
@@ -1287,9 +1288,9 @@ struct TeamDB {
     MPI_Comm &operator[] (x10rt_team t) { assert(t<teamc); return teamv[t]; }
 
     // must be called with global_lock taken
-    void allocTeam (x10rt_team t, x10rt_place members, x10rt_place *placev)
+    void allocTeam (x10rt_team t, x10rt_place placec, x10rt_place *placev)
     {
-        allocTeam_(t, members, placev);
+        allocTeam_(t, placec, placev);
     }
 
     x10rt_team allocTeam ()
@@ -1310,10 +1311,10 @@ struct TeamDB {
     }
 
 
-    x10rt_team allocTeam (x10rt_place members, x10rt_place *placev)
+    x10rt_team allocTeam (x10rt_place placec, x10rt_place *placev)
     {
         x10rt_team t = allocTeam();;
-        allocTeam_(t, members, placev);
+        allocTeam_(t, placec, placev);
         team_next++;
         return t;
     }
@@ -1350,7 +1351,7 @@ struct TeamDB {
        this->teamv[t] = c;
     }
 
-//            this->teamv[t] = new (safe_malloc<TeamObj>()) TeamObj(t, members, placev);
+//            this->teamv[t] = new (safe_malloc<TeamObj>()) TeamObj(t, placec, placev);
 
     MPI_Comm comm (x10rt_team t)
     {
@@ -1380,24 +1381,24 @@ private:
             release_lock(&this->lock);
         }
 
-        void allocTeam_ (x10rt_team t, x10rt_place members, x10rt_place *placev)
+        void allocTeam_ (x10rt_team t, x10rt_place placec, x10rt_place *placev)
         {
             assert(global_state.init);
             assert(!global_state.finalized);
 
-            X10RT_NET_DEBUG("t = %d, members = %d", t, members);
+            X10RT_NET_DEBUG("t = %d, placec = %d", t, placec);
             ensureIndex(t, true);
-//            this->teamv[t] = new (safe_malloc<TeamObj>()) TeamObj(t, members, placev);
+//            this->teamv[t] = new (safe_malloc<TeamObj>()) TeamObj(t, placec, placev);
 
-            int *ranks = new int[members];
-            for (x10rt_place i = 0; i < members; ++i) {
+            int *ranks = new int[placec];
+            for (x10rt_place i = 0; i < placec; ++i) {
                 ranks[i] = placev[i];
                 X10RT_NET_DEBUG("placev[%d} = %d", i, placev[i]);
             }
             MPI_Group grp, MPI_GROUP_WORLD;
             LOCK_IF_MPI_IS_NOT_MULTITHREADED;
             MPI_Comm_group(MPI_COMM_WORLD, &MPI_GROUP_WORLD);
-            if (MPI_SUCCESS != MPI_Group_incl(MPI_GROUP_WORLD, members, ranks, &grp)) {
+            if (MPI_SUCCESS != MPI_Group_incl(MPI_GROUP_WORLD, placec, ranks, &grp)) {
 		fprintf(stderr, "[%s:%d] %s\n",
 				__FILE__, __LINE__, "Error in MPI_Group_incl");
 		delete[] ranks;
@@ -1521,6 +1522,31 @@ struct CollectivePostprocess {
     struct CollectivePostprocessEnv env;
 };
 
+struct BlockingMessage {
+    x10rt_place placec;
+    x10rt_place *placev;
+
+    int msg_id;
+    x10rt_place home;
+    size_t cont_len;
+    char *cont;
+    x10rt_remote_ptr ch;
+    x10rt_remote_ptr arg;
+
+    BlockingMessage(
+            x10rt_place placec, x10rt_place *placev,
+            int msg_id, x10rt_place home,
+            size_t cont_len, char  *cont, x10rt_remote_ptr ch_,
+            x10rt_remote_ptr arg_)
+    : placec(placec), placev(placev), msg_id(msg_id), home(home), cont_len(cont_len), cont(cont), ch(ch_), arg(arg_) {
+    }
+
+    ~BlockingMessage() {
+        free(placev);
+        free(cont);
+    }
+};
+
 static bool test_and_call_handler(struct CollectivePostprocess & cp) {
     assert(global_state.init);
     assert(!global_state.finalized);
@@ -1549,11 +1575,31 @@ static bool test_and_call_handler(struct CollectivePostprocess & cp) {
     return false;
 }
 
-struct CollectivePostprocessDB {
+static void send_blocking_msg (int msg_id, x10rt_place home,
+        size_t cont_len, char  *cont, x10rt_remote_ptr ch_,
+                                    x10rt_remote_ptr arg_);
+
+static bool test_and_send_msg(struct BlockingMessage & bm) {
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
+    int complete = 0;
+    MPI_Status msg_status;
+
+    if (coll_state.startBlockingMessagte(bm.placec, bm.placev)) {
+        X10RT_NET_DEBUG("%s", "send blocking message");
+        send_blocking_msg(bm.msg_id, bm.home, bm.cont_len, bm.cont, bm.ch, bm.arg);
+        return true;
+    }
+    return false;
+}
+
+struct TeamPostprocessDB {
 private:
     bool isPolling;
     pthread_mutex_t lock;
     std::list<struct CollectivePostprocess> coll_list;
+    std::list<struct BlockingMessage> msg_list;
 
     bool canStartPolling() {
         get_lock(&this->lock);
@@ -1583,9 +1629,15 @@ public:
     void add_handler(struct CollectivePostprocess *cp) {
         coll_list.push_back(*cp);
     }
+
+    void add_handler(struct BlockingMessage *bm) {
+        msg_list.push_back(*bm);
+    }
+
     void poll(void) {
         if (canStartPolling()) {
             coll_list.remove_if(test_and_call_handler);
+            msg_list.remove_if(test_and_send_msg);
             finishPolling();
         }
     }
@@ -1697,16 +1749,16 @@ static void team_new_recv (const x10rt_msg_params *p)
     x10rt_deserbuf b;
     x10rt_deserbuf_init(&b, p);
     x10rt_team t; x10rt_deserbuf_read(&b, &t);
-    x10rt_place members; x10rt_deserbuf_read(&b, &members);
-    x10rt_place *placev = safe_malloc<x10rt_place>(members);
-    x10rt_deserbuf_read_ex(&b, placev, sizeof(*placev), members);
+    x10rt_place placec; x10rt_deserbuf_read(&b, &placec);
+    x10rt_place *placev = safe_malloc<x10rt_place>(placec);
+    x10rt_deserbuf_read_ex(&b, placev, sizeof(*placev), placec);
     x10rt_remote_ptr counter_; x10rt_deserbuf_read(&b, &counter_);
     x10rt_place home; x10rt_deserbuf_read(&b, &home);
     x10rt_remote_ptr ch_; x10rt_deserbuf_read(&b, &ch_);
     x10rt_remote_ptr arg_; x10rt_deserbuf_read(&b, &arg_);
 
     X10RT_NET_DEBUG("%s", "team allocate");
-    mpi_tdb.allocTeam(t, members, placev);
+    mpi_tdb.allocTeam(t, placec, placev);
     X10RT_NET_DEBUG("%s", "team allocated");
 
     send_team_new_finished(home,t,ch_,arg_,counter_);
@@ -1879,6 +1931,91 @@ static void team_allocate_new_teams_recv (const x10rt_msg_params *p)
     free(cont);
 }
 
+static void send_blocking_msg (int msg_id, x10rt_place home,
+        size_t cont_len, char  *cont, x10rt_remote_ptr ch_,
+                                    x10rt_remote_ptr arg_)
+{
+    X10RT_NET_DEBUG("%s", "called");
+    X10RT_NET_DEBUGV("d",msg_id);
+
+    x10rt_serbuf b;
+    x10rt_serbuf_init(&b, home, msg_id);
+    x10rt_serbuf_write(&b, &cont_len);
+    x10rt_serbuf_write_ex(&b, cont, sizeof(*cont), cont_len);
+    x10rt_serbuf_write(&b, &ch_);
+    x10rt_serbuf_write(&b, &arg_);
+    x10rt_net_send_msg(&b.p);
+    x10rt_serbuf_free(&b);
+}
+
+static void team_blocking_msg_recv (const x10rt_msg_params *p)
+{
+    X10RT_NET_DEBUG("%s", "called");
+
+    x10rt_deserbuf b;
+    x10rt_deserbuf_init(&b, p);
+    X10RT_NET_DEBUG("%s", "buffer init");
+
+    int msg_id; x10rt_deserbuf_read(&b, &msg_id);
+    x10rt_place home; x10rt_deserbuf_read(&b, &home);
+    x10rt_place placec; x10rt_deserbuf_read(&b, &placec);
+    x10rt_place *placev = safe_malloc<x10rt_place>(placec);
+    x10rt_deserbuf_read_ex(&b, placev, sizeof(*placev), placec);
+    size_t cont_len ; x10rt_deserbuf_read(&b, &cont_len);
+    char *cont = safe_malloc<char>(cont_len);
+    x10rt_deserbuf_read_ex(&b, cont, sizeof(*cont), cont_len);
+    x10rt_remote_ptr ch_; x10rt_deserbuf_read(&b, &ch_);
+    x10rt_remote_ptr arg_; x10rt_deserbuf_read(&b, &arg_);
+
+    BlockingMessage *bm = new BlockingMessage(placec, placev, msg_id, home, cont_len, cont, ch_, arg_);
+    coll_pdb.add_handler(bm);
+}
+
+static void team_blocking_finished_recv (const x10rt_msg_params *p)
+{
+    X10RT_NET_DEBUG("%s", "called");
+
+    x10rt_deserbuf b;
+    x10rt_deserbuf_init(&b, p);
+    X10RT_NET_DEBUG("%s", "buffer init");
+
+    x10rt_place placec; x10rt_deserbuf_read(&b, &placec);
+    x10rt_place *placev = safe_malloc<x10rt_place>(placec);
+    x10rt_deserbuf_read_ex(&b, placev, sizeof(*placev), placec);
+
+    coll_state.finishBlockingMessage(placec, placev);
+}
+
+static void send_team_blocking_finished (x10rt_place placec, x10rt_place *placev)
+{
+    x10rt_serbuf b;
+    x10rt_serbuf_init(&b, 0, coll_state.TEAM_BLOCKING_FINISHED_ID);
+    x10rt_serbuf_write(&b, &placec);
+    x10rt_serbuf_write(&b, &placev);
+    x10rt_net_send_msg(&b.p);
+    x10rt_serbuf_free(&b);
+}
+
+static void team_callback_recv (const x10rt_msg_params *p)
+{
+    X10RT_NET_DEBUG("%s", "called");
+
+    x10rt_deserbuf b;
+    x10rt_deserbuf_init(&b, p);
+    X10RT_NET_DEBUG("%s", "buffer init");
+
+    size_t cont_len ; x10rt_deserbuf_read(&b, &cont_len);
+    char *cont = safe_malloc<char>(cont_len);
+    x10rt_deserbuf_read_ex(&b, cont, sizeof(*cont), cont_len);
+    x10rt_remote_ptr ch_; x10rt_deserbuf_read(&b, &ch_);
+    x10rt_remote_ptr arg_; x10rt_deserbuf_read(&b, &arg_);
+
+    x10rt_completion_handler *ch = reinterpret_cast<x10rt_completion_handler*>(ch_);
+    void *arg = reinterpret_cast<void*>(arg_);
+    ch(arg);
+    free(cont);
+}
+
 static void x10rt_net_coll_init(int *argc, char ** *argv, x10rt_msg_type *counter) {
 
     mpi_tdb.allocTeam(MPI_COMM_WORLD); // t = 0
@@ -1888,6 +2025,9 @@ static void x10rt_net_coll_init(int *argc, char ** *argv, x10rt_msg_type *counte
     coll_state.TEAM_NEW_FINISHED_ID = (*counter)++;
     coll_state.TEAM_SPLIT_ALLOCATE_TEAM_ID = (*counter)++;
     coll_state.TEAM_ALLOCATE_NEW_TEAMS_ID = (*counter)++;
+    coll_state.TEAM_BLOCKING_MSG_ID = (*counter)++;
+    coll_state.TEAM_BLOCKING_FINISHED_ID = (*counter)++;
+    coll_state.TEAM_CALLBACK_ID = (*counter)++;
 
     coll_pdb.init();
 
@@ -1896,12 +2036,45 @@ static void x10rt_net_coll_init(int *argc, char ** *argv, x10rt_msg_type *counte
     X10RT_NET_DEBUGV("d",coll_state.TEAM_NEW_FINISHED_ID);
     X10RT_NET_DEBUGV("d",coll_state.TEAM_SPLIT_ALLOCATE_TEAM_ID);
     X10RT_NET_DEBUGV("d",coll_state.TEAM_ALLOCATE_NEW_TEAMS_ID);
+    X10RT_NET_DEBUGV("d",coll_state.TEAM_BLOCKING_MSG_ID);
+    X10RT_NET_DEBUGV("d",coll_state.TEAM_BLOCKING_FINISHED_ID);
+    X10RT_NET_DEBUGV("d",coll_state.TEAM_CALLBACK_ID);
 
     x10rt_net_register_msg_receiver(coll_state.TEAM_NEW_ALLOCATE_TEAM_ID, team_new_allocate_teams_recv);
     x10rt_net_register_msg_receiver(coll_state.TEAM_NEW_ID, team_new_recv);
     x10rt_net_register_msg_receiver(coll_state.TEAM_NEW_FINISHED_ID, team_new_finished_recv);
     x10rt_net_register_msg_receiver(coll_state.TEAM_SPLIT_ALLOCATE_TEAM_ID, team_split_allocate_teams_recv);
     x10rt_net_register_msg_receiver(coll_state.TEAM_ALLOCATE_NEW_TEAMS_ID, team_allocate_new_teams_recv);
+    x10rt_net_register_msg_receiver(coll_state.TEAM_BLOCKING_MSG_ID, team_blocking_msg_recv);
+    x10rt_net_register_msg_receiver(coll_state.TEAM_BLOCKING_FINISHED_ID, team_blocking_finished_recv);
+    x10rt_net_register_msg_receiver(coll_state.TEAM_CALLBACK_ID, team_callback_recv);
+}
+
+static void x10rt_net_team_barrier_for_blocking (x10rt_place placec, x10rt_place *placev,
+		x10rt_completion_handler *ch, void *arg)
+{
+    X10RT_NET_DEBUG("%s", "called");
+
+    int msg_id = coll_state.TEAM_CALLBACK_ID;
+    x10rt_place home = x10rt_net_here();
+    x10rt_remote_ptr ch_ = reinterpret_cast<x10rt_remote_ptr>(ch);
+    x10rt_remote_ptr arg_ = reinterpret_cast<x10rt_remote_ptr>(arg);
+    size_t cont_len = 0;
+    char cont_cont;
+    char *cont = &cont_cont;
+
+    x10rt_serbuf b;
+    x10rt_serbuf_init(&b, 0, coll_state.TEAM_BLOCKING_MSG_ID);
+    x10rt_serbuf_write(&b, &msg_id);
+    x10rt_serbuf_write(&b, &home);
+    x10rt_serbuf_write(&b, &placec);
+    x10rt_serbuf_write_ex(&b, placev, sizeof(*placev), placec);
+    x10rt_serbuf_write(&b, &cont_len);
+    x10rt_serbuf_write_ex(&b, cont, sizeof(*cont), cont_len);
+    x10rt_serbuf_write(&b, &ch_);
+    x10rt_serbuf_write(&b, &arg_);
+    x10rt_net_send_msg(&b.p);
+    x10rt_serbuf_free(&b);
 }
 
 /** \see #x10rt_team_new
@@ -1915,6 +2088,12 @@ void x10rt_net_team_new (x10rt_place placec, x10rt_place *placev,
 		x10rt_completion_handler2 *ch, void *arg)
 {
     X10RT_NET_DEBUG("%s", "called");
+
+    {
+        int finished = 0;
+        x10rt_net_team_barrier_for_blocking(placec, placev, x10rt_net_one_setter, &finished);
+        while (!finished) x10rt_net_probe_ex(true);
+    }
 
     x10rt_place home = x10rt_net_here();
     x10rt_remote_ptr ch_ = reinterpret_cast<x10rt_remote_ptr>(ch);
@@ -1957,6 +2136,8 @@ void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_comple
     assert(global_state.init);
     assert(!global_state.finalized);
 
+    X10RT_NET_DEBUG("%s", "called");
+
     MPI_Comm comm = mpi_tdb[team];
     MPI_Group grp, MPI_GROUP_WORLD;
     MPI_Comm_group(comm, &grp);
@@ -1980,6 +2161,8 @@ void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_comple
     for (int i = 0; i < sz; ++i) {
         members[i] = dbuf[i];
     }
+
+    ch(arg);
 }
 
 x10rt_place x10rt_net_team_sz (x10rt_team team)
@@ -2012,6 +2195,22 @@ void x10rt_net_team_split (x10rt_team parent, x10rt_place parent_role,
     MPI_Comm comm = mpi_tdb[parent];
     int gsize = x10rt_net_team_sz(parent);
 
+    x10rt_place placec = x10rt_net_team_sz(parent);
+    x10rt_place *placev = ChkAlloc<x10rt_place>(placec * sizeof(x10rt_place));
+
+    if (parent_role == 0) {
+        {
+            int finished = 0;
+            x10rt_net_team_members(parent, placev, x10rt_net_one_setter, &finished);
+            while (!finished) x10rt_net_probe_ex(true);
+        }
+        {
+            int finished = 0;
+            x10rt_net_team_barrier_for_blocking(placec, placev, x10rt_net_one_setter, &finished);
+            while (!finished) x10rt_net_probe_ex(true);
+        }
+    }
+
     {
 	int finished = 0;
 	x10rt_net_barrier(parent, parent_role, x10rt_net_one_setter, &finished);
@@ -2027,6 +2226,10 @@ void x10rt_net_team_split (x10rt_team parent, x10rt_place parent_role,
     }
     UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
 
+    if (parent_role == 0) {
+        send_team_blocking_finished(placec, placev);
+    }
+
     // role 0 must exist
     int *colors = new int[gsize];
     {
@@ -2037,6 +2240,7 @@ void x10rt_net_team_split (x10rt_team parent, x10rt_place parent_role,
 
     int *new_team_ids = NULL;
     if (parent_role == 0) {
+
 	std::sort(colors, colors+gsize);
 	std::map<x10rt_place, int> color_mapping;
 	assert(gsize > 0);
