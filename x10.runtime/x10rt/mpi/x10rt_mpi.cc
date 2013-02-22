@@ -2063,11 +2063,11 @@ void x10rt_net_team_split (x10rt_team parent, x10rt_place parent_role,
 	char *cont = static_cast<char *>(malloc(cont_len));
 	MPI_Comm *comm1 = reinterpret_cast<MPI_Comm *>(cont);
 	x10rt_team *team1 = reinterpret_cast<x10rt_team *>(&comm1[1]);
-	x10rt_place *places = reinterpret_cast<x10rt_place *>(&team1[1]);
+	x10rt_place *role_and_colors = reinterpret_cast<x10rt_place *>(&team1[1]);
 	comm1[0] = new_comm;
 	team1[0] = parent;
-	places[0] = parent_role;
-	memcpy(&places[1], &new_team_ids[0], gsize * sizeof(x10rt_place));
+	role_and_colors[0] = parent_role;
+	memcpy(&role_and_colors[1], &new_team_ids[0], gsize * sizeof(x10rt_place));
 	x10rt_remote_ptr ch_ = reinterpret_cast<x10rt_remote_ptr>(ch);
 	x10rt_remote_ptr arg_ = reinterpret_cast<x10rt_remote_ptr>(arg);
 
