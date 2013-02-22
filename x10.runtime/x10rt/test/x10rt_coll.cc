@@ -464,7 +464,6 @@ static void coll_test (x10rt_team team, x10rt_place role, x10rt_place per_place)
         while (!finished) { x10rt_probe(); }
         for (size_t i=0 ; i<x10rt_team_sz(team) - role ; ++i) {
         	test_t oracle = (i + role) * (i + role + 1) / 2 + role;
-        	std::cout <<  role << ": i=" <<  i << ", oracle=" << oracle << ", dbuf=" << dbuf[i] << std::endl;
         	if (dbuf[i] != oracle) {
         		std::cout << team << ": role " << role
         				<< " has received invalid data"
