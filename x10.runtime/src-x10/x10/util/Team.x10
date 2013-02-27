@@ -50,9 +50,8 @@ public struct Team {
     /** Returns the PlaceGroup of the places of the team.
      */
     public def placeGroup() : PlaceGroup = {
-    	val ps = new Array[Place](places);
-    	ArrayUtils.sort(ps, (x:Place, y:Place)=>x.id.compareTo(y.id));
-    	return new SparsePlaceGroup(ps.sequence());
+        val ps = new Array[Place](places);
+        return new OrderedPlaceGroup(ps.sequence());
     }
 
     /** Returns the place corresponding to the given role.
