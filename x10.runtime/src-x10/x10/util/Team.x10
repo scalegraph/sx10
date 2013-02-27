@@ -62,13 +62,13 @@ public struct Team {
     /** Returns the role corresponding to the given place.
      * @param place Place in this team
      */
-    public def getRole(place:Place) : Int = {
-    	var role:Int = -1;
-    	for ([p] in places) {
-    		if (places(p) == place)
-    			role = p;
-    	}
-    	return role;
+    public def getRole(place:Place) : Array[Int] = {
+        val role = new ArrayBuilder[Int]();
+        for ([p] in places) {
+            if (places(p) == place)
+                role.add(p);
+        }
+        return role.result();
     }
     
     private def this (id:Int, places:Array[Place](1)) { this.id = id; this.places = places; }
