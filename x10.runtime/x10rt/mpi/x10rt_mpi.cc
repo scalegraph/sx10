@@ -1630,11 +1630,21 @@ public:
     }
 
     void add_handler(struct CollectivePostprocess *cp) {
+        X10RT_NET_DEBUG("%s", "called");
+        while (!canStartPolling()) {
+            x10rt_net_probe_ex(false);
+        }
         coll_list.push_back(*cp);
+        finishPolling();
     }
 
     void add_handler(struct BlockingMessage *bm) {
+        X10RT_NET_DEBUG("%s", "called");
+        while (!canStartPolling()) {
+            x10rt_net_probe_ex(false);
+        }
         msg_list.push_back(*bm);
+        finishPolling();
     }
 
     void poll(void) {
