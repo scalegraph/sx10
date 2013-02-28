@@ -453,10 +453,12 @@ struct CollState {
     }
 
     bool startBlockingMessagte(x10rt_place placec, x10rt_place *placev) {
+        // TODO: stub
         return true;
     }
 
     void finishBlockingMessage(x10rt_place placec, x10rt_place *placev) {
+        // TODO: stub
     }
 };
 
