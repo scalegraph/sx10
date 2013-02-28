@@ -1412,6 +1412,7 @@ private:
 		abort();
             }
             MPI_Group_free(&MPI_GROUP_WORLD);
+            MPI_Group_free(&grp);
             UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
 
             this->teamv[t] = comm;
@@ -1967,6 +1968,7 @@ static void team_blocking_msg_recv (const x10rt_msg_params *p)
     x10rt_remote_ptr ch_; x10rt_deserbuf_read(&b, &ch_);
     x10rt_remote_ptr arg_; x10rt_deserbuf_read(&b, &arg_);
 
+    X10RT_NET_DEBUG("%s", "sent");
     BlockingMessage *bm = new BlockingMessage(placec, placev, msg_id, home, cont_len, cont, ch_, arg_);
     coll_pdb.add_handler(bm);
 }
@@ -2162,6 +2164,8 @@ void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_comple
         members[i] = dbuf[i];
     }
 
+    MPI_Group_free(&MPI_GROUP_WORLD);
+    MPI_Group_free(&grp);
     ch(arg);
 }
 
