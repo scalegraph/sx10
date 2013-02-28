@@ -2064,9 +2064,9 @@ static void x10rt_net_team_barrier_for_blocking (x10rt_place placec, x10rt_place
     x10rt_remote_ptr ch_ = reinterpret_cast<x10rt_remote_ptr>(ch);
     x10rt_remote_ptr arg_ = reinterpret_cast<x10rt_remote_ptr>(arg);
     size_t cont_len = 0;
-    char cont_cont;
-    char *cont = &cont_cont;
+    char *cont = safe_malloc<char>(cont_len);
 
+    /*
     x10rt_serbuf b;
     x10rt_serbuf_init(&b, 0, coll_state.TEAM_BLOCKING_MSG_ID);
     x10rt_serbuf_write(&b, &msg_id);
@@ -2079,6 +2079,20 @@ static void x10rt_net_team_barrier_for_blocking (x10rt_place placec, x10rt_place
     x10rt_serbuf_write(&b, &arg_);
     x10rt_net_send_msg(&b.p);
     x10rt_serbuf_free(&b);
+
+    x10rt_serbuf b;
+    x10rt_serbuf_init(&b, 0, coll_state.TEAM_CALLBACK_ID);
+    x10rt_serbuf_write(&b, &cont_len);
+    x10rt_serbuf_write_ex(&b, cont, sizeof(*cont), cont_len);
+    x10rt_serbuf_write(&b, &ch_);
+    x10rt_serbuf_write(&b, &arg_);
+    x10rt_net_send_msg(&b.p);
+    x10rt_serbuf_free(&b);
+    */
+
+    ch(arg);
+
+    X10RT_NET_DEBUG("%s", "finished");
 }
 
 /** \see #x10rt_team_new
