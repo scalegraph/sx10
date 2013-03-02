@@ -42,6 +42,13 @@ public final class OrderedPlaceGroup extends PlaceGroup {
   }
 
   /**
+   * Construct a OrderedPlaceGroup from a Array[Place](1). 
+   */
+  public def this(pa:Array[Place](1)) {
+    places = new Array[Place](pa.size, (i:int)=>pa(i));
+  }
+
+  /**
    * Construct a OrderedPlaceGroup that contains a single place, p.
    * @param p the place 
    */
