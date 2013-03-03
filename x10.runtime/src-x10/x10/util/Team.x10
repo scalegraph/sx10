@@ -38,6 +38,7 @@ public struct Team {
      */
     private id: Int;
     private places: Array[Place](1);
+    private role: PlaceLocalHandle[Array[Int](1)];
 
     /** Returns the id of the team.
      */
@@ -47,11 +48,14 @@ public struct Team {
      */
     public def places() = places;
 
+    /** Returns the role of here
+     */
+    public def getRoleHere() : Array[Int](1) = this.role();
+
     /** Returns the PlaceGroup of the places of the team.
      */
     public def placeGroup() : PlaceGroup = {
-        val ps = new Array[Place](places);
-        return new OrderedPlaceGroup(ps.sequence());
+        return new OrderedPlaceGroup(places);
     }
 
     /** Returns the place corresponding to the given role.
@@ -62,29 +66,38 @@ public struct Team {
     /** Returns the role corresponding to the given place.
      * @param place Place in this team
      */
-    public def getRole(place:Place) : Array[Int] = {
+    public def getRole(place:Place) : Array[Int](1) = {
+        return getRole(places, place);
+    }
+
+    private static def getRole(places:Array[Place](1), place:Place) {
         val role = new ArrayBuilder[Int]();
         for ([p] in places) {
             if (places(p) == place)
                 role.add(p);
         }
-        return role.result();
+        return role.result();    
     }
     
-    private def this (id:Int, places:Array[Place](1)) { this.id = id; this.places = places; }
+    private def this (id:Int, places:Array[Place](1)) {
+        this.id = id;
+        this.places = places;
+        this.role = PlaceLocalHandle.make[Array[Int](1)](new OrderedPlaceGroup(places), () => getRole(places, here));
+    }
 
     /** Create a team by defining the place where each member lives.  This would usually be called before creating an async for each member of the team.
      * @param places The place of each member
      */
-    public def this (places:Array[Place]) {
-        this(places.raw(), places.size);
+    public def this (places:Array[Place](1)) {
+        this(places.raw(), places.size, new OrderedPlaceGroup(places));
     }
 
-    private def this (places:IndexedMemoryChunk[Place], count:Int) {
+    private def this (places:IndexedMemoryChunk[Place], count:Int, pg:PlaceGroup) {
         val result = IndexedMemoryChunk.allocateUninitialized[Int](1);
         finish nativeMake(places, count, result);
         this.id = result(0);
         this.places =new Array[Place](places);
+        this.role = PlaceLocalHandle.make[Array[Int](1)](pg, () => getRole(new Array[Place](places), here));
     }
 
     private static def nativeMake (places:IndexedMemoryChunk[Place], count:Int, result:IndexedMemoryChunk[Int]) : void {
