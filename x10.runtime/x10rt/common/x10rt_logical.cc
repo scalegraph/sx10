@@ -1084,6 +1084,7 @@ void x10rt_lgl_allreduce (x10rt_team team, x10rt_place role,
 
 void x10rt_lgl_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg)
 {
+    ESCAPE_IF_ERR;
     if (has_collectives_append) {
         x10rt_net_team_members(team, members, ch, arg);
     } else {
@@ -1096,6 +1097,7 @@ void x10rt_lgl_scatterv (x10rt_team team, x10rt_place role,
                     void *dbuf, size_t dcount,
                     size_t el, x10rt_completion_handler *ch, void *arg)
 {
+    ESCAPE_IF_ERR;
     if (has_collectives_append) {
         x10rt_net_scatterv(team, role, root, sbuf, soffsets, scounts, dbuf, dcount, el, ch, arg);
     } else {
@@ -1108,6 +1110,7 @@ void x10rt_lgl_gather (x10rt_team team, x10rt_place role,
                     size_t el, size_t count,
                     x10rt_completion_handler *ch, void *arg)
 {
+    ESCAPE_IF_ERR;
     if (has_collectives_append) {
         x10rt_net_gather(team, role, root, sbuf, dbuf, el, count, ch, arg);
     } else {
@@ -1120,6 +1123,7 @@ void x10rt_lgl_gatherv (x10rt_team team, x10rt_place role,
                     void *dbuf, const void *doffsets, const void *dcounts,
                     size_t el, x10rt_completion_handler *ch, void *arg)
 {
+    ESCAPE_IF_ERR;
     if (has_collectives_append) {
         x10rt_net_gatherv(team, role, root, sbuf, scount, dbuf, doffsets, dcounts, el, ch, arg);
     } else {
@@ -1132,6 +1136,7 @@ void x10rt_lgl_allgather (x10rt_team team, x10rt_place role,
 		void *dbuf,
 		size_t el, size_t count, x10rt_completion_handler *ch, void *arg)
 {
+    ESCAPE_IF_ERR;
     if (has_collectives_append) {
         x10rt_net_allgather(team, role, sbuf, dbuf, el, count, ch, arg);
     } else {
@@ -1144,6 +1149,7 @@ void x10rt_lgl_allgatherv (x10rt_team team, x10rt_place role,
 		void *dbuf, const void *doffsets, const void *dcounts,
 		size_t el, x10rt_completion_handler *ch, void *arg)
 {
+    ESCAPE_IF_ERR;
     if (has_collectives_append) {
         x10rt_net_allgatherv(team, role, sbuf, scount, dbuf, doffsets, dcounts, el, ch, arg);
     } else {
@@ -1157,6 +1163,7 @@ void x10rt_lgl_alltoallv (x10rt_team team, x10rt_place role,
                     void *dbuf, const void *doffsets, const void *dcounts,
                     size_t el, x10rt_completion_handler *ch, void *arg)
 {
+    ESCAPE_IF_ERR;
     if (has_collectives_append) {
         x10rt_net_alltoallv(team, role, sbuf, soffsets, scounts, dbuf, doffsets, dcounts, el, ch, arg);
     } else {
