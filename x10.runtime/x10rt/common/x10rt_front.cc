@@ -110,6 +110,9 @@ x10rt_place x10rt_child (x10rt_place host, x10rt_place index)
 x10rt_place x10rt_child_index (x10rt_place child)
 { return x10rt_lgl_child_index(child); }
 
+x10rt_answer x10rt_supports (x10rt_opt o)
+{ return x10rt_lgl_supports(o); }
+
 
 static uint32_t print_headers = getenv("X10RT_PRINT_MSG_HEADERS") != NULL
                               ? (uint32_t)strtoull(getenv("X10RT_PRINT_MSG_HEADERS"),NULL,10)

@@ -303,6 +303,11 @@ X10RT_C x10rt_error x10rt_lgl_blocking_probe (void);
  */
 X10RT_C void x10rt_lgl_finalize (void); 
 
+/** Return whether the x10rt_net implementation supports a particular feature and it is to be used.
+ * \see #x10rt_supports
+ */
+X10RT_C x10rt_answer x10rt_lgl_supports (x10rt_opt o);
+
 /** \see #x10rt_team_new
  * \param placec As in #x10rt_team_new
  * \param placev As in #x10rt_team_new

@@ -43,7 +43,7 @@ typedef uint32_t x10rt_team;
 
 /** An integer type capable of representing an answer for a request for the x10rt_net support.
  */
-typedef uint32_t x10rt_anwser;
+typedef uint32_t x10rt_answer;
 
 /** User callback to signal that non-blocking operations have completed.
  */

@@ -380,6 +380,10 @@ X10RT_C x10rt_place x10rt_child (x10rt_place host, x10rt_place index);
  */
 X10RT_C x10rt_place x10rt_child_index (x10rt_place child);
 
+/** Return whether the x10rt_net implementation supports a particular feature and it is to be used.
+ */
+X10RT_C x10rt_answer x10rt_supports (x10rt_opt o);
+
 /** \} */
 
 

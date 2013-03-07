@@ -1135,6 +1135,15 @@ public struct Team {
         return alltoallvAuto(role, flatten_src, src_offs, src_sizes);
     }
 
+    private static val OPT_REMOTE_OP = 0;
+    private static val OPT_COLLECTIVES = 1;
+    private static val OPT_COLLECTIVES_APPEND = 2;
+
+    private static def nativeSupports (opt:Int) : Int {
+        @Native("java", "return x10.x10rt.TeamSupport.nativeSize(opt);")
+        @Native("c++", "return (x10_int)x10rt_supports(static_cast<x10rt_opt>(opt));") { return -1; }
+    }
+
 }
 
 // vim: shiftwidth=4:tabstop=4:expandtab
