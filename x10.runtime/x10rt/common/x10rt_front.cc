@@ -169,6 +169,11 @@ void x10rt_finalize (void)
 { x10rt_lgl_finalize(); }
 
 
+void x10rt_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg)
+{
+    x10rt_lgl_team_members(team, members, ch, arg);
+}
+
 
 void x10rt_team_new (x10rt_place placec, x10rt_place *placev,
                      x10rt_completion_handler2 *ch, void *arg)
