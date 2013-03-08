@@ -105,8 +105,10 @@ public struct Team {
     }
 
     private static def nativeMake (places:IndexedMemoryChunk[Place], count:Int, result:IndexedMemoryChunk[Int]) : void {
+        Runtime.increaseParallelism();
         @Native("java", "x10.x10rt.TeamSupport.nativeMake(places, count, result);")
     	@Native("c++", "x10rt_team_new(count, (x10rt_place*)places->raw(), x10aux::coll_handler2, x10aux::coll_enter2(result->raw()));") {}
+        Runtime.decreaseParallelism(1);
     }
 
     /** Returns the number of elements in the team.
@@ -941,8 +943,10 @@ public struct Team {
     }
 
     private static def nativeSplit(id:Int, role:Int, color:Int, new_role:Int, result:IndexedMemoryChunk[Int]) : void {
+        Runtime.increaseParallelism();
         @Native("java", "x10.x10rt.TeamSupport.nativeSplit(id, role, color, new_role, result);")
         @Native("c++", "x10rt_team_split(id, role, color, new_role, x10aux::coll_handler2, x10aux::coll_enter2(result->raw()));") {}
+        Runtime.decreaseParallelism(1);
     }
 
     /** Destroy a team that is no-longer needed.  Called simultaneously by each member of
