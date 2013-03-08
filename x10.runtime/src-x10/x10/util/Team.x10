@@ -1226,13 +1226,16 @@ public struct Team {
         }
 
         private static def gather[T] (comm:Team, role:Int, root:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
-            throw new IllegalOperationException("gather is not implemented.");
+            val dst_off_i = role == root ? dst_off : 0;
+            val dst_i = role == root ? dst : new Array[T](IndexedMemoryChunk.allocateUninitialized[T](count));
+            comm.allgather(role, src, src_off, dst_i, dst_off_i, count);
         }
 
         private static def gatherv[T] (comm:Team, role:Int, root:Int, src:Array[T], src_off:Int, src_count:Int, dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
-            val dst_offs_i = comm.bcast(role, root, dst_offs);
             val dst_counts_i = comm.bcast(role, root, dst_counts);
-            comm.allgatherv(role, src, src_off, src_count, dst, dst_offs_i, dst_counts_i);
+            val dst_offs_i = role == root ? dst_offs : countsToOffs(dst_counts_i);
+            val dst_i = role == root ? dst : new Array[T](IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0)));
+            comm.allgatherv(role, src, src_off, src_count, dst_i, dst_offs_i, dst_counts_i);
         }
 
         private static def allgather[T](comm:Team, role:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
