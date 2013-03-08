@@ -37,7 +37,8 @@ public struct Team {
     /** The underlying representation of a team's identity.
      */
     private id: Int;
-    private places: Array[Place](1);
+    private members: PlaceLocalHandle[Array[Place](1)];
+    private role: PlaceLocalHandle[Array[Int](1)];
 
     /** Returns the id of the team.
      */
@@ -45,47 +46,60 @@ public struct Team {
 
     /** Returns the places of the team.
      */
-    public def places() = places;
+    public def places() = members();
+
+    /** Returns the role of here
+     */
+    public def getRoleHere() : Array[Int](1) = this.role();
 
     /** Returns the PlaceGroup of the places of the team.
      */
     public def placeGroup() : PlaceGroup = {
-    	val ps = new Array[Place](places);
-    	ArrayUtils.sort(ps, (x:Place, y:Place)=>x.id.compareTo(y.id));
-    	return new SparsePlaceGroup(ps.sequence());
+        return new OrderedPlaceGroup(members());
     }
 
     /** Returns the place corresponding to the given role.
      * @param role Our role in this team
      */
-    public def getPlace(role:Int) : Place = places(role);
+    public def getPlace(role:Int) : Place = members()(role);
 
     /** Returns the role corresponding to the given place.
      * @param place Place in this team
      */
-    public def getRole(place:Place) : Int = {
-    	var role:Int = -1;
-    	for ([p] in places) {
-    		if (places(p) == place)
-    			role = p;
-    	}
-    	return role;
+    public def getRole(place:Place) : Array[Int](1) = {
+        return getRole(members(), place);
+    }
+
+    private static def getRole(places:Array[Place](1), place:Place) {
+        val role = new ArrayBuilder[Int]();
+        for ([p] in places) {
+            if (places(p) == place)
+                role.add(p);
+        }
+        return role.result();    
     }
     
-    private def this (id:Int, places:Array[Place](1)) { this.id = id; this.places = places; }
+    private def this (id:Int, places:Array[Place](1)) {
+        val pg = new OrderedPlaceGroup(places);
+        this.id = id;
+        this.members = PlaceLocalHandle.make[Array[Place](1)](pg, ()=>places);
+        this.role = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>getRole(places, here));
+    }
 
     /** Create a team by defining the place where each member lives.  This would usually be called before creating an async for each member of the team.
      * @param places The place of each member
      */
-    public def this (places:Array[Place]) {
-        this(places.raw(), places.size);
+    public def this (places:Array[Place](1)) {
+        this(places.raw(), places.size, new OrderedPlaceGroup(places));
     }
 
-    private def this (places:IndexedMemoryChunk[Place], count:Int) {
+    private def this (places:IndexedMemoryChunk[Place], count:Int, pg:PlaceGroup) {
         val result = IndexedMemoryChunk.allocateUninitialized[Int](1);
+        val pa = new Array[Place](places);
         finish nativeMake(places, count, result);
         this.id = result(0);
-        this.places =new Array[Place](places);
+        this.members = PlaceLocalHandle.make[Array[Place](1)](pg, ()=>pa);
+        this.role = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>getRole(pa, here));
     }
 
     private static def nativeMake (places:IndexedMemoryChunk[Place], count:Int, result:IndexedMemoryChunk[Int]) : void {
@@ -914,7 +928,7 @@ public struct Team {
         @Native("c++", "x10rt_team_del(id, role, x10aux::coll_handler, x10aux::coll_enter());") {}
     }
 
-    public def toString() = "Team(" + this.id + "," + this.places +  ")";
+    public def toString() = "Team(" + this.id + "," + this.members() +  ")";
     public def equals(that:Team) = that.id==this.id;
     public def equals(that:Any) = that instanceof Team && (that as Team).id==this.id;
     public def hashCode()=id;
