@@ -1124,11 +1124,18 @@ public struct Team {
     }
 
 
-    public def allgathervAuto[T] (role:Int, src:Array[T]) {
+    public def allgatherv[T] (role:Int, src:Array[T]) {
         val dst_counts = allgather1(role, src.size as Int);
         val dst_offs = countsToOffs(dst_counts);
 
         return allgatherv[T](role, src, dst_offs, dst_counts);
+    }
+
+    /**
+     * @deprecated use {@link #allgatherv(Int, Array[T])} instead
+     */
+    public def allgathervAuto[T] (role:Int, src:Array[T]) {
+        return allgatherv[T](role, src);
     }
 
 
@@ -1147,24 +1154,45 @@ public struct Team {
         return alltoallvAutoWithBreakdown(role, flatten_src, src_offs, src_sizes);
     }
 
-    public def alltoallvAuto[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int]) {
+    public def alltoallv[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int]) {
         val dst_counts = alltoall(role, src_counts);
         val dst_offs = countsToOffs(dst_counts);
         val dst = alltoallv[T](role, src, src_offs, src_counts, dst_offs, dst_counts);
         return dst;
     }
 
-    public def alltoallvAuto[T] (role:Int, src:Array[T], src_counts:Array[Int](1)) {
+    public def alltoallv[T] (role:Int, src:Array[T], src_counts:Array[Int](1)) {
         val src_offs = countsToOffs(src_counts);
-        return alltoallvAuto[T](role, src, src_offs, src_counts);
+        return alltoallv[T](role, src, src_offs, src_counts);
     }
 
-    public def alltoallvAuto[T] (role:Int, src:Array[Array[T](1)](1)) {
+    public def alltoallv[T] (role:Int, src:Array[Array[T](1)](1)) {
         val flatten_src_tuple = flatten(src);
         val flatten_src = flatten_src_tuple.first;
         val src_offs = flatten_src_tuple.second.first;
         val src_sizes = flatten_src_tuple.second.second;
-        return alltoallvAuto(role, flatten_src, src_offs, src_sizes);
+        return alltoallv(role, flatten_src, src_offs, src_sizes);
+    }
+
+    /**
+     * @deprecated use {@link #alltoall(Int, Array[T], Array[Int](1), Array[Int](1))} instead
+     */
+    public def alltoallvAuto[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int]) {
+        return alltoallv[T](role, src, src_offs, src_counts);
+    }
+
+    /**
+     * @deprecated use {@link #alltoall(Int, Array[T], Array[Int](1))} instead
+     */
+    public def alltoallvAuto[T] (role:Int, src:Array[T], src_counts:Array[Int](1)) {
+        return alltoallv[T](role, src, src_counts);
+    }
+
+    /**
+     * @deprecated use {@link #alltoall(Int, Array[Array[T](1)](1))} instead
+     */
+    public def alltoallvAuto[T] (role:Int, src:Array[Array[T](1)](1)) {
+        return alltoallv(role, src);
     }
 
     private static val OPT_REMOTE_OP = 0;
