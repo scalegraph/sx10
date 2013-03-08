@@ -110,6 +110,9 @@ x10rt_place x10rt_child (x10rt_place host, x10rt_place index)
 x10rt_place x10rt_child_index (x10rt_place child)
 { return x10rt_lgl_child_index(child); }
 
+x10rt_answer x10rt_supports (x10rt_opt o)
+{ return x10rt_lgl_supports(o); }
+
 
 static uint32_t print_headers = getenv("X10RT_PRINT_MSG_HEADERS") != NULL
                               ? (uint32_t)strtoull(getenv("X10RT_PRINT_MSG_HEADERS"),NULL,10)
@@ -165,6 +168,11 @@ x10rt_error x10rt_blocking_probe (void)
 void x10rt_finalize (void)
 { x10rt_lgl_finalize(); }
 
+
+void x10rt_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg)
+{
+    x10rt_lgl_team_members(team, members, ch, arg);
+}
 
 
 void x10rt_team_new (x10rt_place placec, x10rt_place *placev,

@@ -151,6 +151,23 @@ unsigned int x10rt_lgl_local_accels (x10rt_lgl_cat cat)
     }
 }
 
+x10rt_answer x10rt_lgl_supports (x10rt_opt o)
+{
+    switch (o) {
+        case X10RT_OPT_REMOTE_OP:
+            return has_remote_op;
+        case X10RT_OPT_COLLECTIVES:
+            return has_collectives;
+        case X10RT_OPT_COLLECTIVES_APPEND:
+            return has_collectives_append;
+        default:
+            tame_assert_r(o==X10RT_OPT_REMOTE_OP || o==X10RT_OPT_COLLECTIVES || o==X10RT_OPT_COLLECTIVES_APPEND, 0);
+            return 0;
+    }
+}
+
+
+
 namespace {
 
     x10rt_msg_type send_finish_id;
