@@ -237,7 +237,11 @@ public struct Team {
      * @param dst_count The numbers of elements being received
      */
     public def scatterv[T] (role:Int, root:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst:Array[T], dst_off:Int, dst_count:Int) : void {
-        finish nativeScatterv(id, role, root, src.raw(), src_offs.raw(), src_counts.raw(), dst.raw(), dst_off, dst_count);
+        if (has_collectives_append) {
+            finish nativeScatterv(id, role, root, src.raw(), src_offs.raw(), src_counts.raw(), dst.raw(), dst_off, dst_count);
+        } else {
+            TeamEmulationAppend.scatterv(this, role, root, src, src_offs, src_counts, dst, dst_off, dst_count);
+        }
     }
 
     private static def nativeScatterv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], src_counts:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_off:Int, dst_count:Int) : void {
@@ -1146,6 +1150,47 @@ public struct Team {
         @Native("c++", "return (x10_int)x10rt_supports(static_cast<x10rt_opt>(opt));") { return -1; }
     }
 
+    static public struct TeamEmulationAppend {
+        private static def scatterv[T] (team:Team, role:Int, root:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst:Array[T], dst_off:Int, dst_count:Int) : void {
+            if (role == root) {
+                val localLen = src_counts.reduce((acc:Int, x:Int)=>Math.max(acc, x), 0);
+                val len = team.bcast1(role, root, localLen);
+                val src_long = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](len * team.size()));
+                for (i in 0..(src_offs.size-1)) {
+                    Array.copy(src, src_offs.raw()(i), src_long, i * len, len);
+                }
+
+                val dst_long = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](len));
+                team.scatter(role, root, src_long, 0, dst_long, 0, len);
+                Array.copy(dst_long, 0, dst, dst_off, dst_count);
+            } else {
+                val len = team.bcast1(role, root, 0);
+                val dst_long = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](len));
+                team.scatter(role, root, src, 0, dst_long, 0, len);
+                Array.copy(dst_long, 0, dst, dst_off, dst_count);
+            }
+        }
+
+        private static def gather[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
+            throw new IllegalOperationException("gather is not implemented.");
+        }
+
+        private static def gatherv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, src_count:Int, dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
+            throw new IllegalOperationException("gatherv is not implemented.");
+        }
+
+        private static def allgather[T](id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
+            throw new IllegalOperationException("allgather is not implemented.");
+        }
+
+        private static def allgatherv[T] (id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, src_count:Int, dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
+            throw new IllegalOperationException("allgatherv is not implemented.");
+        }
+
+        private static def alltoallv[T] (id:Int, role:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], src_counts:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
+            throw new IllegalOperationException("alltoallv is not implemented.");
+        }
+    }
 }
 
 // vim: shiftwidth=4:tabstop=4:expandtab
