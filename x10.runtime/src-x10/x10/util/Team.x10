@@ -33,6 +33,8 @@ public struct Team {
     /** A team that has one member at each place.
      */
     public static WORLD = Team(0, new Array[Place](PlaceGroup.WORLD.numPlaces(), (i:Int)=>PlaceGroup.WORLD(i)));
+    private static has_collectives = (nativeSupports(OPT_COLLECTIVES) != 0);
+    private static has_collectives_append = (nativeSupports(OPT_COLLECTIVES_APPEND) != 0);
 
     /** The underlying representation of a team's identity.
      */
