@@ -1231,7 +1231,7 @@ public struct Team {
 
         private static def gather[T] (comm:Team, role:Int, root:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
             val dst_off_i = role == root ? dst_off : 0;
-            val dst_i = role == root ? dst : new Array[T](IndexedMemoryChunk.allocateUninitialized[T](count));
+            val dst_i = role == root ? dst : new Array[T](IndexedMemoryChunk.allocateUninitialized[T](comm.size() * count));
             comm.allgather(role, src, src_off, dst_i, dst_off_i, count);
         }
 
