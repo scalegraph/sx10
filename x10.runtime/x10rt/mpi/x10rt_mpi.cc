@@ -2187,6 +2187,7 @@ void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_comple
     UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
 
     for (int i = 0; i < sz; ++i) {
+        X10RT_NET_DEBUG("team [%s]-> Place %s", sbuf[i], dbuf[i]);
         members[i] = dbuf[i];
     }
 
@@ -2203,6 +2204,7 @@ x10rt_place x10rt_net_team_sz (x10rt_team team)
     int sz;
 
     MPI_Comm comm = mpi_tdb[team];
+    X10RT_NET_DEBUG("team=%d, comm=%zd", team, (size_t)comm);
     LOCK_IF_MPI_IS_NOT_MULTITHREADED;
     if (MPI_SUCCESS != MPI_Comm_size(comm, &sz)) {
         fprintf(stderr, "[%s:%d] %s\n",
@@ -2210,6 +2212,7 @@ x10rt_place x10rt_net_team_sz (x10rt_team team)
         abort();
     }
     UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    X10RT_NET_DEBUG("team=%d, size=%d", team, sz);
     return sz;
 }
 
@@ -2606,9 +2609,12 @@ void x10rt_net_bcast (x10rt_team team, x10rt_place role,
     int gsize = x10rt_net_team_sz(team);
     char *buf = (role == root) ? ChkAlloc<char>(count * el) : reinterpret_cast<char *>(dbuf);
     if (role == root) {
+        memcpy(buf, dbuf, count * el);
+        /*
         for (int i = 0; i < count * el; i++) {
             buf[i] = reinterpret_cast<const char *>(sbuf)[i];
         }
+        */
     }
     X10RT_NET_DEBUG("mp: sbuf=%"PRIxPTR" dbuf=%"PRIxPTR" buf=%"PRIxPTR, sbuf, dbuf, buf);
 

@@ -1230,9 +1230,11 @@ public struct Team {
         }
 
         private static def gather[T] (comm:Team, role:Int, root:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
-            val dst_off_i = role == root ? dst_off : 0;
-            val dst_i = role == root ? dst : new Array[T](IndexedMemoryChunk.allocateUninitialized[T](comm.size() * count));
-            comm.allgather(role, src, src_off, dst_i, dst_off_i, count);
+            val dst_i = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](comm.size() * count));
+            comm.allgather(role, src, src_off, dst_i, 0, count);
+            if (role == root) {
+                Array.copy(dst_i, 0, dst, dst_off, count);
+            }
         }
 
         private static def gatherv[T] (comm:Team, role:Int, root:Int, src:Array[T], src_off:Int, src_count:Int, dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
