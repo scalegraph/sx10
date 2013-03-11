@@ -2187,7 +2187,7 @@ void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_comple
     UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
 
     for (int i = 0; i < sz; ++i) {
-        X10RT_NET_DEBUG("team [%s]-> Place %s", sbuf[i], dbuf[i]);
+        X10RT_NET_DEBUG("team [%d]-> Place %d", sbuf[i], dbuf[i]);
         members[i] = dbuf[i];
     }
 
