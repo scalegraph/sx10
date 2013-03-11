@@ -2179,15 +2179,21 @@ void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_comple
     }
 
     LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    if (MPI_SUCCESS != MPI_Group_translate_ranks(MPI_GROUP_WORLD, sz, sbuf, grp, dbuf)) {
+    if (MPI_SUCCESS != MPI_Group_translate_ranks(grp, sz, sbuf, MPI_GROUP_WORLD, dbuf)) {
         fprintf(stderr, "[%s:%d] %s\n",
                 __FILE__, __LINE__, "Error in MPI_Group_translate_ranks");
         abort();
     }
     UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
 
+    if (*dbuf == MPI_UNDEFINED) {
+        fprintf(stderr, "[%s:%d] %s\n",
+                __FILE__, __LINE__, "MPI_UNDIFINED is returned by MPI_Group_translate_ranks");
+        abort();
+    }
+
     for (int i = 0; i < sz; ++i) {
-        X10RT_NET_DEBUG("team [%d]-> Place %d", sbuf[i], dbuf[i]);
+        X10RT_NET_DEBUG("team %d(%zd): [%d] -> Place %d", team, comm, sbuf[i], dbuf[i]);
         members[i] = dbuf[i];
     }
 
