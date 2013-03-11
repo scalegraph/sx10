@@ -2186,6 +2186,12 @@ void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_comple
     }
     UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
 
+    if (*dbuf == MPI_UNDEFINED) {
+        fprintf(stderr, "[%s:%d] %s\n",
+                __FILE__, __LINE__, "MPI_UNDIFINED is returned by MPI_Group_translate_ranks");
+        abort();
+    }
+
     for (int i = 0; i < sz; ++i) {
         X10RT_NET_DEBUG("team %d(%zd): [%d] -> Place %d", team, comm, sbuf[i], dbuf[i]);
         members[i] = dbuf[i];
