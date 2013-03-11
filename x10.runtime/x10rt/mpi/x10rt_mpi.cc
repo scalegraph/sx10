@@ -2179,7 +2179,7 @@ void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_comple
     }
 
     LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    if (MPI_SUCCESS != MPI_Group_translate_ranks(MPI_GROUP_WORLD, sz, sbuf, grp, dbuf)) {
+    if (MPI_SUCCESS != MPI_Group_translate_ranks(grp, sz, sbuf, MPI_GROUP_WORLD, dbuf)) {
         fprintf(stderr, "[%s:%d] %s\n",
                 __FILE__, __LINE__, "Error in MPI_Group_translate_ranks");
         abort();
