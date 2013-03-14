@@ -1457,7 +1457,7 @@ void x10rt_emu_allgather (x10rt_team team, x10rt_place role,
     x10rt_int *progress = static_cast<x10rt_int *>(malloc(sizeof(x10rt_int) * sz));
     memset(progress, 0, sizeof(x10rt_int) * sz);
     for (x10rt_place i = 0; i < sz; i++) {
-        x10rt_bcast(team, i, role, sbuf, static_cast<char *>(dbuf) + el * count * i, el, count, x10rt_net_one_setter, &progress[i]);
+        x10rt_bcast(team, role, i, sbuf, static_cast<char *>(dbuf) + el * count * i, el, count, x10rt_net_one_setter, &progress[i]);
     }
     for (x10rt_place i = 0; i < sz; i++) {
         while (progress[i] != 1) {
@@ -1479,7 +1479,7 @@ void x10rt_emu_allgatherv (x10rt_team team, x10rt_place role,
     x10rt_int *progress = static_cast<x10rt_int *>(malloc(sizeof(x10rt_int) * sz));
     memset(progress, 0, sizeof(x10rt_int) * sz);
     for (x10rt_place i = 0; i < sz; i++) {
-        x10rt_bcast(team, i, role, sbuf, static_cast<char *>(dbuf) + el * doffsets_i[i], el, dcounts_i[i], x10rt_net_one_setter, &progress[i]);
+        x10rt_bcast(team, role, i, sbuf, static_cast<char *>(dbuf) + el * doffsets_i[i], el, dcounts_i[i], x10rt_net_one_setter, &progress[i]);
     }
     for (x10rt_place i = 0; i < sz; i++) {
         while (progress[i] != 1) {
