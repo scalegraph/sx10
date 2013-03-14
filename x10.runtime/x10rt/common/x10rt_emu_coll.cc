@@ -1362,7 +1362,7 @@ void x10rt_emu_scatterv (x10rt_team team, x10rt_place role,
         }
         void *sbuf_long = malloc(el * len * sz);
         for (x10rt_place i = 0; i < sz; i++) {
-            memcpy(sbuf_long, static_cast<const char *>(sbuf) + el * soffsets_i[i], el * len);
+            memcpy(static_cast<char *>(sbuf_long) + el * len * i, static_cast<const char *>(sbuf) + el * soffsets_i[i], el * len);
         }
         void *dbuf_long = malloc(el * len);
         progress = 0;
