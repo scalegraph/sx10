@@ -34,7 +34,8 @@ public struct Team {
      */
     public static WORLD = Team(0, new Array[Place](PlaceGroup.WORLD.numPlaces(), (i:Int)=>PlaceGroup.WORLD(i)));
     private static has_collectives = (nativeSupports(OPT_COLLECTIVES) != 0);
-    private static has_collectives_append = (nativeSupports(OPT_COLLECTIVES) != 0 && nativeSupports(OPT_COLLECTIVES_APPEND) != 0);
+    //private static has_collectives = (nativeSupports(OPT_COLLECTIVES) != 0);
+    private static has_collectives_append = true;
 
     /** The underlying representation of a team's identity.
      */
