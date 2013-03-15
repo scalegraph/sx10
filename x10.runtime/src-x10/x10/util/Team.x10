@@ -33,9 +33,6 @@ public struct Team {
     /** A team that has one member at each place.
      */
     public static WORLD = Team(0, new Array[Place](PlaceGroup.WORLD.numPlaces(), (i:Int)=>PlaceGroup.WORLD(i)));
-    private static has_collectives = (nativeSupports(OPT_COLLECTIVES) != 0);
-    //private static has_collectives = (nativeSupports(OPT_COLLECTIVES) != 0);
-    private static has_collectives_append = true;
 
     /** The underlying representation of a team's identity.
      */
@@ -221,11 +218,7 @@ public struct Team {
      * @param dst_count The numbers of elements being received
      */
     public def scatterv[T] (role:Int, root:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst:Array[T], dst_off:Int, dst_count:Int) : void {
-        if (has_collectives_append) {
-            finish nativeScatterv(id, role, root, getRawOrDummyChunk(src), getRawOrDummyChunk(src_offs), getRawOrDummyChunk(src_counts), getRawOrDummyChunk(dst), dst_off, dst_count);
-        } else {
-            TeamEmulationAppend.scatterv(this, role, root, src, src_offs, src_counts, dst, dst_off, dst_count);
-        }
+        finish nativeScatterv(id, role, root, getRawOrDummyChunk(src), getRawOrDummyChunk(src_offs), getRawOrDummyChunk(src_counts), getRawOrDummyChunk(dst), dst_off, dst_count);
     }
 
     private static def nativeScatterv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], src_counts:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_off:Int, dst_count:Int) : void {
@@ -285,11 +278,7 @@ public struct Team {
      * @param count The number of elements being transferred
      */
     public def gather[T] (role:Int, root:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
-        if (has_collectives_append) {
-            finish nativeGather(id, role, root, src.raw(), src_off, dst.raw(), dst_off, count);
-        } else {
-            TeamEmulationAppend.gather(this, role, root, src, src_off, dst, dst_off, count);
-        }
+        finish nativeGather(id, role, root, src.raw(), src_off, dst.raw(), dst_off, count);
     }
 
     private static def nativeGather[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
@@ -361,11 +350,7 @@ public struct Team {
      * @param dst_counts The numbers of elements being transferred
      */
     public def gatherv[T] (role:Int, root:Int, src:Array[T], src_off:Int, src_count:Int, dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
-        if (has_collectives_append) {
-            finish nativeGatherv(id, role, root, getRawOrDummyChunk(src), src_off, src_count, getRawOrDummyChunk(dst), getRawOrDummyChunk(dst_offs), getRawOrDummyChunk(dst_counts));
-        } else {
-            TeamEmulationAppend.gatherv(this, role, root, src, src_off, src_count, dst, dst_offs, dst_counts);
-        }
+        finish nativeGatherv(id, role, root, getRawOrDummyChunk(src), src_off, src_count, getRawOrDummyChunk(dst), getRawOrDummyChunk(dst_offs), getRawOrDummyChunk(dst_counts));
     }
 
     private static def nativeGatherv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, src_count:Int, dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
@@ -447,11 +432,7 @@ public struct Team {
     }
 
     public def allgather[T] (role:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
-        if (has_collectives_append) {
-            finish nativeAllgather(id, role, src.raw(), src_off, dst.raw(), dst_off, count);
-        } else {
-            TeamEmulationAppend.allgather(this, role, src, src_off, dst, dst_off, count);
-        }
+        finish nativeAllgather(id, role, src.raw(), src_off, dst.raw(), dst_off, count);
     }
 
     private static def nativeAllgather[T](id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
@@ -466,11 +447,7 @@ public struct Team {
     }
 
     public def allgatherv[T] (role:Int, src:Array[T], src_off:Int, src_count:Int, dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
-        if (has_collectives_append) {
-            finish nativeAllgatherv(id, role, src.raw(), src_off, src_count, dst.raw(), dst_offs.raw(), dst_counts.raw());
-        } else {
-            TeamEmulationAppend.allgatherv(this, role,src, src_off, src_count, dst, dst_offs, dst_counts);
-        }
+        finish nativeAllgatherv(id, role, src.raw(), src_off, src_count, dst.raw(), dst_offs.raw(), dst_counts.raw());
     }
 
     private static def nativeAllgatherv[T] (id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, src_count:Int, dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
@@ -514,11 +491,7 @@ public struct Team {
     }
     
     public def alltoallv[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
-        if (has_collectives_append) {
-            finish nativeAlltoallv(id, role, src.raw(), src_offs.raw(), src_counts.raw(), dst.raw(), dst_offs.raw(), dst_counts.raw());
-        } else {
-            TeamEmulationAppend.alltoallv(this, role, src, src_offs, src_counts, dst, dst_offs, dst_counts);
-        }
+        finish nativeAlltoallv(id, role, src.raw(), src_offs.raw(), src_counts.raw(), dst.raw(), dst_offs.raw(), dst_counts.raw());
     }
 
     private static def nativeAlltoallv[T] (id:Int, role:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], src_counts:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
@@ -888,61 +861,6 @@ public struct Team {
     private static def nativeSupports (opt:Int) : Int {
         @Native("java", "return x10.x10rt.TeamSupport.nativeSize(opt);")
         @Native("c++", "return (x10_int)x10rt_supports(static_cast<x10rt_opt>(opt));") { return -1; }
-    }
-
-    static public struct TeamEmulationAppend {
-        private static def scatterv[T] (team:Team, role:Int, root:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst:Array[T], dst_off:Int, dst_count:Int) : void {
-            if (role == root) {
-                val localLen = src_counts.reduce((acc:Int, x:Int)=>Math.max(acc, x), 0);
-                val len = team.bcast1(role, root, localLen);
-                val src_long = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](len * team.size()));
-                for (i in 0..(src_offs.size-1)) {
-                    Array.copy(src, src_offs.raw()(i), src_long, i * len, len);
-                }
-
-                val dst_long = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](len));
-                team.scatter(role, root, src_long, 0, dst_long, 0, len);
-                Array.copy(dst_long, 0, dst, dst_off, dst_count);
-            } else {
-                val len = team.bcast1(role, root, 0);
-                val dst_long = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](len));
-                team.scatter(role, root, src, 0, dst_long, 0, len);
-                Array.copy(dst_long, 0, dst, dst_off, dst_count);
-            }
-        }
-
-        private static def gather[T] (comm:Team, role:Int, root:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
-            val dst_i = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](comm.size() * count));
-            comm.allgather(role, src, src_off, dst_i, 0, count);
-            if (role == root) {
-                Array.copy(dst_i, 0, dst, dst_off, count);
-            }
-        }
-
-        private static def gatherv[T] (comm:Team, role:Int, root:Int, src:Array[T], src_off:Int, src_count:Int, dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
-            val dst_counts_i = comm.bcast(role, root, dst_counts);
-            val dst_offs_i = role == root ? dst_offs : countsToOffs(dst_counts_i);
-            val dst_i = role == root ? dst : new Array[T](IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0)));
-            comm.allgatherv(role, src, src_off, src_count, dst_i, dst_offs_i, dst_counts_i);
-        }
-
-        private static def allgather[T](comm:Team, role:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
-            finish for (i in 0..(comm.size()-1)) {
-                comm.bcast(role, i, src, src_off, dst, i * count + dst_off, count);
-            }
-        }
-
-        private static def allgatherv[T] (comm:Team, role:Int, src:Array[T], src_off:Int, src_count:Int, dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
-            finish for (i in 0..(dst_offs.size-1)) {
-                comm.bcast(role, i, src, src_off, dst, dst_offs.raw()(i), dst_counts.raw()(i));
-            }
-        }
-
-        private static def alltoallv[T] (comm:Team, role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
-            finish for (i in 0..(dst_offs.size-1)) {
-                comm.scatterv(role, i, src, src_offs, src_counts, dst, dst_offs.raw()(i), dst_counts.raw()(i));
-            }
-        }
     }
 }
 
