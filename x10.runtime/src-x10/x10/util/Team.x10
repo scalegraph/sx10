@@ -997,7 +997,7 @@ public struct Team {
     public def scatter[T] (role:Int, root:Int, src:Array[T]) {
         val team_size = size();
         assert(role != root || src.size % team_size == 0);
-        val count = bcastSend1(role, root, src.size / team_size);
+        val count = bcast1(role, root, src.size / team_size);
         return scatterSend(role, root, src, count);
     }
 
