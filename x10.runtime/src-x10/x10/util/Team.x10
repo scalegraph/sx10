@@ -1045,19 +1045,19 @@ public struct Team {
         return allgatherv[T](role, src, dst_offs, dst_counts);
     }
 
-    public def alltoallvAutoWithBreakdown[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int]) : Pair[Array[T](1),Array[Int](1)] {
+    public def alltoallvWithBreakdown[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int]) : Pair[Array[T](1),Array[Int](1)] {
         val dst_counts = alltoall(role, src_counts);
         val dst_offs = countsToOffs(dst_counts);
         val dst = alltoallv[T](role, src, src_offs, src_counts, dst_offs, dst_counts);
         return Pair[Array[T](1),Array[Int](1)](dst, dst_counts);
     }
 
-    public def alltoallvAutoWithBreakdown[T] (role:Int, src:Array[Array[T](1)](1)) : Pair[Array[T](1),Array[Int](1)] {
+    public def alltoallvWithBreakdown[T] (role:Int, src:Array[Array[T](1)](1)) : Pair[Array[T](1),Array[Int](1)] {
         val flatten_src_tuple = flatten(src);
         val flatten_src = flatten_src_tuple.first;
         val src_offs = flatten_src_tuple.second.first;
         val src_sizes = flatten_src_tuple.second.second;
-        return alltoallvAutoWithBreakdown(role, flatten_src, src_offs, src_sizes);
+        return alltoallvWithBreakdown(role, flatten_src, src_offs, src_sizes);
     }
 
     public def alltoallv[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int]) {
