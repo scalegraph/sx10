@@ -1001,24 +1001,6 @@ public struct Team {
         return scatterSend(role, root, src, count);
     }
 
-    /**
-     * @deprecated use {@link #scatter(Int, Int, Array[T])} instead
-     */
-    public def scatterSendAuto[T] (role:Int, root:Int, src:Array[T]) {
-        val team_size = size();
-        assert(src.size % team_size == 0);
-        val count = bcastSend1(role, root, src.size / team_size);
-        return scatterSend(role, root, src, count);
-    }
-
-    /**
-     * @deprecated use {@link #scatter(Int, Int, Array[T])} instead
-     */
-    public def scatterRecvAuto[T] (role:Int, root:Int) {
-        val count = bcastRecv1[Int](role, root);
-        return scatterRecv[T](role, root, count);
-    }
-
     public def scatterv[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int]) {
         val team_size = size();
         assert(role != root || src_counts.size == team_size);
@@ -1027,28 +1009,9 @@ public struct Team {
         return scatterv(role, root, src, src_counts, src_offs, dst_count);
     }
 
-    /**
-     * @deprecated use {@link #scatter(Int, Int, Array[T], Array[Int], Array[Int])} instead
-     */
-    public def scattervSendAuto[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int]) {
-        val team_size = size();
-        assert(role != root || src_counts.size == team_size);
-        assert(role != root || src_offs.size == team_size);
-        val dst_count = scatterSend(role, root, src_counts, 1)(0);
-        return scattervSend(role, root, src, src_counts, src_offs, dst_count);
-    }
-
     public def scatterv[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int](1)) {
         val src_offs = role == root ? countsToOffs(src_counts) : null as Array[Int](1);
         return scatterv[T](role, root, src, src_counts, src_offs);
-    }
-
-    /**
-     * @deprecated use {@link #scatter(Int, Int, Array[T], Array[Int])} instead
-     */
-    public def scattervSendAuto[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int](1)) {
-        val src_offs = countsToOffs(src_counts);
-        return scattervSendAuto[T](role, root, src, src_counts, src_offs);
     }
 
     public def scatterv[T] (role:Int, root:Int, src:Array[Array[T](1)](1)) {
@@ -1063,48 +1026,11 @@ public struct Team {
         }
     }
 
-    /**
-     * @deprecated use {@link #scatter(Int, Int, Array[Array[T]])} instead
-     */
-    public def scattervSendAuto[T] (role:Int, root:Int, src:Array[Array[T](1)](1)) {
-        val flatten_src_tuple = flatten(src);
-        val flatten_src = flatten_src_tuple.first;
-        val src_offs = flatten_src_tuple.second.first;
-        val src_sizes = flatten_src_tuple.second.second;
-        return scattervSendAuto[T](role, root, flatten_src, src_sizes, src_offs);
-    }
-
-    /**
-     * @deprecated use scatterv instead
-     */
-    public def scattervRecvAuto[T] (role:Int, root:Int) {
-        val dst_count = scatterRecv[Int](role, root, 1)(0);
-        val result = scattervRecv[T](role, root, dst_count);
-        return result;
-    }
-
     public def gatherv[T] (role:Int, root:Int, src:Array[T](1)) {
         val src_size = role == root ? src.size : Zero.get[Int]();
         val dst_counts = gather1[Int](role, root, src_size);
         return gatherv[T](role, root, src, dst_counts);
     }
-
-    /**
-     * @deprecated use {@link #gatherv(Int, Int, Array[Array[T]])} instead
-     */
-    public def gathervSendAuto[T] (role:Int, root:Int, src:Array[T]) : void {
-        gatherSend1(role, root, src.size);
-        gathervSend(role, root, src);
-    }
-
-    /**
-     * @deprecated use {@link #gatherv(Int, Int, Array[Array[T]])} instead
-     */
-    public def gathervRecvAuto[T] (role:Int, root:Int, src:Array[T]) {
-        val dst_counts = gatherRecv1[Int](role, root, src.size);
-        return gathervRecv[T](role, root, src, dst_counts);
-    }
-
 
     public def bcast[T] (role:Int, root:Int, src:Array[T]) {
         val src_size = role == root ? src.size : Zero.get[Int]();
@@ -1112,37 +1038,12 @@ public struct Team {
         return bcast(role, root, src, count);
     }
 
-    /**
-     * @deprecated use {@link #bcast(Int, Int, Array[T])} instead
-     */
-    public def bcastSendAuto[T] (role:Int, root:Int, src:Array[T]) {
-        val count = bcastSend1(role, root, src.size);
-        return bcastSend(role, root, src, count);
-    }
-
-    /**
-     * @deprecated use {@link #bcast(Int, Int, Array[T])} instead
-     */
-    public def bcastRecvAuto[T] (role:Int, root:Int) {
-        val count = bcastRecv1[Int](role, root);
-        return bcastRecv[T](role, root, count);
-    }
-
-
     public def allgatherv[T] (role:Int, src:Array[T]) {
         val dst_counts = allgather1(role, src.size as Int);
         val dst_offs = countsToOffs(dst_counts);
 
         return allgatherv[T](role, src, dst_offs, dst_counts);
     }
-
-    /**
-     * @deprecated use {@link #allgatherv(Int, Array[T])} instead
-     */
-    public def allgathervAuto[T] (role:Int, src:Array[T]) {
-        return allgatherv[T](role, src);
-    }
-
 
     public def alltoallvAutoWithBreakdown[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int]) : Pair[Array[T](1),Array[Int](1)] {
         val dst_counts = alltoall(role, src_counts);
@@ -1177,27 +1078,6 @@ public struct Team {
         val src_offs = flatten_src_tuple.second.first;
         val src_sizes = flatten_src_tuple.second.second;
         return alltoallv(role, flatten_src, src_offs, src_sizes);
-    }
-
-    /**
-     * @deprecated use {@link #alltoall(Int, Array[T], Array[Int](1), Array[Int](1))} instead
-     */
-    public def alltoallvAuto[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int]) {
-        return alltoallv[T](role, src, src_offs, src_counts);
-    }
-
-    /**
-     * @deprecated use {@link #alltoall(Int, Array[T], Array[Int](1))} instead
-     */
-    public def alltoallvAuto[T] (role:Int, src:Array[T], src_counts:Array[Int](1)) {
-        return alltoallv[T](role, src, src_counts);
-    }
-
-    /**
-     * @deprecated use {@link #alltoall(Int, Array[Array[T](1)](1))} instead
-     */
-    public def alltoallvAuto[T] (role:Int, src:Array[Array[T](1)](1)) {
-        return alltoallv(role, src);
     }
 
     private static val OPT_REMOTE_OP = 0;
