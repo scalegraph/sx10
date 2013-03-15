@@ -1414,7 +1414,7 @@ void x10rt_emu_gatherv (x10rt_team team, x10rt_place role, x10rt_place root, con
 		void *dbuf, const void *doffsets, const void *dcounts, size_t el, x10rt_completion_handler *ch, void *arg)
 {
     x10rt_place sz = x10rt_team_sz(team);
-    x10rt_int *dcounts_i;
+    x10rt_int *dcounts_i = static_cast<x10rt_int *>(malloc(sizeof(x10rt_int) * sz));
     x10rt_int progress;
 
     progress = 0;
@@ -1445,6 +1445,7 @@ void x10rt_emu_gatherv (x10rt_team team, x10rt_place role, x10rt_place root, con
         free(doffsets_i);
         free(dbuf_i);
     }
+    free(dcounts_i);
     ch(arg);
 }
 
