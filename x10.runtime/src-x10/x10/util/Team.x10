@@ -11,6 +11,7 @@
 
 package x10.util;
 
+import x10.compiler.Inline;
 import x10.compiler.Native;
 import x10.compiler.NativeRep;
 import x10.compiler.StackAllocate;
@@ -29,6 +30,15 @@ import x10.util.concurrent.AtomicInteger;
 public struct Team {
 
     private static struct DoubleIdx(value:Double, idx:Int) {}
+
+    private static isDebug = System.getenv().containsKey("X10_TEAM_DEBUG");
+	public static @Inline def debugln(pkg:String, str: String) {
+        if (isDebug) {
+		//@Ifdef("DEBUGPRINT")
+			Console.OUT.println("" + Timer.milliTime() + ":Place " + here.id + ":Worker " + Runtime.workerId() + ":" + pkg + ": " + str);
+			Console.OUT.flush();
+		}
+	}
 
     /** A team that has one member at each place.
      */
