@@ -11,6 +11,7 @@
 
 package x10.util;
 
+import x10.compiler.Inline;
 import x10.compiler.Native;
 import x10.compiler.NativeRep;
 import x10.compiler.StackAllocate;
@@ -29,6 +30,15 @@ import x10.util.concurrent.AtomicInteger;
 public struct Team {
 
     private static struct DoubleIdx(value:Double, idx:Int) {}
+
+    private static isDebug = System.getenv().containsKey("X10_TEAM_DEBUG");
+	public static @Inline def debugln(pkg:String, str: String) {
+        if (isDebug) {
+		//@Ifdef("DEBUGPRINT")
+			Console.OUT.println("" + Timer.milliTime() + ":Place " + here.id + ":Worker " + Runtime.workerId() + ":" + pkg + ": " + str);
+			Console.OUT.flush();
+		}
+	}
 
     /** A team that has one member at each place.
      */
@@ -324,7 +334,7 @@ public struct Team {
     public def gather1[T] (role:Int, root:Int, src:T) {T haszero} : Array[T](1) {
         val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
         src_raw(0) = src;
-        val dst : Array[T](1) = role == root ? new Array[T](IndexedMemoryChunk.allocateUninitialized[T](size())) : null as Array[T](1) ;
+        val dst : Array[T](1) = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](role == root ? size() : 0)) ;
         gather(role, root, new Array[T](src_raw), 0, dst, 0, 1);
         return dst;
     }
@@ -484,6 +494,7 @@ public struct Team {
     }
 
     public def alltoall[T] (role:Int, src:Array[T]) {
+        assert(src != null);
     	assert(src.size % size() == 0);
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](src.size);
         finish nativeAlltoall(id, role, src.raw(), 0, dst_raw, 0, src.size / size());
@@ -500,6 +511,7 @@ public struct Team {
     }
 
     public def alltoallv[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst_offs:Array[Int], dst_counts:Array[Int]) {
+        assert(src != null);
         assert(src_counts.size == size());
         assert(src_offs.size == size());
         assert(dst_counts.size == size());
@@ -770,87 +782,128 @@ public struct Team {
 
     public def scatter[T] (role:Int, root:Int, src:Array[T]) {
         val team_size = size();
+        assert(role != root || src != null);
         assert(role != root || src.size % team_size == 0);
-        val count = bcast1(role, root, src.size / team_size);
+        val src_size = role == root ? src.size : Zero.get[Int]();
+        val count = bcast1(role, root, src_size / team_size);
+        debugln("scatter", "count: " + count);
         return scatter(role, root, src, count);
     }
 
     public def scatterv[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int]) {
+        assert(role != root || src_counts != null);
+        assert(role != root || src_offs != null);
         val team_size = size();
         assert(role != root || src_counts.size == team_size);
         assert(role != root || src_offs.size == team_size);
         val dst_count = scatter(role, root, src_counts, 1)(0);
+        debugln("scatterv", "dst_count: " + dst_count);
         return scatterv(role, root, src, src_counts, src_offs, dst_count);
     }
 
     public def scatterv[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int](1)) {
-        val src_offs = role == root ? countsToOffs(src_counts) : null as Array[Int](1);
+        assert(role != root || src_counts != null);
+        val src_offs : Array[Int] = role == root ? countsToOffs(src_counts) : null;
+        debugln("scatterv", "src_offs: " +  src_offs);
         return scatterv[T](role, root, src, src_counts, src_offs);
     }
 
     public def scatterv[T] (role:Int, root:Int, src:Array[Array[T](1)](1)) {
         if (role == root) {
+            assert(src != null);
             val flatten_src_tuple = flatten(src);
             val flatten_src = flatten_src_tuple.first;
             val src_offs = flatten_src_tuple.second.first;
             val src_sizes = flatten_src_tuple.second.second;
+            debugln("scatterv", "flatten_src_tuple: " + flatten_src_tuple);
             return scatterv[T](role, root, flatten_src, src_sizes, src_offs);
         } else {
+            debugln("scatterv", "non root");
             return scatterv[T](role, root, null, null, null);
         }
     }
 
     public def gatherv[T] (role:Int, root:Int, src:Array[T](1)) {
+        assert(src != null);
         val src_size = role == root ? src.size : Zero.get[Int]();
         val dst_counts = gather1[Int](role, root, src_size);
+        debugln("gatherv", "dst_counts: " + dst_counts);
         return gatherv[T](role, root, src, dst_counts);
     }
 
     public def bcast[T] (role:Int, root:Int, src:Array[T]) {
+        assert(role != root || src != null);
         val src_size = role == root ? src.size : Zero.get[Int]();
         val count = bcast1(role, root, src_size);
+        debugln("bcast", "count: " + count);
         return bcast(role, root, src, count);
     }
 
     public def allgatherv[T] (role:Int, src:Array[T]) {
+        assert(src != null);
         val dst_counts = allgather1(role, src.size as Int);
         val dst_offs = countsToOffs(dst_counts);
+        debugln("allgatherv", "dst_counts: " + dst_counts);
+        debugln("allgatherv", "dst_offs: " + dst_offs);
 
         return allgatherv[T](role, src, dst_offs, dst_counts);
     }
 
     public def alltoallvWithBreakdown[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int]) : Pair[Array[T](1),Array[Int](1)] {
+        assert(src != null);
+        assert(src_offs != null);
+        assert(src_counts != null);
         val dst_counts = alltoall(role, src_counts);
         val dst_offs = countsToOffs(dst_counts);
         val dst = alltoallv[T](role, src, src_offs, src_counts, dst_offs, dst_counts);
+        debugln("alltoallvWithBreakdown", "dst_counts: " + dst_counts);
+        debugln("alltoallvWithBreakdown", "dst_offs: " + dst_offs);
+        debugln("alltoallvWithBreakdown", "dst: " + dst);
         return Pair[Array[T](1),Array[Int](1)](dst, dst_counts);
     }
 
     public def alltoallvWithBreakdown[T] (role:Int, src:Array[Array[T](1)](1)) : Pair[Array[T](1),Array[Int](1)] {
+        assert(src != null);
         val flatten_src_tuple = flatten(src);
         val flatten_src = flatten_src_tuple.first;
         val src_offs = flatten_src_tuple.second.first;
         val src_sizes = flatten_src_tuple.second.second;
+        debugln("alltoallvWithBreakdown", "src_counts: " + src_sizes);
+        debugln("alltoallvWithBreakdown", "src_offs: " + src_offs);
+        debugln("alltoallvWithBreakdown", "flatten_src: " + flatten_src);
         return alltoallvWithBreakdown(role, flatten_src, src_offs, src_sizes);
     }
 
     public def alltoallv[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int]) {
+        assert(src != null);
+        assert(src_offs != null);
+        assert(src_counts != null);
         val dst_counts = alltoall(role, src_counts);
         val dst_offs = countsToOffs(dst_counts);
         val dst = alltoallv[T](role, src, src_offs, src_counts, dst_offs, dst_counts);
+        debugln("alltoallv", "dst_counts: " + dst_counts);
+        debugln("alltoallv", "dst_offs: " + dst_offs);
+        debugln("alltoallv", "dst: " + dst);
         return dst;
     }
 
     public def alltoallv[T] (role:Int, src:Array[T], src_counts:Array[Int](1)) {
+        assert(src != null);
+        assert(src_counts != null);
         val src_offs = countsToOffs(src_counts);
+        debugln("alltoallv", "src_offs: " + src_offs);
         return alltoallv[T](role, src, src_offs, src_counts);
     }
 
     public def alltoallv[T] (role:Int, src:Array[Array[T](1)](1)) {
+        assert(src != null);
         val flatten_src_tuple = flatten(src);
         val flatten_src = flatten_src_tuple.first;
         val src_offs = flatten_src_tuple.second.first;
         val src_sizes = flatten_src_tuple.second.second;
+        debugln("alltoallv", "src_counts: " + src_sizes);
+        debugln("alltoallv", "src_offs: " + src_offs);
+        debugln("alltoallv", "flatten_src: " + flatten_src);
         return alltoallv(role, flatten_src, src_offs, src_sizes);
     }
 
