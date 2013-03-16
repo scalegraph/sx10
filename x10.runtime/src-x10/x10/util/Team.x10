@@ -786,6 +786,7 @@ public struct Team {
         assert(role != root || src.size % team_size == 0);
         val src_size = role == root ? src.size : Zero.get[Int]();
         val count = bcast1(role, root, src_size);
+        debugln("scatter", "count: " + count);
         return scatter(role, root, src, count);
     }
 
@@ -826,6 +827,7 @@ public struct Team {
         assert(src != null);
         val src_size = role == root ? src.size : Zero.get[Int]();
         val dst_counts = gather1[Int](role, root, src_size);
+        debugln("gatherv", "dst_counts: " + dst_counts);
         return gatherv[T](role, root, src, dst_counts);
     }
 
@@ -833,6 +835,7 @@ public struct Team {
         assert(role != root || src != null);
         val src_size = role == root ? src.size : Zero.get[Int]();
         val count = bcast1(role, root, src_size);
+        debugln("bcast", "count: " + count);
         return bcast(role, root, src, count);
     }
 
@@ -840,6 +843,8 @@ public struct Team {
         assert(src != null);
         val dst_counts = allgather1(role, src.size as Int);
         val dst_offs = countsToOffs(dst_counts);
+        debugln("allgatherv", "dst_counts: " + dst_counts);
+        debugln("allgatherv", "dst_offs: " + dst_offs);
 
         return allgatherv[T](role, src, dst_offs, dst_counts);
     }
@@ -851,6 +856,9 @@ public struct Team {
         val dst_counts = alltoall(role, src_counts);
         val dst_offs = countsToOffs(dst_counts);
         val dst = alltoallv[T](role, src, src_offs, src_counts, dst_offs, dst_counts);
+        debugln("alltoallvWithBreakdown", "dst_counts: " + dst_counts);
+        debugln("alltoallvWithBreakdown", "dst_offs: " + dst_offs);
+        debugln("alltoallvWithBreakdown", "dst: " + dst);
         return Pair[Array[T](1),Array[Int](1)](dst, dst_counts);
     }
 
@@ -860,6 +868,9 @@ public struct Team {
         val flatten_src = flatten_src_tuple.first;
         val src_offs = flatten_src_tuple.second.first;
         val src_sizes = flatten_src_tuple.second.second;
+        debugln("alltoallvWithBreakdown", "src_counts: " + src_sizes);
+        debugln("alltoallvWithBreakdown", "src_offs: " + src_offs);
+        debugln("alltoallvWithBreakdown", "flatten_src: " + flatten_src);
         return alltoallvWithBreakdown(role, flatten_src, src_offs, src_sizes);
     }
 
@@ -870,6 +881,9 @@ public struct Team {
         val dst_counts = alltoall(role, src_counts);
         val dst_offs = countsToOffs(dst_counts);
         val dst = alltoallv[T](role, src, src_offs, src_counts, dst_offs, dst_counts);
+        debugln("alltoallv", "dst_counts: " + dst_counts);
+        debugln("alltoallv", "dst_offs: " + dst_offs);
+        debugln("alltoallv", "dst: " + dst);
         return dst;
     }
 
@@ -877,6 +891,7 @@ public struct Team {
         assert(src != null);
         assert(src_counts != null);
         val src_offs = countsToOffs(src_counts);
+        debugln("alltoallv", "src_offs: " + src_offs);
         return alltoallv[T](role, src, src_offs, src_counts);
     }
 
@@ -886,6 +901,9 @@ public struct Team {
         val flatten_src = flatten_src_tuple.first;
         val src_offs = flatten_src_tuple.second.first;
         val src_sizes = flatten_src_tuple.second.second;
+        debugln("alltoallv", "src_counts: " + src_sizes);
+        debugln("alltoallv", "src_offs: " + src_offs);
+        debugln("alltoallv", "flatten_src: " + flatten_src);
         return alltoallv(role, flatten_src, src_offs, src_sizes);
     }
 
