@@ -334,7 +334,7 @@ public struct Team {
     public def gather1[T] (role:Int, root:Int, src:T) {T haszero} : Array[T](1) {
         val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
         src_raw(0) = src;
-        val dst : Array[T](1) = role == root ? new Array[T](IndexedMemoryChunk.allocateUninitialized[T](size())) : null as Array[T](1) ;
+        val dst : Array[T](1) = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](role == root ? size() : 0)) ;
         gather(role, root, new Array[T](src_raw), 0, dst, 0, 1);
         return dst;
     }
@@ -803,8 +803,8 @@ public struct Team {
 
     public def scatterv[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int](1)) {
         assert(role != root || src_counts != null);
-        val src_offs = role == root ? countsToOffs(src_counts) : null as Array[Int](1);
-        debugln("scatterv", "src_offs: " + src_offs);
+        val src_offs : Array[Int] = role == root ? countsToOffs(src_counts) : null;
+        debugln("scatterv", "src_offs: " +  src_offs);
         return scatterv[T](role, root, src, src_counts, src_offs);
     }
 
