@@ -60,7 +60,7 @@ public struct Team {
 
     /** Returns the role of here
      */
-    public def getRoleHere() : Array[Int](1) = this.role();
+    public def roleHere() : Array[Int](1) = this.role();
 
     /** Returns the PlaceGroup of the places of the team.
      */
@@ -71,16 +71,16 @@ public struct Team {
     /** Returns the place corresponding to the given role.
      * @param role Our role in this team
      */
-    public def getPlace(role:Int) : Place = members()(role);
+    public def place(role:Int) : Place = members()(role);
 
     /** Returns the role corresponding to the given place.
      * @param place Place in this team
      */
-    public def getRole(place:Place) : Array[Int](1) = {
-        return getRole(members(), place);
+    public def role(place:Place) : Array[Int](1) = {
+        return role(members(), place);
     }
 
-    private static def getRole(places:Array[Place](1), place:Place) {
+    private static def role(places:Array[Place](1), place:Place) {
         val role = new ArrayBuilder[Int]();
         for ([p] in places) {
             if (places(p) == place)
@@ -93,7 +93,7 @@ public struct Team {
         val pg = new OrderedPlaceGroup(places);
         this.id = id;
         this.members = PlaceLocalHandle.make[Array[Place](1)](pg, ()=>places);
-        this.role = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>getRole(places, here));
+        this.role = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>role(places, here));
     }
 
     /** Create a team by defining the place where each member lives.  This would usually be called before creating an async for each member of the team.
@@ -109,7 +109,7 @@ public struct Team {
         finish nativeMake(places, count, result);
         this.id = result(0);
         this.members = PlaceLocalHandle.make[Array[Place](1)](pg, ()=>pa);
-        this.role = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>getRole(pa, here));
+        this.role = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>role(pa, here));
     }
 
     private static def nativeMake (places:IndexedMemoryChunk[Place], count:Int, result:IndexedMemoryChunk[Int]) : void {
