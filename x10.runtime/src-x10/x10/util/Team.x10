@@ -785,7 +785,7 @@ public struct Team {
         assert(role != root || src != null);
         assert(role != root || src.size % team_size == 0);
         val src_size = role == root ? src.size : Zero.get[Int]();
-        val count = bcast1(role, root, src_size);
+        val count = bcast1(role, root, src_size / team_size);
         debugln("scatter", "count: " + count);
         return scatter(role, root, src, count);
     }
