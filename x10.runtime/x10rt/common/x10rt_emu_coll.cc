@@ -1357,9 +1357,8 @@ void x10rt_emu_scatterv (x10rt_team team, x10rt_place role,
         }
         progress = 0;
         x10rt_bcast(team, role, root, &localLen, &len, sizeof(x10rt_int), 1, x10rt_net_one_setter, &progress);
-        while (progress != 1) {
-            x10rt_probe();
-        }
+        while (progress != 1) x10rt_probe();
+
         void *sbuf_long = malloc(el * len * sz);
         for (x10rt_place i = 0; i < sz; i++) {
             memcpy(static_cast<char *>(sbuf_long) + el * len * i, static_cast<const char *>(sbuf) + el * soffsets_i[i], el * len);
@@ -1367,24 +1366,21 @@ void x10rt_emu_scatterv (x10rt_team team, x10rt_place role,
         void *dbuf_long = malloc(el * len);
         progress = 0;
         x10rt_scatter(team, role, root, sbuf_long, dbuf_long, len, el, x10rt_net_one_setter, &progress);
-        while (progress != 1) {
-            x10rt_probe();
-        }
+        while (progress != 1) x10rt_probe();
+
         memcpy(dbuf, dbuf_long, el * dcounts);
         free(sbuf_long);
         free(dbuf_long);
     } else {
         progress = 0;
         x10rt_bcast(team, role, root, &localLen, &len, sizeof(x10rt_int), 1, x10rt_net_one_setter, &progress);
-        while (progress != 1) {
-            x10rt_probe();
-        }
+        while (progress != 1) x10rt_probe();
+
         void *dbuf_long = malloc(el * len);
         progress = 0;
         x10rt_scatter(team, role, root, sbuf, dbuf_long, len, el, x10rt_net_one_setter, &progress);
-        while (progress != 1) {
-            x10rt_probe();
-        }
+        while (progress != 1) x10rt_probe();
+
         memcpy(dbuf, dbuf_long, el * dcounts);
         free(dbuf_long);
     }
@@ -1400,9 +1396,8 @@ void x10rt_emu_gather (x10rt_team team, x10rt_place role, x10rt_place root, cons
 
     progress = 0;
     x10rt_allgather(team, role, sbuf, dbuf_i, el, count, x10rt_net_one_setter, &progress);
-    while (progress != 1) {
-        x10rt_probe();
-    }
+    while (progress != 1) x10rt_probe();
+
     if (role == root) {
         memcpy(dbuf, dbuf_i, el * count * sz);
     }
@@ -1419,16 +1414,12 @@ void x10rt_emu_gatherv (x10rt_team team, x10rt_place role, x10rt_place root, con
 
     progress = 0;
     x10rt_bcast(team, role, root, dcounts, dcounts_i, sizeof(x10rt_int), sz, x10rt_net_one_setter, &progress);
-    while (progress != 1) {
-        x10rt_probe();
-    }
+    while (progress != 1) x10rt_probe();
 
     if (role == root) {
         progress = 0;
         x10rt_allgatherv(team, role, sbuf, scount, dbuf, doffsets, dcounts, el, x10rt_net_one_setter, &progress);
-        while (progress != 1) {
-            x10rt_probe();
-        }
+        while (progress != 1) x10rt_probe();
     } else {
         x10rt_int *doffsets_i = static_cast<x10rt_int *>(malloc(sizeof(x10rt_int) * sz));
         x10rt_int sum_counts = 0;
@@ -1439,9 +1430,8 @@ void x10rt_emu_gatherv (x10rt_team team, x10rt_place role, x10rt_place root, con
         void *dbuf_i = malloc(el * sum_counts);
         progress = 0;
         x10rt_allgatherv(team, role, sbuf, scount, dbuf_i, doffsets_i, dcounts_i, el, x10rt_net_one_setter, &progress);
-        while (progress != 1) {
-            x10rt_probe();
-        }
+        while (progress != 1) x10rt_probe();
+
         free(doffsets_i);
         free(dbuf_i);
     }
@@ -1455,17 +1445,12 @@ void x10rt_emu_allgather (x10rt_team team, x10rt_place role,
 		size_t el, size_t count, x10rt_completion_handler *ch, void *arg)
 {
     x10rt_place sz = x10rt_team_sz(team);
-    x10rt_int *progress = static_cast<x10rt_int *>(malloc(sizeof(x10rt_int) * sz));
-    memset(progress, 0, sizeof(x10rt_int) * sz);
+    x10rt_int progress;
     for (x10rt_place i = 0; i < sz; i++) {
-        x10rt_bcast(team, role, i, sbuf, static_cast<char *>(dbuf) + el * count * i, el, count, x10rt_net_one_setter, &progress[i]);
+        progress = 0;
+        x10rt_bcast(team, role, i, sbuf, static_cast<char *>(dbuf) + el * count * i, el, count, x10rt_net_one_setter, &progress);
+        while (progress != 1)  x10rt_probe();
     }
-    for (x10rt_place i = 0; i < sz; i++) {
-        while (progress[i] != 1) {
-            x10rt_probe();
-        }
-    }
-    free(progress);
     ch(arg);
 }
 
@@ -1477,17 +1462,12 @@ void x10rt_emu_allgatherv (x10rt_team team, x10rt_place role,
     const x10rt_int *doffsets_i = static_cast<const x10rt_int *>(doffsets);
     const x10rt_int *dcounts_i = static_cast<const x10rt_int *>(dcounts);
     x10rt_place sz = x10rt_team_sz(team);
-    x10rt_int *progress = static_cast<x10rt_int *>(malloc(sizeof(x10rt_int) * sz));
-    memset(progress, 0, sizeof(x10rt_int) * sz);
+    x10rt_int progress;
     for (x10rt_place i = 0; i < sz; i++) {
-        x10rt_bcast(team, role, i, sbuf, static_cast<char *>(dbuf) + el * doffsets_i[i], el, dcounts_i[i], x10rt_net_one_setter, &progress[i]);
+        progress = 0;
+        x10rt_bcast(team, role, i, sbuf, static_cast<char *>(dbuf) + el * doffsets_i[i], el, dcounts_i[i], x10rt_net_one_setter, &progress);
+        while (progress != 1) x10rt_probe();
     }
-    for (x10rt_place i = 0; i < sz; i++) {
-        while (progress[i] != 1) {
-            x10rt_probe();
-        }
-    }
-    free(progress);
     ch(arg);
 }
 
@@ -1497,17 +1477,12 @@ void x10rt_emu_alltoallv (x10rt_team team, x10rt_place role, const void *sbuf, c
     const x10rt_int *doffsets_i = static_cast<const x10rt_int *>(doffsets);
     const x10rt_int *dcounts_i = static_cast<const x10rt_int *>(dcounts);
     x10rt_place sz = x10rt_team_sz(team);
-    x10rt_int *progress = static_cast<x10rt_int *>(malloc(sizeof(x10rt_int) * sz));
-    memset(progress, 0, sizeof(x10rt_int) * sz);
+    x10rt_int progress;
     for (x10rt_place i = 0; i < sz; i++) {
-        x10rt_scatterv(team, role, i, sbuf, soffsets, scounts, static_cast<char *>(dbuf) + el * doffsets_i[i], dcounts_i[i], el, x10rt_net_one_setter, &progress[i]); 
+        progress = 0;
+        x10rt_scatterv(team, role, i, sbuf, soffsets, scounts, static_cast<char *>(dbuf) + el * doffsets_i[i], dcounts_i[i], el, x10rt_net_one_setter, &progress); 
+        while (progress != 1) x10rt_probe();
     }
-    for (x10rt_place i = 0; i < sz; i++) {
-        while (progress[i] != 1) {
-            x10rt_probe();
-        }
-    }
-    free(progress);
     ch(arg);
 }
 

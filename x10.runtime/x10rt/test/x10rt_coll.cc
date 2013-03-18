@@ -346,47 +346,6 @@ static void coll_test (x10rt_team team, x10rt_place role, x10rt_place per_place)
                                << ((double)taken)/long_tests/1000 << " μs" << std::endl;
     }
 
-    if (getenv("NO_REDUCE")==NULL) {
-        float sbuf[1134];
-        float dbuf[1134];
-        size_t count = sizeof(sbuf)/sizeof(*sbuf);
-
-        for (size_t i=0 ; i<count ; ++i) sbuf[i] = float(role+1) * i * i;
-        for (size_t i=0 ; i<count ; ++i) dbuf[i] = -(float)i;
-
-        if (0==role)
-            std::cout<<team<<": reduce correctness (if no errors then OK):" << std::endl;
-        finished = 0;
-        x10rt_reduce(team, role, 0, sbuf, dbuf, X10RT_RED_OP_ADD, X10RT_RED_TYPE_FLT, count,
-                            x10rt_one_setter, &finished);
-        while (!finished) { x10rt_probe(); }
-        float oracle_base = (x10rt_team_sz(team)*x10rt_team_sz(team) + x10rt_team_sz(team))/2;
-        if (0==role) {
-            for (size_t i=0 ; i<count ; ++i) {
-                float oracle = oracle_base * i * i;
-                if (fabs(dbuf[i] / oracle - 1)>0.00001) {
-                    std::cout << team << ": role " << role
-                        << " has received invalid sum at ["<<i<<"]:  " << dbuf[i]
-                        << " (not " << oracle << ")" << std::endl;
-                }
-            }
-        }
-
-
-        if (0==role) std::cout << team << ": reduce timing test..." << std::endl;
-        x10rt_barrier_b(team,role);
-        taken = -nano_time();
-        for (int i=0 ; i<long_tests ; ++i) {
-            finished = 0;
-            x10rt_reduce(team, role, 0, sbuf, dbuf, X10RT_RED_OP_ADD, X10RT_RED_TYPE_FLT, count,
-                                x10rt_one_setter, &finished);
-            while (!finished) { sched_yield(); x10rt_probe(); }
-        }
-        taken += nano_time();
-        if (0==role) std::cout << team << ": reduce time:  "
-                               << ((double)taken)/long_tests/1000 << " μs" << std::endl;
-    }
-
 
     if (getenv("NO_SCATTERV")==NULL) {
         x10rt_place root = 43 % x10rt_team_sz(team);
