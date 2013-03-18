@@ -60,7 +60,7 @@ public struct Team {
 
     /** Returns the role of here
      */
-    public def roleHere() : Array[Int](1) = this.role();
+    public def role() : Array[Int](1) = this.role();
 
     /** Returns the PlaceGroup of the places of the team.
      */
