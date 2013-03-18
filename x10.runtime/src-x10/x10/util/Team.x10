@@ -11,6 +11,7 @@
 
 package x10.util;
 
+import x10.compiler.Inline;
 import x10.compiler.Native;
 import x10.compiler.NativeRep;
 import x10.compiler.StackAllocate;
@@ -30,6 +31,15 @@ public struct Team {
 
     private static struct DoubleIdx(value:Double, idx:Int) {}
 
+    private static isDebug = System.getenv().containsKey("X10_TEAM_DEBUG");
+	public static @Inline def debugln(pkg:String, str: String) {
+        if (isDebug) {
+		//@Ifdef("DEBUGPRINT")
+			Console.OUT.println("" + Timer.milliTime() + ":Place " + here.id + ":Worker " + Runtime.workerId() + ":" + pkg + ": " + str);
+			Console.OUT.flush();
+		}
+	}
+
     /** A team that has one member at each place.
      */
     public static WORLD = Team(0, new Array[Place](PlaceGroup.WORLD.numPlaces(), (i:Int)=>PlaceGroup.WORLD(i)));
@@ -37,7 +47,7 @@ public struct Team {
     /** The underlying representation of a team's identity.
      */
     private id: Int;
-    private places: Array[Place](1);
+    private members: PlaceLocalHandle[Array[Place](1)];
     private role: PlaceLocalHandle[Array[Int](1)];
 
     /** Returns the id of the team.
@@ -46,31 +56,31 @@ public struct Team {
 
     /** Returns the places of the team.
      */
-    public def places() = places;
+    public def places() = members();
 
     /** Returns the role of here
      */
-    public def getRoleHere() : Array[Int](1) = this.role();
+    public def roleHere() : Array[Int](1) = this.role();
 
     /** Returns the PlaceGroup of the places of the team.
      */
     public def placeGroup() : PlaceGroup = {
-        return new OrderedPlaceGroup(places);
+        return new OrderedPlaceGroup(members());
     }
 
     /** Returns the place corresponding to the given role.
      * @param role Our role in this team
      */
-    public def getPlace(role:Int) : Place = places(role);
+    public def place(role:Int) : Place = members()(role);
 
     /** Returns the role corresponding to the given place.
      * @param place Place in this team
      */
-    public def getRole(place:Place) : Array[Int](1) = {
-        return getRole(places, place);
+    public def role(place:Place) : Array[Int](1) = {
+        return role(members(), place);
     }
 
-    private static def getRole(places:Array[Place](1), place:Place) {
+    private static def role(places:Array[Place](1), place:Place) {
         val role = new ArrayBuilder[Int]();
         for ([p] in places) {
             if (places(p) == place)
@@ -80,9 +90,10 @@ public struct Team {
     }
     
     private def this (id:Int, places:Array[Place](1)) {
+        val pg = new OrderedPlaceGroup(places);
         this.id = id;
-        this.places = places;
-        this.role = PlaceLocalHandle.make[Array[Int](1)](new OrderedPlaceGroup(places), () => getRole(places, here));
+        this.members = PlaceLocalHandle.make[Array[Place](1)](pg, ()=>places);
+        this.role = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>role(places, here));
     }
 
     /** Create a team by defining the place where each member lives.  This would usually be called before creating an async for each member of the team.
@@ -94,15 +105,18 @@ public struct Team {
 
     private def this (places:IndexedMemoryChunk[Place], count:Int, pg:PlaceGroup) {
         val result = IndexedMemoryChunk.allocateUninitialized[Int](1);
+        val pa = new Array[Place](places);
         finish nativeMake(places, count, result);
         this.id = result(0);
-        this.places =new Array[Place](places);
-        this.role = PlaceLocalHandle.make[Array[Int](1)](pg, () => getRole(new Array[Place](places), here));
+        this.members = PlaceLocalHandle.make[Array[Place](1)](pg, ()=>pa);
+        this.role = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>role(pa, here));
     }
 
     private static def nativeMake (places:IndexedMemoryChunk[Place], count:Int, result:IndexedMemoryChunk[Int]) : void {
+        Runtime.increaseParallelism();
         @Native("java", "x10.x10rt.TeamSupport.nativeMake(places, count, result);")
     	@Native("c++", "x10rt_team_new(count, (x10rt_place*)places->raw(), x10aux::coll_handler2, x10aux::coll_enter2(result->raw()));") {}
+        Runtime.decreaseParallelism(1);
     }
 
     /** Returns the number of elements in the team.
@@ -173,7 +187,6 @@ public struct Team {
      * where n is the number of members of the team.
      *
      * @see #scatter
-     * @see #scatterRecv
      *
      * @param role Our role in the team
      *
@@ -189,24 +202,6 @@ public struct Team {
     public def scatter[T] (role:Int, root:Int, src:Array[T], count:Int) {
         val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
         finish nativeScatter(id, role, root, getRawOrDummyChunk(src), 0, dst_raw, 0, count);
-        return new Array[T](dst_raw);
-    }
-
-    /**
-     * @deprecated use {@link #scatter(Int, Int, Array[T], Int)} instead
-     */
-    public def scatterSend[T] (role:Int, root:Int, src:Array[T], count:Int) {
-    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
-        finish nativeScatter(id, role, root, src.raw(), 0, dst_raw, 0, count);
-        return new Array[T](dst_raw);
-    }
-
-    /**
-     * @deprecated use {@link #scatter(Int, Int, Array[T], Int)} instead
-     */
-    public def scatterRecv[T] (role:Int, root:Int, count:Int) {
-    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
-        finish nativeScatter(id, role, root, dummyChunk[T](), 0, dst_raw, 0, count);
         return new Array[T](dst_raw);
     }
 
@@ -233,7 +228,7 @@ public struct Team {
      * @param dst_count The numbers of elements being received
      */
     public def scatterv[T] (role:Int, root:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst:Array[T], dst_off:Int, dst_count:Int) : void {
-        finish nativeScatterv(id, role, root, src.raw(), src_offs.raw(), src_counts.raw(), dst.raw(), dst_off, dst_count);
+        finish nativeScatterv(id, role, root, getRawOrDummyChunk(src), getRawOrDummyChunk(src_offs), getRawOrDummyChunk(src_counts), getRawOrDummyChunk(dst), dst_off, dst_count);
     }
 
     private static def nativeScatterv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], src_counts:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_off:Int, dst_count:Int) : void {
@@ -247,7 +242,6 @@ public struct Team {
      * last member gets the last portion.
      *
      * @see #scatterv
-     * @see #scattervRecv
      *
      * @param role Our role in the team
      *
@@ -266,31 +260,11 @@ public struct Team {
     public def scatterv[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int], dst_count:Int) {
         assert(role != root || src_counts.size == size());
         assert(role != root || src_offs.size == size());
-        val dst_raw : IndexedMemoryChunk[T] = IndexedMemoryChunk.allocateUninitialized[T](dst_count);
-        finish nativeScatterv(id, role, root, getRawOrDummyChunk(src), getRawOrDummyChunk(src_offs), getRawOrDummyChunk(src_counts), dst_raw, 0, dst_count);
-        return new Array[T](dst_raw);
+        val dst = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](dst_count));
+        scatterv(role, root, src, src_offs, src_counts, dst, 0, dst_count);
+        return dst;
     }
 
-    /**
-     * @deprecated use {@link #scatterv(Int, Int, Array[T], Array[Int], Array[Int], Int)} instead
-     */
-    public def scattervSend[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int], dst_count:Int) {
-    	assert(src_counts.size == size());
-    	assert(src_offs.size == size());
-    	val dst_raw : IndexedMemoryChunk[T] = IndexedMemoryChunk.allocateUninitialized[T](dst_count);
-    	finish nativeScatterv(id, role, root, src.raw(), src_offs.raw(), src_counts.raw(), dst_raw, 0, dst_count);
-    	return new Array[T](dst_raw);
-    }
-
-    /**
-     * @deprecated use {@link #scatterv(Int, Int, Array[T], Array[Int], Array[Int], Int)} instead
-     */
-    public def scattervRecv[T] (role:Int, root:Int, dst_count:Int) {
-    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](dst_count);
-    	finish nativeScatterv(id, role, root, dummyChunk[T](), dummyChunk[Int](), dummyChunk[Int](), dst_raw, 0, dst_count);
-    	return new Array[T](dst_raw);
-    }
-    
     /** Blocks until the root have received each part of all member's array.
      * Each member sends a contiguous and distinct portion of the src array.
      * dst will be structured so that the portions are sorted in ascending
@@ -330,7 +304,6 @@ public struct Team {
      * last member gets the last portion.
      *
      * @see #gather
-     * @see #gatherRecv
      *
      * @param role Our role in the team
      *
@@ -343,31 +316,12 @@ public struct Team {
      * @return received array
      */
     public def gather[T] (role:Int, root:Int, src:Array[T], count:Int) {
-    	val dst_raw = role == root ? IndexedMemoryChunk.allocateUninitialized[T](count) : dummyChunk[T]();
-        finish nativeGather(id, role, root, src.raw(), 0, dst_raw, 0, count);
-        return new Array[T](dst_raw);
-    }
-
-    /**
-     * @deprecated use {@link #gather(Int, Int, Array[T], Int)} instead
-     */
-    public def gatherSend[T] (role:Int, root:Int, src:Array[T], count:Int) : void {
-        finish nativeGather(id, role, root, src.raw(), 0, dummyChunk[T](), 0, count);
-    }
-
-    /**
-     * @deprecated use {@link #gather(Int, Int, Array[T], Int)} instead
-     */
-    public def gatherRecv[T] (role:Int, root:Int, src:Array[T], count:Int) {
-    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
-        finish nativeGather(id, role, root, src.raw(), 0, dst_raw, 0, count);
-        return new Array[T](dst_raw);
+        val dst = role == root ? new Array[T](IndexedMemoryChunk.allocateUninitialized[T](count)) : null;
+        gather(role, root, src, 0, dst, 0, count);
+        return dst;
     }
 
     /** Almost same as gather except that each member sends one data.
-     *
-     * @see #gatherSend
-     * @see #gatherRecv1
      *
      * @param role Our role in the team
      *
@@ -378,31 +332,11 @@ public struct Team {
      * @param count The number of elements being transferred
      */
     public def gather1[T] (role:Int, root:Int, src:T) {T haszero} : Array[T](1) {
-    	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
-    	src_raw(0) = src;
-    	val dst_raw = role == root ? IndexedMemoryChunk.allocateUninitialized[T](size()) : dummyChunk[T]();
-        finish nativeGather(id, role, root, src_raw, 0, dst_raw, 0, 1);
-        return (role == root ? new Array[T](dst_raw) : null) as Array[T](1) ;
-    }
-
-    /**
-     * @deprecated use {@link #gather1(Int, Int, T)} instead
-     */
-    public def gatherSend1[T] (role:Int, root:Int, src:T) : void {
-    	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
-    	src_raw(0) = src;
-        finish nativeGather(id, role, root, src_raw, 0, dummyChunk[T](), 0, 1);
-    }
-
-    /**
-     * @deprecated use {@link #gather1(Int, Int, T)} instead
-     */
-    public def gatherRecv1[T] (role:Int, root:Int, src:T) {
-    	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
-    	src_raw(0) = src;
-    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](size());
-        finish nativeGather(id, role, root, src_raw, 0, dst_raw, 0, 1);
-        return new Array[T](dst_raw);
+        val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
+        src_raw(0) = src;
+        val dst : Array[T](1) = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](role == root ? size() : 0)) ;
+        gather(role, root, new Array[T](src_raw), 0, dst, 0, 1);
+        return dst;
     }
 
     /** Almost same as gather except for permitting messages to have different sizes.
@@ -426,7 +360,7 @@ public struct Team {
      * @param dst_counts The numbers of elements being transferred
      */
     public def gatherv[T] (role:Int, root:Int, src:Array[T], src_off:Int, src_count:Int, dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
-        finish nativeGatherv(id, role, root, src.raw(), src_off, src_count, dst.raw(), dst_offs.raw(), dst_counts.raw());
+        finish nativeGatherv(id, role, root, getRawOrDummyChunk(src), src_off, src_count, getRawOrDummyChunk(dst), getRawOrDummyChunk(dst_offs), getRawOrDummyChunk(dst_counts));
     }
 
     private static def nativeGatherv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, src_count:Int, dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
@@ -435,25 +369,9 @@ public struct Team {
     }
 
     public def gatherv[T] (role:Int, root:Int, src:Array[T], dst_offs:Array[Int], dst_counts:Array[Int] ) {
-    	val dst_raw = role == root ? IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0)) : dummyChunk[T]();
-    	finish nativeGatherv(id, role, root, src.raw(), 0, src.size, dst_raw, getRawOrDummyChunk(dst_offs), getRawOrDummyChunk(dst_counts));
-        return role == root ? new Array[T](dst_raw) : null;
-    }
-
-    /**
-     * @deprecated use {@link #gatherv(Int, Int, Array[T], Array[Int], Array[Int])} instead
-     */
-    public def gathervSend[T] (role:Int, root:Int, src:Array[T]) : void {
-    	finish nativeGatherv(id, role, root, src.raw(), 0, src.size, dummyChunk[T](), dummyChunk[Int](), dummyChunk[Int]());
-    }
-    
-    /**
-     * @deprecated use {@link #gatherv(Int, Int, Array[T], Array[Int], Array[Int])} instead
-     */
-    public def gathervRecv[T] (role:Int, root:Int, src:Array[T], dst_offs:Array[Int], dst_counts:Array[Int] ) {
-    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0));
-    	finish nativeGatherv(id, role, root, src.raw(), 0, src.size, dst_raw, dst_offs.raw(), dst_counts.raw());
-        return new Array[T](dst_raw);
+        val dst = role == root ? new Array[T](IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0))) : null;
+        gatherv(role, root, src, 0, src.size, dst, dst_offs, dst_counts);
+        return dst;
     }
 
     private static def countsToOffs (counts:Array[Int](1)) {
@@ -468,14 +386,6 @@ public struct Team {
         } else {
             return gatherv[T](role, root, src, null, null);
         }
-    }
-
-    /**
-     * @deprecated use {@link #gatherv(Int, Int, Array[T], Array[Int], Array[Int])} instead
-     */
-    public def gathervRecv[T] (role:Int, root:Int, src:Array[T], dst_counts:Array[Int](1) ) {
-    	val dst_offs = countsToOffs(dst_counts);
-        return gathervRecv[T](role, root, src, dst_offs, dst_counts);
     }
 
     /** Blocks until all members have received root's array.
@@ -511,62 +421,24 @@ public struct Team {
         return dst_raw(0);
     }
 
-    /**
-     * @deprecated use {@link #bcast1(Int, Int, T)} instead
-     */
-    public def bcastSend1[T] (role:Int, root:Int, src:T) : T {
-    	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
-    	src_raw(0) = src;
-    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
-        finish nativeBcast(id, role, root, src_raw, 0, dst_raw, 0, 1);
-        return dst_raw(0);
-    }
-
-    /**
-     * @deprecated use {@link #bcast1(Int, Int, T)} instead
-     */
-    public def bcastRecv1[T] (role:Int, root:Int) : T {
-    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
-        finish nativeBcast(id, role, root, dummyChunk[T](), 0, dst_raw, 0, 1);
-        return dst_raw(0);
-    }
-
     public def bcast[T] (role:Int, root:Int, src:Array[T], count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
         finish nativeBcast(id, role, root, getRawOrDummyChunk(src), 0, dst_raw, 0, count);
         return new Array[T](dst_raw);
     }
 
-    /**
-     * @deprecated use {@link #bcast(Int, Int, Array[T], Int)} instead
-     */
-    public def bcastSend[T] (role:Int, root:Int, src:Array[T], count:Int) {
-    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
-        finish nativeBcast(id, role, root, src.raw(), 0, dst_raw, 0, count);
-        return new Array[T](dst_raw);
-    }
-
-    /**
-     * @deprecated use {@link #bcast(Int, Int, Array[T], Int)} instead
-     */
-    public def bcastRecv[T] (role:Int, root:Int, count:Int) {
-    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
-        finish nativeBcast(id, role, root, dummyChunk[T](), 0, dst_raw, 0, count);
-        return new Array[T](dst_raw);
-    }
-
     public def allgather1[T] (role:Int, src:T) {
-    	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
-    	src_raw(0) = src;
-    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](size());
-        finish nativeAllgather(id, role, src_raw, 0, dst_raw, 0, 1);
-        return new Array[T](dst_raw);
+        val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
+        src_raw(0) = src;
+        val dst = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](size()));
+        allgather(role, new Array[T](src_raw), 0, dst, 0, 1);
+        return dst;
     }
 
     public def allgather[T] (role:Int, src:Array[T]) {
-    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](src.size * size());
-        finish nativeAllgather(id, role, src.raw(), 0, dst_raw, 0, src.size);
-        return new Array[T](dst_raw);
+        val dst = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](src.size * size()));
+        allgather(role, src, 0, dst, 0, src.size);
+        return dst;
     }
 
     public def allgather[T] (role:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
@@ -579,12 +451,12 @@ public struct Team {
     }
     
     public def allgatherv[T] (role:Int, src:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) {
-    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0));
-        finish nativeAllgatherv(id, role, src.raw(), 0, src.size, dst_raw, dst_offs.raw(), dst_counts.raw());
-        return new Array[T](dst_raw);
+        val dst = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0)));
+        allgatherv(role, src, 0, src.size, dst, dst_offs, dst_counts);
+        return dst;
     }
 
-    public def allgatherv[T] (role:Int, root:Int, src:Array[T], src_off:Int, src_count:Int, dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
+    public def allgatherv[T] (role:Int, src:Array[T], src_off:Int, src_count:Int, dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
         finish nativeAllgatherv(id, role, src.raw(), src_off, src_count, dst.raw(), dst_offs.raw(), dst_counts.raw());
     }
 
@@ -622,13 +494,14 @@ public struct Team {
     }
 
     public def alltoall[T] (role:Int, src:Array[T]) {
+        assert(src != null);
     	assert(src.size % size() == 0);
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](src.size);
         finish nativeAlltoall(id, role, src.raw(), 0, dst_raw, 0, src.size / size());
         return new Array[T](dst_raw);
     }
     
-    public def alltoallv[T] (role:Int, root:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
+    public def alltoallv[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
         finish nativeAlltoallv(id, role, src.raw(), src_offs.raw(), src_counts.raw(), dst.raw(), dst_offs.raw(), dst_counts.raw());
     }
 
@@ -638,14 +511,15 @@ public struct Team {
     }
 
     public def alltoallv[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst_offs:Array[Int], dst_counts:Array[Int]) {
-    	assert(src_counts.size == size());
-    	assert(src_offs.size == size());
-    	assert(dst_counts.size == size());
-    	assert(dst_offs.size == size());
-    	assert(size() > 0);
-    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0));
-        finish nativeAlltoallv(id, role, src.raw(), src_offs.raw(), src_counts.raw(), dst_raw, dst_offs.raw(), dst_counts.raw());
-        return new Array[T](dst_raw);
+        assert(src != null);
+        assert(src_counts.size == size());
+        assert(src_offs.size == size());
+        assert(dst_counts.size == size());
+        assert(dst_offs.size == size());
+        assert(size() > 0);
+        val dst = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0)));
+        alltoallv(role, src, src_offs, src_counts, dst, dst_offs, dst_counts);
+        return dst;
     }
 
     /** Indicates the operation to perform when reducing. */
@@ -758,63 +632,6 @@ public struct Team {
         @Native("c++", "x10rt_reduce(id, role, root, &src->raw()[src_off], &dst->raw()[dst_off], (x10rt_red_op_type)op, x10rt_get_red_type<TPMGL(T)>(), count, x10aux::coll_handler, x10aux::coll_enter());") {}
     }
 
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceSend (role:Int, root:Int, src:Byte, op:Int) { genericReduceSend(role, root, src, op); }
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceSend (role:Int, root:Int, src:UByte, op:Int) { genericReduceSend(role, root, src, op); }
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceSend (role:Int, root:Int, src:Short, op:Int) { genericReduceSend(role, root, src, op); }
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceSend (role:Int, root:Int, src:UShort, op:Int) { genericReduceSend(role, root, src, op); }
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceSend (role:Int, root:Int, src:UInt, op:Int) { genericReduceSend(role, root, src, op); }
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceSend (role:Int, root:Int, src:Int, op:Int) { genericReduceSend(role, root, src, op); }
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceSend (role:Int, root:Int, src:Long, op:Int) { genericReduceSend(role, root, src, op); }
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceSend (role:Int, root:Int, src:ULong, op:Int) { genericReduceSend(role, root, src, op); }
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceSend (role:Int, root:Int, src:Float, op:Int) { genericReduceSend(role, root, src, op); }
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceSend (role:Int, root:Int, src:Double, op:Int) { genericReduceSend(role, root, src, op); }
-
-    private def genericReduceSend[T] (role:Int, root:Int, src:T, op:Int) : void {
-        val chk = IndexedMemoryChunk.allocateUninitialized[T](1);
-        val dst = dummyChunk[T]();
-        chk(0) = src;
-        finish nativeReduce[T](id, role, root, chk, dst, op);
-    }
-
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceRecv (role:Int, root:Int, src:Byte, op:Int) = genericReduceRecv(role, root, src, op);
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceRecv (role:Int, root:Int, src:UByte, op:Int) = genericReduceRecv(role, root, src, op);
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceRecv (role:Int, root:Int, src:Short, op:Int) = genericReduceRecv(role, root, src, op);
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceRecv (role:Int, root:Int, src:UShort, op:Int) = genericReduceRecv(role, root, src, op);
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceRecv (role:Int, root:Int, src:UInt, op:Int) = genericReduceRecv(role, root, src, op);
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceRecv (role:Int, root:Int, src:Int, op:Int) = genericReduceRecv(role, root, src, op);
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceRecv (role:Int, root:Int, src:Long, op:Int) = genericReduceRecv(role, root, src, op);
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceRecv (role:Int, root:Int, src:ULong, op:Int) = genericReduceRecv(role, root, src, op);
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceRecv (role:Int, root:Int, src:Float, op:Int) = genericReduceRecv(role, root, src, op);
-    /** Performs a reduction on a single value, returning the result @deprecated */
-    public def reduceRecv (role:Int, root:Int, src:Double, op:Int) = genericReduceRecv(role, root, src, op);
-
-    private def genericReduceRecv[T] (role:Int, root:Int, src:T, op:Int) : T {
-        val chk = IndexedMemoryChunk.allocateUninitialized[T](1);
-        val dst = IndexedMemoryChunk.allocateUninitialized[T](1);
-        chk(0) = src;
-        finish nativeReduce[T](id, role, root, chk, dst, op);
-        return dst(0);
-    }
-
     /** Performs a reduction on a single value, returning the result  */
     public def reduce (role:Int, root:Int, src:Byte, op:Int) = genericReduce[Byte](role, root, src, op);
     /** Performs a reduction on a single value, returning the result  */
@@ -901,14 +718,22 @@ public struct Team {
     	val src_raw = IndexedMemoryChunk.allocateUninitialized[Int](1);
     	src_raw(0) = place;
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[Int](new_size);
-        finish nativeAllgather(new_id, new_role, src_raw, 0, dst_raw, 0, 1);
+        //nativeAllgather(new_id, new_role, src_raw, 0, dst_raw, 0, 1);
+        finish nativeMembers(new_id, dst_raw);
         
         return Team(new_id, new Array[Place](dst_raw.length(), (i:Int)=>new Place(dst_raw(i))));
     }
 
+    private static def nativeMembers(id:Int, result:IndexedMemoryChunk[Int]) : void {
+        //@Native("java", "x10.x10rt.TeamSupport.nativeSplit(id, role, color, new_role, result);")
+        @Native("c++", "x10rt_team_members(id, (x10rt_place*)result->raw(), x10aux::coll_handler, x10aux::coll_enter());") {}
+    }
+
     private static def nativeSplit(id:Int, role:Int, color:Int, new_role:Int, result:IndexedMemoryChunk[Int]) : void {
+        Runtime.increaseParallelism();
         @Native("java", "x10.x10rt.TeamSupport.nativeSplit(id, role, color, new_role, result);")
         @Native("c++", "x10rt_team_split(id, role, color, new_role, x10aux::coll_handler2, x10aux::coll_enter2(result->raw()));") {}
+        Runtime.decreaseParallelism(1);
     }
 
     /** Destroy a team that is no-longer needed.  Called simultaneously by each member of
@@ -926,7 +751,7 @@ public struct Team {
         @Native("c++", "x10rt_team_del(id, role, x10aux::coll_handler, x10aux::coll_enter());") {}
     }
 
-    public def toString() = "Team(" + this.id + "," + this.places +  ")";
+    public def toString() = "Team(" + this.id + "," + this.members() +  ")";
     public def equals(that:Team) = that.id==this.id;
     public def equals(that:Any) = that instanceof Team && (that as Team).id==this.id;
     public def hashCode()=id;
@@ -957,182 +782,139 @@ public struct Team {
 
     public def scatter[T] (role:Int, root:Int, src:Array[T]) {
         val team_size = size();
+        assert(role != root || src != null);
         assert(role != root || src.size % team_size == 0);
-        val count = bcastSend1(role, root, src.size / team_size);
-        return scatterSend(role, root, src, count);
-    }
-
-    /**
-     * @deprecated use {@link #scatter(Int, Int, Array[T])} instead
-     */
-    public def scatterSendAuto[T] (role:Int, root:Int, src:Array[T]) {
-        val team_size = size();
-        assert(src.size % team_size == 0);
-        val count = bcastSend1(role, root, src.size / team_size);
-        return scatterSend(role, root, src, count);
-    }
-
-    /**
-     * @deprecated use {@link #scatter(Int, Int, Array[T])} instead
-     */
-    public def scatterRecvAuto[T] (role:Int, root:Int) {
-        val count = bcastRecv1[Int](role, root);
-        return scatterRecv[T](role, root, count);
+        val src_size = role == root ? src.size : Zero.get[Int]();
+        val count = bcast1(role, root, src_size / team_size);
+        debugln("scatter", "count: " + count);
+        return scatter(role, root, src, count);
     }
 
     public def scatterv[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int]) {
+        assert(role != root || src_counts != null);
+        assert(role != root || src_offs != null);
         val team_size = size();
         assert(role != root || src_counts.size == team_size);
         assert(role != root || src_offs.size == team_size);
         val dst_count = scatter(role, root, src_counts, 1)(0);
+        debugln("scatterv", "dst_count: " + dst_count);
         return scatterv(role, root, src, src_counts, src_offs, dst_count);
     }
 
-    /**
-     * @deprecated use {@link #scatter(Int, Int, Array[T], Array[Int], Array[Int])} instead
-     */
-    public def scattervSendAuto[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int]) {
-        val team_size = size();
-        assert(role != root || src_counts.size == team_size);
-        assert(role != root || src_offs.size == team_size);
-        val dst_count = scatterSend(role, root, src_counts, 1)(0);
-        return scattervSend(role, root, src, src_counts, src_offs, dst_count);
-    }
-
     public def scatterv[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int](1)) {
-        val src_offs = role == root ? countsToOffs(src_counts) : null as Array[Int](1);
+        assert(role != root || src_counts != null);
+        val src_offs : Array[Int] = role == root ? countsToOffs(src_counts) : null;
+        debugln("scatterv", "src_offs: " +  src_offs);
         return scatterv[T](role, root, src, src_counts, src_offs);
-    }
-
-    /**
-     * @deprecated use {@link #scatter(Int, Int, Array[T], Array[Int])} instead
-     */
-    public def scattervSendAuto[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int](1)) {
-        val src_offs = countsToOffs(src_counts);
-        return scattervSendAuto[T](role, root, src, src_counts, src_offs);
     }
 
     public def scatterv[T] (role:Int, root:Int, src:Array[Array[T](1)](1)) {
         if (role == root) {
+            assert(src != null);
             val flatten_src_tuple = flatten(src);
             val flatten_src = flatten_src_tuple.first;
             val src_offs = flatten_src_tuple.second.first;
             val src_sizes = flatten_src_tuple.second.second;
+            debugln("scatterv", "flatten_src_tuple: " + flatten_src_tuple);
             return scatterv[T](role, root, flatten_src, src_sizes, src_offs);
         } else {
+            debugln("scatterv", "non root");
             return scatterv[T](role, root, null, null, null);
         }
     }
 
-    /**
-     * @deprecated use {@link #scatter(Int, Int, Array[Array[T]])} instead
-     */
-    public def scattervSendAuto[T] (role:Int, root:Int, src:Array[Array[T](1)](1)) {
-        val flatten_src_tuple = flatten(src);
-        val flatten_src = flatten_src_tuple.first;
-        val src_offs = flatten_src_tuple.second.first;
-        val src_sizes = flatten_src_tuple.second.second;
-        return scattervSendAuto[T](role, root, flatten_src, src_sizes, src_offs);
-    }
-
-    /**
-     * @deprecated use scatterv instead
-     */
-    public def scattervRecvAuto[T] (role:Int, root:Int) {
-        val dst_count = scatterRecv[Int](role, root, 1)(0);
-        val result = scattervRecv[T](role, root, dst_count);
-        return result;
-    }
-
     public def gatherv[T] (role:Int, root:Int, src:Array[T](1)) {
+        assert(src != null);
         val src_size = role == root ? src.size : Zero.get[Int]();
         val dst_counts = gather1[Int](role, root, src_size);
+        debugln("gatherv", "dst_counts: " + dst_counts);
         return gatherv[T](role, root, src, dst_counts);
     }
 
-    /**
-     * @deprecated use {@link #gatherv(Int, Int, Array[Array[T]])} instead
-     */
-    public def gathervSendAuto[T] (role:Int, root:Int, src:Array[T]) : void {
-        gatherSend1(role, root, src.size);
-        gathervSend(role, root, src);
-    }
-
-    /**
-     * @deprecated use {@link #gatherv(Int, Int, Array[Array[T]])} instead
-     */
-    public def gathervRecvAuto[T] (role:Int, root:Int, src:Array[T]) {
-        val dst_counts = gatherRecv1[Int](role, root, src.size);
-        return gathervRecv[T](role, root, src, dst_counts);
-    }
-
-
     public def bcast[T] (role:Int, root:Int, src:Array[T]) {
+        assert(role != root || src != null);
         val src_size = role == root ? src.size : Zero.get[Int]();
         val count = bcast1(role, root, src_size);
+        debugln("bcast", "count: " + count);
         return bcast(role, root, src, count);
     }
 
-    /**
-     * @deprecated use {@link #bcast(Int, Int, Array[T])} instead
-     */
-    public def bcastSendAuto[T] (role:Int, root:Int, src:Array[T]) {
-        val count = bcastSend1(role, root, src.size);
-        return bcastSend(role, root, src, count);
-    }
-
-    /**
-     * @deprecated use {@link #bcast(Int, Int, Array[T])} instead
-     */
-    public def bcastRecvAuto[T] (role:Int, root:Int) {
-        val count = bcastRecv1[Int](role, root);
-        return bcastRecv[T](role, root, count);
-    }
-
-
-    public def allgathervAuto[T] (role:Int, src:Array[T]) {
+    public def allgatherv[T] (role:Int, src:Array[T]) {
+        assert(src != null);
         val dst_counts = allgather1(role, src.size as Int);
         val dst_offs = countsToOffs(dst_counts);
+        debugln("allgatherv", "dst_counts: " + dst_counts);
+        debugln("allgatherv", "dst_offs: " + dst_offs);
 
         return allgatherv[T](role, src, dst_offs, dst_counts);
     }
 
-
-    public def alltoallvAutoWithBreakdown[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int]) : Pair[Array[T](1),Array[Int](1)] {
+    public def alltoallvWithBreakdown[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int]) : Pair[Array[T](1),Array[Int](1)] {
+        assert(src != null);
+        assert(src_offs != null);
+        assert(src_counts != null);
         val dst_counts = alltoall(role, src_counts);
         val dst_offs = countsToOffs(dst_counts);
         val dst = alltoallv[T](role, src, src_offs, src_counts, dst_offs, dst_counts);
+        debugln("alltoallvWithBreakdown", "dst_counts: " + dst_counts);
+        debugln("alltoallvWithBreakdown", "dst_offs: " + dst_offs);
+        debugln("alltoallvWithBreakdown", "dst: " + dst);
         return Pair[Array[T](1),Array[Int](1)](dst, dst_counts);
     }
 
-    public def alltoallvAutoWithBreakdown[T] (role:Int, src:Array[Array[T](1)](1)) : Pair[Array[T](1),Array[Int](1)] {
+    public def alltoallvWithBreakdown[T] (role:Int, src:Array[Array[T](1)](1)) : Pair[Array[T](1),Array[Int](1)] {
+        assert(src != null);
         val flatten_src_tuple = flatten(src);
         val flatten_src = flatten_src_tuple.first;
         val src_offs = flatten_src_tuple.second.first;
         val src_sizes = flatten_src_tuple.second.second;
-        return alltoallvAutoWithBreakdown(role, flatten_src, src_offs, src_sizes);
+        debugln("alltoallvWithBreakdown", "src_counts: " + src_sizes);
+        debugln("alltoallvWithBreakdown", "src_offs: " + src_offs);
+        debugln("alltoallvWithBreakdown", "flatten_src: " + flatten_src);
+        return alltoallvWithBreakdown(role, flatten_src, src_offs, src_sizes);
     }
 
-    public def alltoallvAuto[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int]) {
+    public def alltoallv[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int]) {
+        assert(src != null);
+        assert(src_offs != null);
+        assert(src_counts != null);
         val dst_counts = alltoall(role, src_counts);
         val dst_offs = countsToOffs(dst_counts);
         val dst = alltoallv[T](role, src, src_offs, src_counts, dst_offs, dst_counts);
+        debugln("alltoallv", "dst_counts: " + dst_counts);
+        debugln("alltoallv", "dst_offs: " + dst_offs);
+        debugln("alltoallv", "dst: " + dst);
         return dst;
     }
 
-    public def alltoallvAuto[T] (role:Int, src:Array[T], src_counts:Array[Int](1)) {
+    public def alltoallv[T] (role:Int, src:Array[T], src_counts:Array[Int](1)) {
+        assert(src != null);
+        assert(src_counts != null);
         val src_offs = countsToOffs(src_counts);
-        return alltoallvAuto[T](role, src, src_offs, src_counts);
+        debugln("alltoallv", "src_offs: " + src_offs);
+        return alltoallv[T](role, src, src_offs, src_counts);
     }
 
-    public def alltoallvAuto[T] (role:Int, src:Array[Array[T](1)](1)) {
+    public def alltoallv[T] (role:Int, src:Array[Array[T](1)](1)) {
+        assert(src != null);
         val flatten_src_tuple = flatten(src);
         val flatten_src = flatten_src_tuple.first;
         val src_offs = flatten_src_tuple.second.first;
         val src_sizes = flatten_src_tuple.second.second;
-        return alltoallvAuto(role, flatten_src, src_offs, src_sizes);
+        debugln("alltoallv", "src_counts: " + src_sizes);
+        debugln("alltoallv", "src_offs: " + src_offs);
+        debugln("alltoallv", "flatten_src: " + flatten_src);
+        return alltoallv(role, flatten_src, src_offs, src_sizes);
     }
 
+    private static val OPT_REMOTE_OP = 0;
+    private static val OPT_COLLECTIVES = 1;
+    private static val OPT_COLLECTIVES_APPEND = 2;
+
+    private static def nativeSupports (opt:Int) : Int {
+        @Native("java", "return x10.x10rt.TeamSupport.nativeSize(opt);")
+        @Native("c++", "return (x10_int)x10rt_supports(static_cast<x10rt_opt>(opt));") { return -1; }
+    }
 }
 
 // vim: shiftwidth=4:tabstop=4:expandtab

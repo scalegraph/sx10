@@ -297,6 +297,8 @@ public class TeamSupport {
         }
     }
     
+    private static native int nativeSupportsImpl(int id);
+
     private static native void nativeMakeImpl(int[] places, int count, int[] result, FinishState fs);
     
     private static native int nativeSizeImpl(int id);

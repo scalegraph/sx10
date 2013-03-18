@@ -91,6 +91,20 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeMakeImpl(JNIEnv *env, jc
 
 /*
  * Class:     x10_x10rt_TeamSupport
+ * Method:    nativeSupportsImpl
+ * Signature: (I)I
+ */
+JNIEXPORT jint JNICALL Java_x10_x10rt_TeamSupport_nativeSupportsImpl(JNIEnv *env, jclass klazz, jint opt) {
+    return x10rt_supports(static_cast<x10rt_opt>(opt));
+}
+
+
+/*****************************************************
+ * nativeSizeImpl
+ *****************************************************/
+
+/*
+ * Class:     x10_x10rt_TeamSupport
  * Method:    nativeSizeImpl
  * Signature: (I)I
  */

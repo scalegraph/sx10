@@ -41,6 +41,14 @@ typedef uint32_t x10rt_endpoint;
  */
 typedef uint32_t x10rt_team;
 
+/** An integer type capable of representing an answer for a request for the x10rt_net support.
+ */
+typedef uint32_t x10rt_answer;
+
+/** An integer type corresponding to x10_int.
+ */
+typedef int32_t  x10rt_int;
+
 /** User callback to signal that non-blocking operations have completed.
  */
 typedef void x10rt_completion_handler (void *arg);

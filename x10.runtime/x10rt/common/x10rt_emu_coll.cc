@@ -1335,27 +1335,108 @@ bool x10rt_emu_coll_probe (void)
     return progressing;
 }
 
+static void x10rt_net_one_setter (void *arg)
+{ *((x10rt_int*)arg) = 1; }
+
 void x10rt_emu_scatterv (x10rt_team team, x10rt_place role,
                     x10rt_place root, const void *sbuf, const void *soffsets, const void *scounts,
                     void *dbuf, size_t dcounts,
                     size_t el, x10rt_completion_handler *ch, void *arg)
 {
-	fprintf(stderr, "X10RT: x10rt_emu_gather is not implemented.\n");
-	abort();
+    const x10rt_int *soffsets_i = static_cast<const x10rt_int *>(soffsets);
+    const x10rt_int *scounts_i = static_cast<const x10rt_int *>(scounts);
+    x10rt_place sz = x10rt_team_sz(team);
+    x10rt_int progress;
+    x10rt_int localLen;
+    x10rt_int len;
+
+    if (role == root) {
+        localLen = 0;
+        for (x10rt_place i = 0; i < sz; i++) {
+            localLen = std::max(localLen, scounts_i[i]);
+        }
+        progress = 0;
+        x10rt_bcast(team, role, root, &localLen, &len, sizeof(x10rt_int), 1, x10rt_net_one_setter, &progress);
+        while (progress != 1) x10rt_probe();
+
+        void *sbuf_long = malloc(el * len * sz);
+        for (x10rt_place i = 0; i < sz; i++) {
+            memcpy(static_cast<char *>(sbuf_long) + el * len * i, static_cast<const char *>(sbuf) + el * soffsets_i[i], el * len);
+        }
+        void *dbuf_long = malloc(el * len);
+        progress = 0;
+        x10rt_scatter(team, role, root, sbuf_long, dbuf_long, len, el, x10rt_net_one_setter, &progress);
+        while (progress != 1) x10rt_probe();
+
+        memcpy(dbuf, dbuf_long, el * dcounts);
+        free(sbuf_long);
+        free(dbuf_long);
+    } else {
+        progress = 0;
+        x10rt_bcast(team, role, root, &localLen, &len, sizeof(x10rt_int), 1, x10rt_net_one_setter, &progress);
+        while (progress != 1) x10rt_probe();
+
+        void *dbuf_long = malloc(el * len);
+        progress = 0;
+        x10rt_scatter(team, role, root, sbuf, dbuf_long, len, el, x10rt_net_one_setter, &progress);
+        while (progress != 1) x10rt_probe();
+
+        memcpy(dbuf, dbuf_long, el * dcounts);
+        free(dbuf_long);
+    }
+    ch(arg);
 }
 
 void x10rt_emu_gather (x10rt_team team, x10rt_place role, x10rt_place root, const void *sbuf,
 		void *dbuf, size_t el, size_t count, x10rt_completion_handler *ch, void *arg)
 {
-	fprintf(stderr, "X10RT: x10rt_emu_gather is not implemented.\n");
-	abort();
+    x10rt_place sz = x10rt_team_sz(team);
+    void *dbuf_i = malloc(el * count * sz);
+    x10rt_int progress;
+
+    progress = 0;
+    x10rt_allgather(team, role, sbuf, dbuf_i, el, count, x10rt_net_one_setter, &progress);
+    while (progress != 1) x10rt_probe();
+
+    if (role == root) {
+        memcpy(dbuf, dbuf_i, el * count * sz);
+    }
+    free(dbuf_i);
+    ch(arg);
 }
 
 void x10rt_emu_gatherv (x10rt_team team, x10rt_place role, x10rt_place root, const void *sbuf, size_t scount,
 		void *dbuf, const void *doffsets, const void *dcounts, size_t el, x10rt_completion_handler *ch, void *arg)
 {
-	fprintf(stderr, "X10RT: x10rt_emu_gatherv is not implemented.\n");
-	abort();
+    x10rt_place sz = x10rt_team_sz(team);
+    x10rt_int *dcounts_i = static_cast<x10rt_int *>(malloc(sizeof(x10rt_int) * sz));
+    x10rt_int progress;
+
+    progress = 0;
+    x10rt_bcast(team, role, root, dcounts, dcounts_i, sizeof(x10rt_int), sz, x10rt_net_one_setter, &progress);
+    while (progress != 1) x10rt_probe();
+
+    if (role == root) {
+        progress = 0;
+        x10rt_allgatherv(team, role, sbuf, scount, dbuf, doffsets, dcounts, el, x10rt_net_one_setter, &progress);
+        while (progress != 1) x10rt_probe();
+    } else {
+        x10rt_int *doffsets_i = static_cast<x10rt_int *>(malloc(sizeof(x10rt_int) * sz));
+        x10rt_int sum_counts = 0;
+        for (x10rt_place i = 0; i < sz; i++) {
+            doffsets_i[i] = sum_counts;
+            sum_counts += dcounts_i[i];
+        }
+        void *dbuf_i = malloc(el * sum_counts);
+        progress = 0;
+        x10rt_allgatherv(team, role, sbuf, scount, dbuf_i, doffsets_i, dcounts_i, el, x10rt_net_one_setter, &progress);
+        while (progress != 1) x10rt_probe();
+
+        free(doffsets_i);
+        free(dbuf_i);
+    }
+    free(dcounts_i);
+    ch(arg);
 }
 
 void x10rt_emu_allgather (x10rt_team team, x10rt_place role,
@@ -1363,8 +1444,14 @@ void x10rt_emu_allgather (x10rt_team team, x10rt_place role,
 		void *dbuf,
 		size_t el, size_t count, x10rt_completion_handler *ch, void *arg)
 {
-	fprintf(stderr, "X10RT: x10rt_emu_allgather is not implemented.\n");
-	abort();
+    x10rt_place sz = x10rt_team_sz(team);
+    x10rt_int progress;
+    for (x10rt_place i = 0; i < sz; i++) {
+        progress = 0;
+        x10rt_bcast(team, role, i, sbuf, static_cast<char *>(dbuf) + el * count * i, el, count, x10rt_net_one_setter, &progress);
+        while (progress != 1)  x10rt_probe();
+    }
+    ch(arg);
 }
 
 void x10rt_emu_allgatherv (x10rt_team team, x10rt_place role,
@@ -1372,15 +1459,31 @@ void x10rt_emu_allgatherv (x10rt_team team, x10rt_place role,
 		void *dbuf, const void *doffsets, const void *dcounts,
 		size_t el, x10rt_completion_handler *ch, void *arg)
 {
-	fprintf(stderr, "X10RT: x10rt_emu_allgatherv is not implemented.\n");
-	abort();
+    const x10rt_int *doffsets_i = static_cast<const x10rt_int *>(doffsets);
+    const x10rt_int *dcounts_i = static_cast<const x10rt_int *>(dcounts);
+    x10rt_place sz = x10rt_team_sz(team);
+    x10rt_int progress;
+    for (x10rt_place i = 0; i < sz; i++) {
+        progress = 0;
+        x10rt_bcast(team, role, i, sbuf, static_cast<char *>(dbuf) + el * doffsets_i[i], el, dcounts_i[i], x10rt_net_one_setter, &progress);
+        while (progress != 1) x10rt_probe();
+    }
+    ch(arg);
 }
 
 void x10rt_emu_alltoallv (x10rt_team team, x10rt_place role, const void *sbuf, const void *soffsets, const void *scounts,
 		void *dbuf, const void *doffsets, const void *dcounts, size_t el, x10rt_completion_handler *ch, void *arg)
 {
-	fprintf(stderr, "X10RT: x10rt_emu_alltoallv is not implemented.\n");
-	abort();
+    const x10rt_int *doffsets_i = static_cast<const x10rt_int *>(doffsets);
+    const x10rt_int *dcounts_i = static_cast<const x10rt_int *>(dcounts);
+    x10rt_place sz = x10rt_team_sz(team);
+    x10rt_int progress;
+    for (x10rt_place i = 0; i < sz; i++) {
+        progress = 0;
+        x10rt_scatterv(team, role, i, sbuf, soffsets, scounts, static_cast<char *>(dbuf) + el * doffsets_i[i], dcounts_i[i], el, x10rt_net_one_setter, &progress); 
+        while (progress != 1) x10rt_probe();
+    }
+    ch(arg);
 }
 
 static int sizeof_dtype(x10rt_red_type dtype)

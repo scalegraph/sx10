@@ -35,7 +35,7 @@ public final class OrderedPlaceGroup extends PlaceGroup {
   private val places:Rail[Place];
 
   /**
-   * Construct a OrderedPlaceGroup from a Sequence[Place]. 
+   * Construct a OrderedPlaceGroup from a Sequence[Place].
    */
   public def this(ps:Sequence[Place]) {
     places = new Array[Place](ps.size(), (i:int)=>ps(i));
