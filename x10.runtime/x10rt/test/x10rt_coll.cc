@@ -451,6 +451,216 @@ static void coll_test (x10rt_team team, x10rt_place role, x10rt_place per_place)
         delete [] doffsets;
         delete [] dcounts;
     }
+    
+    if (getenv("NO_GATHER") == NULL) {
+        x10rt_place root = 43 % x10rt_team_sz(team);
+        size_t count = 1234;
+        typedef double test_t;
+        test_t *sbuf = new test_t[count*x10rt_team_sz(team)];
+        size_t el = sizeof(test_t);
+        test_t *dbuf = new test_t[count*x10rt_team_sz(team)];
+
+        for (size_t i=0 ; i<count ; ++i) {
+            sbuf[i] = pow(test_t(role+2),test_t(role+1)) + i;
+        }
+        for (size_t i=0 ; i<count*x10rt_team_sz(team) ; ++i) dbuf[i] = -(test_t)i;
+
+        if (0==role)
+            std::cout << team << ": gather from " << root
+                      << " correctness (if no warnings follow then OK)..." << std::endl;
+        finished = 0;
+        x10rt_gather(team, role, root, sbuf, root==role ? dbuf : NULL, el, count, x10rt_one_setter, &finished);
+        while (!finished) { x10rt_probe(); }
+        if (root==role) {
+            for (size_t p=0 ; p<x10rt_team_sz(team) ; ++p) {
+                for (size_t i=0 ; i<count ; ++i) {
+                    test_t oracle = pow(test_t(p+2),test_t(p+1)) + i;
+                    if (dbuf[p*count+i] != oracle) {
+                        std::cout << team << ": role " << role
+                                  << " has received invalid data from gather: ["<<i<<"] = " << dbuf[i]
+                                  << " (not " << oracle << ")" << std::endl;
+                    }
+                }
+            }
+        }
+
+        if (0==role) std::cout << team << ": gather timing test..." << std::endl;
+        x10rt_barrier_b(team,role);
+        taken = -nano_time();
+        for (int i=0 ; i<long_tests ; ++i) {
+            finished = 0;
+            x10rt_gather(team, role, root, sbuf, dbuf, el, count, x10rt_one_setter, &finished);
+            while (!finished) { sched_yield(); x10rt_probe(); }
+        }
+        taken += nano_time();
+        if (0==role) std::cout << team << ": gather time:  "
+                               << ((double)taken)/long_tests/1000 << " μs" << std::endl;
+
+        delete [] sbuf;
+        delete [] dbuf;
+    }
+
+    if (getenv("NO_GATHERV")==NULL) {
+        x10rt_place root = 43 % x10rt_team_sz(team);
+        size_t count = 1234;
+        typedef double test_t;
+        test_t *sbuf = new test_t[count*x10rt_team_sz(team)];
+        size_t el = sizeof(test_t);
+        test_t *dbuf = new test_t[count*x10rt_team_sz(team)];
+        int *doffsets = new int[x10rt_team_sz(team)];
+        int *dcounts = new int[x10rt_team_sz(team)];
+
+        for (size_t i=0 ; i<count ; ++i) {
+            sbuf[i] = pow(test_t(role+2),test_t(role+1)) + i;
+        }
+        for (size_t p=0 ; p<x10rt_team_sz(team) ; ++p) {
+            dcounts[p] = count;
+            doffsets[p] = p * count;
+            for (size_t i=0 ; i<count ; ++i) {
+                dbuf[p*count+i] = -(test_t)i;
+            }
+        }
+
+        if (0==role)
+            std::cout << team << ": gatherv from " << root
+                      << " correctness (if no warnings follow then OK)..." << std::endl;
+        finished = 0;
+        x10rt_gatherv(team, role, root, sbuf, count, root==role ? dbuf : NULL, doffsets, dcounts,
+                      el, x10rt_one_setter, &finished);
+        while (!finished) { x10rt_probe(); }
+        if (role==root) {
+            for (size_t p=0 ; p<x10rt_team_sz(team) ; ++p) {
+                for (size_t i=0 ; i<count ; ++i) {
+                    test_t oracle = pow(test_t(p+2),test_t(p+1)) + i;
+                    if (dbuf[p*count+i] != oracle) {
+                        std::cout << team << ": role " << role
+                                  << " has received invalid data from gatherv: ["<<i<<"] = " << dbuf[i]
+                                  << " (not " << oracle << ")" << std::endl;
+                    }
+                }
+            }
+        }
+
+        if (0==role) std::cout << team << ": gatherv timing test..." << std::endl;
+        x10rt_barrier_b(team,role);
+        taken = -nano_time();
+        for (int i=0 ; i<long_tests ; ++i) {
+            finished = 0;
+            x10rt_gatherv(team, role, root, sbuf, count, root==role ? dbuf : NULL, doffsets, dcounts, el, x10rt_one_setter, &finished);
+            while (!finished) { sched_yield(); x10rt_probe(); }
+        }
+        taken += nano_time();
+        if (0==role) std::cout << team << ": gatherv time:  "
+                               << ((double)taken)/long_tests/1000 << " μs" << std::endl;
+                               
+        delete [] sbuf;
+        delete [] dbuf;
+        delete [] doffsets;
+        delete [] dcounts;
+    }
+
+    if (getenv("NO_ALLGATHER") == NULL) {
+        x10rt_place root = 43 % x10rt_team_sz(team);
+        size_t count = 1234;
+        typedef double test_t;
+        test_t *sbuf = new test_t[count*x10rt_team_sz(team)];
+        size_t el = sizeof(test_t);
+        test_t *dbuf = new test_t[count*x10rt_team_sz(team)];
+
+        for (size_t i=0 ; i<count ; ++i) {
+            sbuf[i] = pow(test_t(role+2),test_t(role+1)) + i;
+        }
+        for (size_t i=0 ; i<count*x10rt_team_sz(team) ; ++i) dbuf[i] = -(test_t)i;
+
+        if (0==role)
+            std::cout << team << ": allgather from " << root
+                      << " correctness (if no warnings follow then OK)..." << std::endl;
+        finished = 0;
+        x10rt_allgather(team, role, sbuf, dbuf, el, count, x10rt_one_setter, &finished);
+        while (!finished) { x10rt_probe(); }
+        for (size_t p=0 ; p<x10rt_team_sz(team) ; ++p) {
+            for (size_t i=0 ; i<count ; ++i) {
+                test_t oracle = pow(test_t(p+2),test_t(p+1)) + i;
+                if (dbuf[p*count+i] != oracle) {
+                    std::cout << team << ": role " << role
+                              << " has received invalid data from gather: ["<<i<<"] = " << dbuf[i]
+                              << " (not " << oracle << ")" << std::endl;
+                }
+            }
+        }
+
+        if (0==role) std::cout << team << ": allgather timing test..." << std::endl;
+        x10rt_barrier_b(team,role);
+        taken = -nano_time();
+        for (int i=0 ; i<long_tests ; ++i) {
+            finished = 0;
+            x10rt_allgather(team, role, sbuf, dbuf, el, count, x10rt_one_setter, &finished);
+            while (!finished) { sched_yield(); x10rt_probe(); }
+        }
+        taken += nano_time();
+        if (0==role) std::cout << team << ": allgather time:  "
+                               << ((double)taken)/long_tests/1000 << " μs" << std::endl;
+
+        delete [] sbuf;
+        delete [] dbuf;
+    }
+
+    if (getenv("NO_ALLGATHERV")==NULL) {
+        x10rt_place root = 43 % x10rt_team_sz(team);
+        size_t count = 1234;
+        typedef double test_t;
+        test_t *sbuf = new test_t[count*x10rt_team_sz(team)];
+        size_t el = sizeof(test_t);
+        test_t *dbuf = new test_t[count*x10rt_team_sz(team)];
+        int *doffsets = new int[x10rt_team_sz(team)];
+        int *dcounts = new int[x10rt_team_sz(team)];
+
+        for (size_t i=0 ; i<count ; ++i) {
+            sbuf[i] = pow(test_t(role+2),test_t(role+1)) + i;
+        }
+        for (size_t p=0 ; p<x10rt_team_sz(team) ; ++p) {
+            dcounts[p] = count;
+            doffsets[p] = p * count;
+            for (size_t i=0 ; i<count ; ++i) {
+                dbuf[p*count+i] = -(test_t)i;
+            }
+        }
+
+        if (0==role)
+            std::cout << team << ": allgatherv from " << root
+                      << " correctness (if no warnings follow then OK)..." << std::endl;
+        finished = 0;
+        x10rt_allgatherv(team, role, sbuf, count, dbuf, doffsets, dcounts,
+                      el, x10rt_one_setter, &finished);
+        while (!finished) { x10rt_probe(); }
+        for (size_t p=0 ; p<x10rt_team_sz(team) ; ++p) {
+            for (size_t i=0 ; i<count ; ++i) {
+                test_t oracle = pow(test_t(p+2),test_t(p+1)) + i;
+                if (dbuf[p*count+i] != oracle) {
+                    std::cout << team << ": role " << role
+                              << " has received invalid data from allgatherv: ["<<i<<"] = " << dbuf[i]
+                              << " (not " << oracle << ")" << std::endl;
+                }
+            }
+        }
+
+        if (0==role) std::cout << team << ": allgatherv timing test..." << std::endl;
+        x10rt_barrier_b(team,role);
+        taken = -nano_time();
+        for (int i=0 ; i<long_tests ; ++i) {
+            finished = 0;
+            x10rt_allgatherv(team, role, sbuf, count, dbuf, doffsets, dcounts, el, x10rt_one_setter, &finished);
+            while (!finished) { sched_yield(); x10rt_probe(); }
+        }
+        taken += nano_time();
+        if (0==role) std::cout << team << ": allgatherv time:  "
+                               << ((double)taken)/long_tests/1000 << " μs" << std::endl;
+
+        delete [] sbuf;
+        delete [] dbuf;
+        delete [] doffsets;
+        delete [] dcounts;
+    }
 }
 
 static void spmd_test (x10rt_team team, x10rt_place role, x10rt_place per_place)
