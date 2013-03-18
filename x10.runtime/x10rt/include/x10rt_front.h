@@ -999,40 +999,6 @@ X10RT_C void x10rt_alltoallv (x10rt_team team, x10rt_place role,
                     const void *sbuf, const void *soffsets, const void *scounts,
                     void *dbuf, const void *doffsets, const void *dcounts,
                     size_t el, x10rt_completion_handler *ch, void *arg);
-
-/** Asynchronously blocks until root have received the computed results.  This call is
- * similar to #x10rt_gather except that instead of root receiving the data from each
- * member, this data is instead reduced to a single array of count elements.  This allows
- * less data to be sent around the network, since intermediate results may be computed from a subset
- * of members, and these results are much smaller than the original data.  Note that sbuf and dbuf
- * are the same size, that being count elements of the given type.
- *
- * \param team Team that identifies the members who are participating in this operation
- *
- * \param role Our role in the team
- *
- * \param root The member who is supplied the data
- *
- * \param sbuf The data that is offered by each member
- *
- * \param dbuf The array into which the computed result will be received for this member
- *
- * \param op The operation to perform
- *
- * \param dtype The type of data being supplied
- *
- * \param count The number of elements in sbuf and dbuf
- *
- * \param ch Will be called when the operation is complete
- *
- * \param arg User pointer that is passed to the completion handler
- */
-X10RT_C void x10rt_reduce (x10rt_team team, x10rt_place role, x10rt_place root,
-                              const void *sbuf, void *dbuf,
-                              x10rt_red_op_type op,
-                              x10rt_red_type dtype,
-                              size_t count,
-                              x10rt_completion_handler *ch, void *arg);
 /** \} */
 
 #endif
