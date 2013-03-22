@@ -48,7 +48,7 @@ public struct Team {
      */
     private id: Int;
     private members: PlaceLocalHandle[Array[Place](1)];
-    private role: PlaceLocalHandle[Array[Int](1)];
+    private roleplh: PlaceLocalHandle[Array[Int](1)];
 
     /** Returns the id of the team.
      */
@@ -60,7 +60,7 @@ public struct Team {
 
     /** Returns the role of here
      */
-    public def role() : Array[Int](1) = this.role();
+    public def role() : Array[Int](1) = this.roleplh();
 
     /** Returns the PlaceGroup of the places of the team.
      */
@@ -93,7 +93,7 @@ public struct Team {
         val pg = new OrderedPlaceGroup(places);
         this.id = id;
         this.members = PlaceLocalHandle.make[Array[Place](1)](pg, ()=>places);
-        this.role = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>role(places, here));
+        this.roleplh = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>role(places, here));
     }
 
     /** Create a team by defining the place where each member lives.  This would usually be called before creating an async for each member of the team.
@@ -109,7 +109,7 @@ public struct Team {
         finish nativeMake(places, count, result);
         this.id = result(0);
         this.members = PlaceLocalHandle.make[Array[Place](1)](pg, ()=>pa);
-        this.role = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>role(pa, here));
+        this.roleplh = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>role(pa, here));
     }
 
     private static def nativeMake (places:IndexedMemoryChunk[Place], count:Int, result:IndexedMemoryChunk[Int]) : void {
