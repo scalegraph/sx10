@@ -90,19 +90,19 @@ public class File {
 
         // TODO currently Java backend only
         @Native("java", "#this.delete()")
-        @Native("c++", "false")
+        @Native("c++", "(#this)->del()")
         native def delete(): Boolean;
         @Native("java", "#this.listInternal()")
-        @Native("c++", "reinterpret_cast<x10::array::Array<x10::lang::String*>*>(X10_NULL)")
+        @Native("c++", "(#this)->list()")
         native def list(): Rail[String];
         @Native("java", "#this.mkdir()")
-        @Native("c++", "false")
+        @Native("c++", "(#this)->mkdir()")
         native def mkdir(): Boolean;
         @Native("java", "#this.mkdirs()")
-        @Native("c++", "false")
+        @Native("c++", "(#this)->mkdirs()")
         native def mkdirs(): Boolean;
         @Native("java", "#this.renameTo(#dest)")
-        @Native("c++", "false")
+        @Native("c++", "(#this)->renameTo(#dest)")
         native def renameTo(dest:NativeFile): Boolean;
     }
 
