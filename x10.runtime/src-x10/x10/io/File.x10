@@ -88,13 +88,12 @@ public class File {
         @Native("c++", "(#this)->setLastModified(#v)")
         native def setLastModified(v:Long): Boolean;
 
-        // TODO currently Java backend only
         @Native("java", "#this.delete()")
         @Native("c++", "(#this)->del()")
         native def delete(): Boolean;
         @Native("java", "#this.listInternal()")
         @Native("c++", "(#this)->list()")
-        native def list(): Rail[String];
+        native def list(): Array[String];
         @Native("java", "#this.mkdir()")
         @Native("c++", "(#this)->mkdir()")
         native def mkdir(): Boolean;
@@ -211,7 +210,7 @@ FileSystem operations
     public def canWrite(): Boolean = nativeFile().canWrite();
 
     public def delete(): Boolean = nativeFile().delete();
-    public def list(): Rail[String] = nativeFile().list();
+    public def list(): Array[String] = nativeFile().list();
     public def mkdir(): Boolean = nativeFile().mkdir();
     public def mkdirs(): Boolean = nativeFile().mkdirs();
     public def renameTo(dest:File): Boolean = nativeFile().renameTo(dest.nativeFile());

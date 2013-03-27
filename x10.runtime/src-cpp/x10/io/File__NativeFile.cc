@@ -13,7 +13,7 @@
 
 #include <x10/lang/String.h>
 
-#include <x10/lang/Rail.h>
+#include <x10/array/Array.h>
 
 #include <x10/io/File.h>
 
@@ -169,27 +169,27 @@ File__NativeFile::del() {
 		return (x10_boolean) (::rmdir(path->c_str()) == 0);
 }
 
-Rail<String*>*
+x10::array::Array<String*>*
 File__NativeFile::list() {
 	char sep = (char) (File::FMGL(SEPARATOR__get)().v);
 	DIR* dir;
 	struct dirent* de;
 	if((dir = ::opendir(path->c_str())) == NULL)
 		return NULL;
-	long i;
-	for(i = 0L; (de = ::readdir(dir)) != NULL; i++) ;
+	int i;
+	for(i = 0; (de = ::readdir(dir)) != NULL; i++) ;
 	::rewinddir(dir);
 	::readdir(dir);  // skip "."
 	::readdir(dir);  // skip ".."
-	Rail<String*>* rail = Rail<String*>::_make((x10_long)(i - 2L));
+	x10::array::Array<String*>* array = x10::array::Array<String*>::_make((x10_int)i - 2);
 	String* absPath = getAbsolutePath();
-	for(i = 0L; (de = ::readdir(dir)) != NULL; i++) {
-		char* tmp = (char*)::malloc(sizeof(char) * ((int)absPath->length() + 1 + ::strlen(de->d_name) + 1));
+	for(i = 0; (de = ::readdir(dir)) != NULL; i++) {
+		char* tmp = (char*)::malloc(sizeof(char) * (absPath->length() + 1 + ::strlen(de->d_name) + 1));
 		::sprintf(tmp, "%s%c%s", absPath->c_str(), sep, de->d_name);
-		rail->__set((x10_long)i, String::Steal(tmp));
+		array->__set((x10_int)i, String::Steal(tmp));
 	}
 	::closedir(dir);
-	return rail;
+	return array;
 }
 
 x10_boolean

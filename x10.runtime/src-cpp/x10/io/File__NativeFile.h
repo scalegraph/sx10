@@ -19,7 +19,7 @@
 
 #include <x10/lang/String.h>
 
-#include <x10/lang/Rail.h>
+#include <x10/array/Array.h>
 
 namespace x10 {
 
@@ -79,7 +79,7 @@ namespace x10 {
 
             virtual x10_boolean del();
 
-            virtual x10::lang::Rail<x10::lang::String*>* list();
+            virtual x10::array::Array<x10::lang::String*>* list();
 
             virtual x10_boolean mkdir();
 
