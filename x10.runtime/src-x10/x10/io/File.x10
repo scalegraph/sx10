@@ -88,21 +88,20 @@ public class File {
         @Native("c++", "(#this)->setLastModified(#v)")
         native def setLastModified(v:Long): Boolean;
 
-        // TODO currently Java backend only
         @Native("java", "#this.delete()")
-        @Native("c++", "false")
+        @Native("c++", "(#this)->del()")
         native def delete(): Boolean;
         @Native("java", "#this.listInternal()")
-        @Native("c++", "reinterpret_cast<x10::array::Array<x10::lang::String*>*>(X10_NULL)")
-        native def list(): Rail[String];
+        @Native("c++", "(#this)->list()")
+        native def list(): Array[String];
         @Native("java", "#this.mkdir()")
-        @Native("c++", "false")
+        @Native("c++", "(#this)->mkdir()")
         native def mkdir(): Boolean;
         @Native("java", "#this.mkdirs()")
-        @Native("c++", "false")
+        @Native("c++", "(#this)->mkdirs()")
         native def mkdirs(): Boolean;
         @Native("java", "#this.renameTo(#dest)")
-        @Native("c++", "false")
+        @Native("c++", "(#this)->renameTo(#dest)")
         native def renameTo(dest:NativeFile): Boolean;
     }
 
@@ -211,7 +210,7 @@ FileSystem operations
     public def canWrite(): Boolean = nativeFile().canWrite();
 
     public def delete(): Boolean = nativeFile().delete();
-    public def list(): Rail[String] = nativeFile().list();
+    public def list(): Array[String] = nativeFile().list();
     public def mkdir(): Boolean = nativeFile().mkdir();
     public def mkdirs(): Boolean = nativeFile().mkdirs();
     public def renameTo(dest:File): Boolean = nativeFile().renameTo(dest.nativeFile());
