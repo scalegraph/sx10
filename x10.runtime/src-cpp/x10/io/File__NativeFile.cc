@@ -169,6 +169,11 @@ File__NativeFile::del() {
 		return (x10_boolean) (::rmdir(path->c_str()) == 0);
 }
 
+int
+File__NativeFile::cmp(const void* a, const void* b) {
+	return strcmp((char*)a, (char*)b);
+}
+
 x10::array::Array<String*>*
 File__NativeFile::list() {
 	char sep = (char) (File::FMGL(SEPARATOR__get)().v);
@@ -176,19 +181,28 @@ File__NativeFile::list() {
 	struct dirent* de;
 	if((dir = ::opendir(path->c_str())) == NULL)
 		return NULL;
-	int i;
-	for(i = 0; (de = ::readdir(dir)) != NULL; i++) ;
+	int n;
+	for(n = 0; (de = ::readdir(dir)) != NULL; n++) ;
 	::rewinddir(dir);
-	::readdir(dir);  // skip "."
-	::readdir(dir);  // skip ".."
-	x10::array::Array<String*>* array = x10::array::Array<String*>::_make((x10_int)i - 2);
+	n -= 2;
+	char** tmpArray = (char**)malloc(sizeof(char*) * n);
 	String* absPath = getAbsolutePath();
-	for(i = 0; (de = ::readdir(dir)) != NULL; i++) {
-		char* tmp = (char*)::malloc(sizeof(char) * (absPath->length() + 1 + ::strlen(de->d_name) + 1));
-		::sprintf(tmp, "%s%c%s", absPath->c_str(), sep, de->d_name);
-		array->__set((x10_int)i, String::Steal(tmp));
+	int i = 0;
+	while((de = ::readdir(dir)) != NULL) {
+		if(strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
+		tmpArray[i] = (char*)::malloc(sizeof(char) * (absPath->length() + 1 + ::strlen(de->d_name) + 1));
+		::sprintf(tmpArray[i], "%s%c%s", absPath->c_str(), sep, de->d_name);
+		i++;
 	}
 	::closedir(dir);
+	for(int j = 0; j < n; j++) printf("%s\n", tmpArray[j]);
+	qsort(tmpArray, n, sizeof(char*), File__NativeFile::cmp);
+	for(int j = 0; j < n; j++) printf("%s\n", tmpArray[j]);
+	x10::array::Array<String*>* array = x10::array::Array<String*>::_make((x10_int)n);
+	for(i = 0; i < n; i++) {
+		array->__set((x10_int)i, String::Steal(tmpArray[i]));
+	}
+	free(tmpArray);
 	return array;
 }
 
