@@ -171,7 +171,7 @@ File__NativeFile::del() {
 
 int
 File__NativeFile::cmp(const void* a, const void* b) {
-	return strcmp((char*)a, (char*)b);
+	return strcmp(*(char**)a, *(char**)b);
 }
 
 x10::array::Array<String*>*
@@ -195,9 +195,7 @@ File__NativeFile::list() {
 		i++;
 	}
 	::closedir(dir);
-	for(int j = 0; j < n; j++) printf("%s\n", tmpArray[j]);
 	qsort(tmpArray, n, sizeof(char*), File__NativeFile::cmp);
-	for(int j = 0; j < n; j++) printf("%s\n", tmpArray[j]);
 	x10::array::Array<String*>* array = x10::array::Array<String*>::_make((x10_int)n);
 	for(i = 0; i < n; i++) {
 		array->__set((x10_int)i, String::Steal(tmpArray[i]));
