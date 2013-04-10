@@ -3180,7 +3180,7 @@ static void x10rt_net_handler_reduce (struct CollectivePostprocessEnv cpe) {
 
 
 void x10rt_net_reduce_scatter (x10rt_team team, x10rt_place role,
-                          const void *sbuf, void *dbuf, void *dcounts,
+                          void *sbuf, void *dbuf, void *dcounts,
                           x10rt_red_op_type op,
                           x10rt_red_type dtype,
                           x10rt_completion_handler *ch, void *arg)
@@ -3226,7 +3226,7 @@ static void x10rt_net_handler_reduce_scatter (struct CollectivePostprocessEnv cp
 }
 
 void x10rt_net_scan (x10rt_team team, x10rt_place role,
-                          const void *sbuf, void *dbuf,
+                          void *sbuf, void *dbuf,
                           x10rt_red_op_type op,
                           x10rt_red_type dtype,
                           size_t count,
