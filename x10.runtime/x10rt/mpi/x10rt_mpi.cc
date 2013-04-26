@@ -3196,7 +3196,7 @@ void x10rt_net_reduce_scatter (x10rt_team team, x10rt_place role,
 
     MPI_Comm comm = mpi_tdb.comm(team);
 
-    MPI_COLLECTIVE(Reduce_scatter, Ireduce_scatter, sbuf, dbuf, static_cast<int*>(dcounts), mpi_red_type(dtype), mpi_red_op_type(dtype, op), comm);
+    MPI_COLLECTIVE(Reduce_scatter, Ireduce_scatter, const_cast<void *>(sbuf), dbuf, static_cast<int*>(dcounts), mpi_red_type(dtype), mpi_red_op_type(dtype, op), comm);
 
     MPI_COLLECTIVE_SAVE(team);
     MPI_COLLECTIVE_SAVE(role);
@@ -3243,7 +3243,7 @@ void x10rt_net_scan (x10rt_team team, x10rt_place role,
 
     MPI_Comm comm = mpi_tdb.comm(team);
 
-    MPI_COLLECTIVE(Scan, Iscan, sbuf, dbuf, count, mpi_red_type(dtype), mpi_red_op_type(dtype, op), comm);
+    MPI_COLLECTIVE(Scan, Iscan, const_cast<void *>(sbuf), dbuf, count, mpi_red_type(dtype), mpi_red_op_type(dtype, op), comm);
 
     MPI_COLLECTIVE_SAVE(team);
     MPI_COLLECTIVE_SAVE(role);
