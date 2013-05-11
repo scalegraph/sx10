@@ -1070,7 +1070,7 @@ public final class Runtime {
         case Pragma.FINISH_DENSE:
             f = new FinishState.DenseFinish(); break;
         case Pragma.FINISH_NONE:
-            f = FinishState.NO_ASYNC_FINISH; break;
+            f = new FinishState.NoAsyncFinish(); break;
         default: 
             f = new FinishState.Finish();
         }

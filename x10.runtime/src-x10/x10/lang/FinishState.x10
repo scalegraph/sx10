@@ -253,8 +253,6 @@ abstract class FinishState {
         public final def waitForFinish() {}
         public def simpleLatch():SimpleLatch = null;
     }
-    
-    static NO_ASYNC_FINISH = new NoAsyncFinish();
 
     // a mapping from finish refs to local finish objects
     static class FinishStates {
