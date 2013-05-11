@@ -244,6 +244,15 @@ abstract class FinishState {
     }
     
     static UNCOUNTED_FINISH = new UncountedFinish();
+    
+    static class NoAsyncFinish extends FinishState {
+        public def notifySubActivitySpawn(place:Place) {}
+        public def notifyActivityCreation() {}
+        public def notifyActivityTermination() {}
+        public def pushException(t:Exception) { throw t; }
+        public final def waitForFinish() {}
+        public def simpleLatch():SimpleLatch = null;
+    }
 
     // a mapping from finish refs to local finish objects
     static class FinishStates {

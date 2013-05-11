@@ -30,6 +30,9 @@ public interface Pragma(pragma:Int) extends StatementAnnotation {
     // using two hops for finish update messages
     public static FINISH_DENSE = 5;
 
+    // a finish without any asyncs
+    public static FINISH_NONE = 6;
+
     public static FINISH_ASYNC_AND_BACK = FINISH_HERE;
     public static FINISH_ATEACH_UNIQUE = FINISH_SPMD;
 }
