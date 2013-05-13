@@ -92,8 +92,13 @@ public struct Team {
     private def this (id:Int, places:Array[Place](1)) {
         val pg = new OrderedPlaceGroup(places);
         this.id = id;
-        this.members = PlaceLocalHandle.make[Array[Place](1)](pg, ()=>places);
-        this.roleplh = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>role(places, here));
+        if (here == Place.FIRST_PLACE) {
+            this.members = PlaceLocalHandle.make[Array[Place](1)](pg, ()=>places);
+            this.roleplh = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>role(places, here));
+        } else {
+            this.members = at (Place.FIRST_PLACE) Team.WORLD.members;
+            this.roleplh = at (Place.FIRST_PLACE) Team.WORLD.roleplh;
+        }
     }
 
     /** Create a team by defining the place where each member lives.  This would usually be called before creating an async for each member of the team.
