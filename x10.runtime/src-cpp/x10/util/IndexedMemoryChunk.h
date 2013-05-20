@@ -224,7 +224,8 @@ namespace x10 {
                 allocMem = static_cast<T*>(x10aux::alloc_internal_congruent(size));
             } else {
                 size_t size = alignment + numElements*sizeof(T);
-                allocMem = x10aux::alloc<T>(size, containsPtrs);
+                //allocMem = x10aux::alloc<T>(size, containsPtrs);
+                allocMem = x10aux::alloc_chunk<T>(size);
                 if (zeroed) {
                     memset(allocMem, 0, size);
                 }
