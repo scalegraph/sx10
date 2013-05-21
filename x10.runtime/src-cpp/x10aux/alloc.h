@@ -108,16 +108,14 @@ namespace x10aux {
     }
 
     // this functin used in place of alloc_internal use ignore off page feature to avoid memory leak
-    template <class T> inline T * alloc_chunk(size_t size) {
+    inline void* alloc_chunk(size_t size, bool containsPtrs) {
         void * ret;
 #ifdef X10_USE_BDWGC
         if (!gc_init_done) {
             GC_INIT();
             gc_init_done = true;
         }
-        const x10aux::RuntimeType * rtt = x10aux::getRTT<T>();
-
-        if (rtt->containsPtrs == true) {
+        if (containsPtrs) {
             //printf("Alloc ref: %ld\n", size);
             ret = GC_MALLOC_IGNORE_OFF_PAGE(size);
         } else {
@@ -128,7 +126,7 @@ namespace x10aux {
 #else
         ret = ::malloc(size);
 #endif
-        return (T*) ret;
+        return ret;
     }
 
     template<class T>inline T* system_alloc(size_t size = sizeof(T)) {
