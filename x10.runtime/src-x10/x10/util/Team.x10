@@ -11,6 +11,7 @@
 
 package x10.util;
 
+import x10.compiler.Pragma;
 import x10.compiler.Inline;
 import x10.compiler.Native;
 import x10.compiler.NativeRep;
@@ -95,7 +96,8 @@ public struct Team {
         if (here == Place.FIRST_PLACE) {
             this.members = PlaceLocalHandle.make[Array[Place](1)](pg, ()=>places);
             this.roleplh = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>role(places, here));
-        } else {
+        }
+       else @Pragma(Pragma.FINISH_NONE) finish {
             this.members = at (Place.FIRST_PLACE) Team.WORLD.members;
             this.roleplh = at (Place.FIRST_PLACE) Team.WORLD.roleplh;
         }
