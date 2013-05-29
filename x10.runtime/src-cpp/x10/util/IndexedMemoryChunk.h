@@ -224,7 +224,6 @@ namespace x10 {
                 allocMem = static_cast<T*>(x10aux::alloc_internal_congruent(size));
             } else {
                 size_t size = alignment + numElements*sizeof(T);
-                //allocMem = x10aux::alloc<T>(size, containsPtrs);
                 allocMem = static_cast<T*>(x10aux::alloc_chunk(size, containsPtrs));
                 if (zeroed) {
                     memset(allocMem, 0, size);
@@ -445,7 +444,8 @@ template<class T> void x10::util::IndexedMemoryChunk<T>::_deserialize_body(x10au
         bool containsPtrs = x10aux::getRTT<T>()->containsPtrs;
         size_t alignment = X10_MIN_INDEXEDMEMORYCHUNK_ALIGNMENT;
         size_t size = alignment + len*sizeof(T);
-        T* allocMem = x10aux::alloc<T>(size, containsPtrs);
+        //T* allocMem = x10aux::alloc<T>(size, containsPtrs);
+        T* allocMem = static_cast<T*>(x10aux::alloc_chunk(size, containsPtrs));
         size_t alignDelta = alignment-1;
         size_t alignMask = ~alignDelta;
         size_t alignedMem = ((size_t)allocMem + alignDelta) & alignMask;
@@ -471,7 +471,8 @@ template<> inline void x10::util::IndexedMemoryChunk<TYPE>::_deserialize_body(x1
     } else {\
         size_t alignment = X10_MIN_INDEXEDMEMORYCHUNK_ALIGNMENT;\
         size_t size = alignment + len*sizeof(TYPE);\
-        TYPE* allocMem = x10aux::alloc<TYPE>(size, false);\
+        /*TYPE* allocMem = x10aux::alloc<TYPE>(size, false);*/\
+        TYPE* allocMem = static_cast<TYPE*>(x10aux::alloc_chunk(size, false)); \
         size_t alignDelta = alignment-1;\
         size_t alignMask = ~alignDelta;\
         size_t alignedMem = ((size_t)allocMem + alignDelta) & alignMask;\
@@ -512,7 +513,8 @@ namespace x10 {
                 size_t alignment = X10_MIN_INDEXEDMEMORYCHUNK_ALIGNMENT;
                 // Complex is serialized as two doubles
                 size_t size = alignment + len*2*sizeof(x10_double);
-                x10::lang::Complex* allocMem = x10aux::alloc<x10::lang::Complex>(size, false);
+                //x10::lang::Complex* allocMem = x10aux::alloc<x10::lang::Complex>(size, false);
+                x10::lang::Complex* allocMem = static_cast<x10::lang::Complex*>(x10aux::alloc_chunk(size, false));
                 size_t alignDelta = alignment-1;
                 size_t alignMask = ~alignDelta;
                 size_t alignedMem = ((size_t)allocMem + alignDelta) & alignMask;

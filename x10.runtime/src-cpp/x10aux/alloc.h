@@ -116,10 +116,8 @@ namespace x10aux {
             gc_init_done = true;
         }
         if (containsPtrs) {
-            //printf("Alloc ref: %ld\n", size);
             ret = GC_MALLOC_IGNORE_OFF_PAGE(size);
         } else {
-            //printf("Alloc non-ref %ld\n", size);
             ret = GC_MALLOC_ATOMIC_IGNORE_OFF_PAGE(size);
         }
 
