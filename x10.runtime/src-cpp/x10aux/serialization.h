@@ -110,13 +110,16 @@ namespace x10aux {
         int _size;
         const void** _ptrs;
         int _top;
+
+        boolean _require_lock;
+        reentrant_lock _lock;
+
         void _grow();
         void _add(const void* ptr);
         int _find(const void* ptr);
         const void* _get(int pos);
         const void* _set(int pos, const void* ptr);
         int _position(const void* p);
-        reentrant_lock _lock;
 
     public:
         addr_map(int init_size = 4) :
@@ -155,6 +158,7 @@ namespace x10aux {
             _S_("\t\tReplacing repeated reference "<<((void*) val)<<" of type "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" at "<<(_top+pos)<<" (absolute) in map: "<<this<<" by "<<((void*) newval));
             return val;
         }
+        void require_lock(boolean value) { _require_lock = value; }
         void reset() { _top = 0; assert (false); }
         ~addr_map() { x10aux::dealloc(_ptrs); }
     };
@@ -190,33 +194,41 @@ namespace x10aux {
         #endif
     }
 
+    //
+
     // A growable buffer for serializing into
     class serialization_buffer {
     private:
         char *buffer;
-        char *limit;
+     //   char *limit;
         char *cursor;
-        addr_map map;
+        addr_map *map;
+
+        bool is_map_shared;
         bool size_flag;
         size_t size;
-        reentrant_lock lock;
 
         void grow (size_t new_capacity);
 
     public:
 
-        serialization_buffer (void) : buffer(NULL), limit(NULL), cursor(NULL), map(), size(0) {}
+        serialization_buffer (void) : buffer(NULL), cursor(NULL), map(new addr_map), is_map_shared(false), size(0) {}
+
+        serialization_buffer (addr_map* shared_map) : buffer(NULL), cursor(NULL), map(shared_map), is_map_shared(true), size(0) {}
 
         ~serialization_buffer (void) {
-            if (buffer!=NULL) {
-                x10aux::system_dealloc(buffer);
-            }
+   //         if (buffer!=NULL) {
+   //             x10aux::system_dealloc(buffer);
+   //         }
         }
 
         void grow (void);
 
-        size_t length (void) { return cursor - buffer; }
-        size_t capacity (void) { return limit - buffer; }
+        void begin_count() { size_flag = true; size = 0; map->_require_lock = is_map_shared; }
+        void begin_write(char *buf) { buffer = buf; map->_require_lock = false; }
+
+        size_t length (void) { return size; }
+    //    size_t capacity (void) { return limit - buffer; }
 
         char *steal() { char *buf = buffer; buffer = NULL; return buf; }
         char *borrow() { return buffer; }
@@ -242,42 +254,56 @@ namespace x10aux {
     
     // Case for non-refs (includes simple primitives like x10_int and all structs)
     template<class T> struct serialization_buffer::Write {
-        static void _(serialization_buffer &buf, const T &val);
+    	 static void size(serialization_buffer &buf, const T &val);
+        static void write(serialization_buffer &buf, const T &val);
     };
     // General case for structs
-    template<class T> void serialization_buffer::Write<T>::_(serialization_buffer &buf,
+    template<class T> void serialization_buffer::Write<T>::size(serialization_buffer &buf,
+                                                             const T &val) {
+        T::_serialize(val,buf);
+    }
+    template<class T> void serialization_buffer::Write<T>::write(serialization_buffer &buf,
                                                              const T &val) {
         _S_("Serializing a "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" into buf: "<<&buf);
-        T::_serialize(val,buf);
+        size(buf,val);
     }
     // Specializations for the simple primitives
     #define PRIMITIVE_WRITE_AS_INT(TYPE) \
-    template<> inline void serialization_buffer::Write<TYPE>::_(serialization_buffer &buf, \
+	template<> inline void serialization_buffer::Write<TYPE>::size(serialization_buffer &buf, \
+																const TYPE &val) {\
+		buf.size += sizeof(TYPE); \
+	} \
+    template<> inline void serialization_buffer::Write<TYPE>::write(serialization_buffer &buf, \
                                                                 const TYPE &val) {\
         _S_("Serializing "<<star_rating<TYPE>()<<" a "<<ANSI_SER<<TYPENAME(TYPE)<<ANSI_RESET<<": " \
                           <<(int)val<<" into buf: "<<&buf); \
         /* *(TYPE*) buf.cursor = val; // Cannot do this because of alignment */ \
-        if (buf.cursor + sizeof(TYPE) >= buf.limit) buf.grow(); \
         copy_bytes(buf.cursor, &val, sizeof(TYPE)); \
         buf.cursor += sizeof(TYPE); \
     }
     #define PRIMITIVE_WRITE(TYPE) \
-    template<> inline void serialization_buffer::Write<TYPE>::_(serialization_buffer &buf, \
+		template<> inline void serialization_buffer::Write<TYPE>::size(serialization_buffer &buf, \
+																	const TYPE &val) {\
+			buf.size += sizeof(TYPE); \
+		} \
+    template<> inline void serialization_buffer::Write<TYPE>::write(serialization_buffer &buf, \
                                                                 const TYPE &val) {\
         _S_("Serializing "<<star_rating<TYPE>()<<" a "<<ANSI_SER<<TYPENAME(TYPE)<<ANSI_RESET<<": " \
                           <<val<<" into buf: "<<&buf); \
         /* *(TYPE*) buf.cursor = val; // Cannot do this because of alignment */ \
-        if (buf.cursor + sizeof(TYPE) >= buf.limit) buf.grow(); \
         copy_bytes(buf.cursor, &val, sizeof(TYPE)); \
         buf.cursor += sizeof(TYPE); \
     }
     #define PRIMITIVE_VOLATILE_WRITE(TYPE) \
-    template<> inline void serialization_buffer::Write<volatile TYPE>::_(serialization_buffer &buf, \
+		template<> inline void serialization_buffer::Write<volatile TYPE>::size(serialization_buffer &buf, \
+																	const TYPE &val) {\
+			buf.size += sizeof(TYPE); \
+		} \
+    template<> inline void serialization_buffer::Write<volatile TYPE>::write(serialization_buffer &buf, \
                                                                          const volatile TYPE &val) {\
         _S_("Serializing "<<star_rating<TYPE>()<<" a volatile "<<ANSI_SER<<TYPENAME(TYPE)<<ANSI_RESET<<": " \
                           <<val<<" into buf: "<<&buf); \
         /* *(TYPE*) buf.cursor = val; // Cannot do this because of alignment */ \
-        if (buf.cursor + sizeof(TYPE) >= buf.limit) buf.grow(); \
         copy_bytes(buf.cursor, const_cast<TYPE*>(&val), sizeof(TYPE)); \
         buf.cursor += sizeof(TYPE); \
     }
@@ -300,11 +326,11 @@ namespace x10aux {
 
     // Case for references e.g. Reference*
     template<class T> struct serialization_buffer::Write<T*> {
-        static void _(serialization_buffer &buf, T* val);
+   	 static void size(serialization_buffer &buf, T* val);
+        static void write(serialization_buffer &buf, T* val);
     };
-    template<class T> void serialization_buffer::Write<T*>::_(serialization_buffer &buf,
+    template<class T> void serialization_buffer::Write<T*>::size(serialization_buffer &buf,
                                                                    T* val) {
-        _S_("Serializing a "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" into buf: "<<&buf);
         if (NULL != val) {
             int pos = buf.map.previous_position(val);
             if (pos != 0) {
@@ -316,6 +342,11 @@ namespace x10aux {
         }
         x10::lang::Reference* valAsRef = reinterpret_cast<x10::lang::Reference*>(val);
         serialize_reference(buf, valAsRef);
+    }
+    template<class T> void serialization_buffer::Write<T*>::write(serialization_buffer &buf,
+                                                                   T* val) {
+        _S_("Serializing a "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" into buf: "<<&buf);
+        size(buf,val);
     }
 
     inline void serialization_buffer::copyIn(serialization_buffer &buf,
@@ -358,56 +389,13 @@ namespace x10aux {
 
     
     template<typename T> void serialization_buffer::write(const T &val) {
-        if (this.size_flag == true) {
-            Write<T>::_size(*this,val);
+        if (this.size_flag) {
+            Write<T>::size(*this,val);
         }
         else {
-            Write<T>::_(*this,val);
+            Write<T>::write(*this,val);
         }
     }
-
-    // Specializations size for the simple primitives
-    #define PRIMITIVE_SIZE_AS_INT(TYPE) \
-    template<> inline void serialization_buffer::Write<TYPE>::_size(serialization_buffer &buf, \
-                                                                const TYPE &val) {\
-        _S_("Serializing "<<star_rating<TYPE>()<<" a "<<ANSI_SER<<TYPENAME(TYPE)<<ANSI_RESET<<": " \
-                          <<(int)val<<" into buf: "<<&buf); \
-        lock.lock(); \
-        buf.size += sizeof(TYPE); \
-        lock.unlock(); \
-    }
-    #define PRIMITIVE_SIZE(TYPE) \
-    template<> inline void serialization_buffer::Write<TYPE>::_size(serialization_buffer &buf, \
-                                                                const TYPE &val) {\
-        _S_("Serializing "<<star_rating<TYPE>()<<" a "<<ANSI_SER<<TYPENAME(TYPE)<<ANSI_RESET<<": " \
-                          <<val<<" into buf: "<<&buf); \
-        lock.lock(); \
-        buf.size += sizeof(TYPE); \
-        lock.unlock(); \
-    }
-    #define PRIMITIVE_VOLATILE_SIZE(TYPE) \
-    template<> inline void serialization_buffer::Write<volatile TYPE>::_size(serialization_buffer &buf, \
-                                                                         const volatile TYPE &val) {\
-        _S_("Serializing "<<star_rating<TYPE>()<<" a volatile "<<ANSI_SER<<TYPENAME(TYPE)<<ANSI_RESET<<": " \
-                          <<val<<" into buf: "<<&buf); \
-        lock.lock(); \
-        buf.size += sizeof(TYPE); \
-        lock.unlock(); \
-    }
-    PRIMITIVE_SIZE(x10_boolean)
-    PRIMITIVE_SIZE_AS_INT(x10_byte)
-    PRIMITIVE_SIZE_AS_INT(x10_ubyte)
-    PRIMITIVE_SIZE(x10_char)
-    PRIMITIVE_SIZE(x10_short)
-    PRIMITIVE_SIZE(x10_ushort)
-    PRIMITIVE_SIZE(x10_int)
-    PRIMITIVE_SIZE(x10_uint)
-    PRIMITIVE_SIZE(x10_long)
-    PRIMITIVE_SIZE(x10_ulong)
-    PRIMITIVE_SIZE(x10_float)
-    PRIMITIVE_SIZE(x10_double)
-    //PRIMITIVE_SIZE(x10_addr_t) // already defined above
-
 
     // A buffer from which we can deserialize x10 objects
     class deserialization_buffer {
