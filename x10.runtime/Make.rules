@@ -174,7 +174,7 @@ ifndef CROSS_COMPILE_BLUEGENE
   # platform independent compiler flags and commands
   ifdef USE_GCC
     # CXX defaults to g++, so leave it alone (in case user overrides)
-    override MPICXX = mpicxx
+    override MPICXX = mpicxx -g
     override SHLINK = g++
     ifdef OPTIMIZE
       override CXXFLAGS += -O2 -finline-functions
