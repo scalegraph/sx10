@@ -224,8 +224,8 @@ namespace x10aux {
 
         void grow (void);
 
-        void begin_count() { size_flag = true; size = 0; map->_require_lock = is_map_shared; }
-        void begin_write(char *buf) { buffer = buf; map->_require_lock = false; }
+        void begin_count(void);
+        void begin_write(char *buf);
 
         size_t length (void) { return size; }
     //    size_t capacity (void) { return limit - buffer; }
@@ -254,7 +254,7 @@ namespace x10aux {
     
     // Case for non-refs (includes simple primitives like x10_int and all structs)
     template<class T> struct serialization_buffer::Write {
-    	 static void size(serialization_buffer &buf, const T &val);
+        static void size(serialization_buffer &buf, const T &val);
         static void write(serialization_buffer &buf, const T &val);
     };
     // General case for structs
@@ -367,9 +367,15 @@ namespace x10aux {
     
     // Case for captured stack variables e.g. captured_ref_lval<T> and captured_struct_lval<T>.
     template<class T> struct serialization_buffer::Write<captured_ref_lval<T> > {
-        static void _(serialization_buffer &buf, captured_ref_lval<T> val);
+        static void size(serialization_buffer &buf, captured_ref_lval<T> val);
+        static void write(serialization_buffer &buf, captured_ref_lval<T> val);
     };
-    template<class T> void serialization_buffer::Write<captured_ref_lval<T> >::_(serialization_buffer &buf,
+    template<class T> void serialization_buffer::Write<captured_ref_lval<T> >::size(serialization_buffer &buf,
+                                                                                 captured_ref_lval<T> val) {
+        x10_long capturedAddress = val.capturedAddress();
+        buf.size(capturedAddress);
+    }
+    template<class T> void serialization_buffer::Write<captured_ref_lval<T> >::write(serialization_buffer &buf,
                                                                                  captured_ref_lval<T> val) {
         _S_("Serializing a stack variable of type ref<"<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<"> into buf: "<<&buf);
         x10_long capturedAddress = val.capturedAddress();
@@ -377,9 +383,15 @@ namespace x10aux {
         buf.write(capturedAddress);
     }
     template<class T> struct serialization_buffer::Write<captured_struct_lval<T> > {
-        static void _(serialization_buffer &buf, captured_struct_lval<T> val);
+        static void size(serialization_buffer &buf, captured_struct_lval<T> val);
+        static void write(serialization_buffer &buf, captured_struct_lval<T> val);
     };
-    template<class T> void serialization_buffer::Write<captured_struct_lval<T> >::_(serialization_buffer &buf,
+    template<class T> void serialization_buffer::Write<captured_struct_lval<T> >::size(serialization_buffer &buf,
+                                                                                    captured_struct_lval<T> val) {
+        x10_long capturedAddress = val.capturedAddress();
+        buf.size(capturedAddress);
+    }
+    template<class T> void serialization_buffer::Write<captured_struct_lval<T> >::write(serialization_buffer &buf,
                                                                                     captured_struct_lval<T> val) {
         _S_("Serializing a stack variable of type "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" into buf: "<<&buf);
         x10_long capturedAddress = val.capturedAddress();

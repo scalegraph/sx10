@@ -177,6 +177,30 @@ namespace x10aux {
     void coll_handler(void *arg);
     void *coll_enter2(void *arg);
     void coll_handler2(x10rt_team t, void *arg);
+
+    templete <typename T> int count_ser_size(addr_map shared_map, T* data, int data_offset, int data_count) {
+        serialization_buffer buf(shared_map);
+        buf.begin_count();
+        for (int i = 0; i < data_count; ++i) {
+            buf.write(data + data_offset + i);
+        }
+        return buf.length();
+    }
+
+    templete <typename T> int write_ser_data(addr_map shared_map, T* data, int data_offset, int data_count, void* imc_ptr) {
+        serialization_buffer buf(shared_map);
+        buf.begin_write(imc_ptr);
+        for (int i = 0; i < data_count; ++i) {
+            buf.write(data + data_offset + i);
+        }
+    }
+
+    templete <typename T> int read_deser_data(addr_map shared_map, queue<int> resolv_queue, T* data, int data_offset, int data_count, void* imc_ptr, int len) {
+        deserialization_buffer buf(imc_ptr, len, shared_map, resolv_queue);
+        for (int i = 0; i < data_count; ++i) {
+            data[data_offset + i] = buf.read<T>();
+        }
+    }
 }
 #endif
 // vim:tabstop=4:shiftwidth=4:expandtab
