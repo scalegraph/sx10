@@ -42,13 +42,11 @@ void* addr_map::_get(void* key) {
 void serialization_buffer::begin_count(void) {
     size_flag = true;
     buffer = cursor = NULL;
-    map->require_lock(is_map_shared);
 }
 
-void serialization_buffer::begin_write(char *base, char *buf) {
-	buffer = base;
-	cursor = buf;
-    map->require_lock(false);
+void serialization_buffer::begin_write(char *buf) {
+    size_flag = false;
+    buffer = cursor = buf;
 }
 
 void serialization_buffer::serialize_reference(serialization_buffer &buf,
