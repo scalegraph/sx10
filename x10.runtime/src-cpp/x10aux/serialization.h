@@ -20,9 +20,6 @@
 #include <x10aux/deserialization_dispatcher.h>
 #include <x10/lang/RuntimeNatives.h>
 
-#include <limits>
-#include <map>
-//#include <unordered_map>
 
 /* --------------------- 
  * Serialization support
@@ -104,101 +101,53 @@ namespace x10 {
     }
 }
 
-namespace x10aux {
-
-	template <class T>
-	class gc_allocator
-	{
-	public:
-		typedef size_t size_type;
-		typedef ptrdiff_t difference_type;
-		typedef T* pointer;
-		typedef const T* const_pointer;
-		typedef T& reference;
-		typedef const T& const_reference;
-		typedef T value_type;
-
-		template <class U>
-		struct rebind {
-			typedef gc_allocator<U> other;
-		};
-
-		gc_allocator() throw(){}
-		gc_allocator(const gc_allocator&) throw(){}
-		template <class U> gc_allocator(const gc_allocator<U>&) throw(){}
-		~gc_allocator() throw(){}
-
-		pointer allocate(size_type num, const void* hint = 0) {
-			return x10aux::alloc<T>(num * sizeof(T), true);
-		}
-		void construct(pointer p, const T& value) {
-			new( (void*)p ) T(value);
-		}
-		void deallocate(pointer p, size_type num) {
-			x10aux::dealloc( p );
-		}
-		void destroy(pointer p) { p->~T(); }
-		pointer address(reference value) const { return &value; }
-		const_pointer address(const_reference value) const { return &value; }
-		size_type max_size() const throw() {
-			return std::numeric_limits<size_t>::max() / sizeof(T);
-		}
-	};
-
-}
-
-template <class T1, class T2>
-bool operator==(const x10aux::gc_allocator<T1>&, const x10aux::gc_allocator<T2>&) throw() { return true; }
-
-template <class T1, class T2>
-bool operator!=(const x10aux::gc_allocator<T1>&, const x10aux::gc_allocator<T2>&) throw() { return false; }
-
 
 namespace x10aux {
 
     // addr_map can be used to detect and properly handle cycles when serializing object graphs
     // it can also be used to avoid serializing two copies of an object when serializing a DAG.
     class addr_map {
-        // NB: Must call x10aux::alloc here because _ptrs may hold the only live reference
-        //     to temporary objects allocated by custom serialization serialize methods.
-        //     If we don't keep those objects live here, the storage may be reused during the
-        //     serialization operation, resulting in incorrect detection of a repeated reference!
-    	typedef std::map<void*, void*, std::less<void*>, gc_allocator< std::pair<void*, void*> > > map_type;
-    	map_type map;
-
-        void* _get_or_add(void* key, void* val);
-        void _add(void* key, void* val);
-        void* _get(void* key);
-
+        int _size;
+        const void** _ptrs;
+        int _top;
+        void _grow();
+        void _add(const void* ptr);
+        int _find(const void* ptr);
+        const void* _get(int pos);
+        const void* _set(int pos, const void* ptr);
+        int _position(const void* p);
     public:
-        addr_map(int init_size = 4)
+        addr_map(int init_size = 4) :
+            _size(init_size),
+                // NB: Must call x10aux::alloc here because _ptrs may hold the only live reference
+                //     to temporary objects allocated by custom serialization serialize methods.
+                //     If we don't keep those objects live here, the storage may be reused during the
+                //     serialization operation, resulting in incorrect detection of a repeated reference!
+            _ptrs(new (x10aux::alloc<const void*>((init_size)*sizeof(const void*), true)) const void*[init_size]),
+            _top(0)
         { }
         /* Returns 0 if the pointer has not been recorded yet */
-        template<class T> x10_long get_position_or_add(const T* r, x10_long pos) {
-            x10_long prev_pos = (x10_long)_get_or_add((void*)r, (void*)pos);
-            if (pos == prev_pos) {
-                _S_("\t\tRecorded new reference "<<((void*)r)<<" of type "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" at "<<pos<<" in map: "<<this);
+        template<class T> int previous_position(const T* r) {
+            int pos = _position((void*)r);
+            if (pos == 0) {
+                _S_("\t\tRecorded new reference "<<((void*)r)<<" of type "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" at "<<(_top+pos-1)<<" (absolute) in map: "<<this);
             } else {
-                _S_("\t\tFound repeated reference "<<((void*)r)<<" of type "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" at "<<prev_pos<<" in map: "<<this);
+                _S_("\t\tFound repeated reference "<<((void*)r)<<" of type "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" at "<<(_top+pos)<<" (absolute) in map: "<<this);
             }
-            return prev_pos;
-        }
-        template<class T> x10_long get_position(T* r) {
-        	x10_long pos = (x10_long)_get((void*)r);
-            _S_("\t\tRetrieving repeated reference "<<((void*) r)<<" of type "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" at "<<pos<<" (absolute) in map: "<<this);
             return pos;
         }
-        template<class T> void add_at_position(const T* r, x10_long pos) {
-            _add((void*)pos, (void*)r);
-            if (pos == 0) {
-                _S_("\t\tRecorded new reference "<<((void*)r)<<" of type "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" at "<<pos<<" (absolute) in map: "<<this);
-            }
-        }
-        template<class T> T* get_at_position(x10_long pos) {
-            T* val = (T*)_get((void*)pos);
-            _S_("\t\tRetrieving repeated reference "<<((void*) val)<<" of type "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" at "<<pos<<" (absolute) in map: "<<this);
+        template<class T> T* get_at_position(int pos) {
+            T* val = (T*)_get(pos);
+            _S_("\t\tRetrieving repeated reference "<<((void*) val)<<" of type "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" at "<<(_top+pos)<<" (absolute) in map: "<<this);
             return val;
         }
+        template<class T> T* set_at_position(int pos, T* newval) {
+            T* val = (T*)_set(pos, newval);
+            _S_("\t\tReplacing repeated reference "<<((void*) val)<<" of type "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" at "<<(_top+pos)<<" (absolute) in map: "<<this<<" by "<<((void*) newval));
+            return val;
+        }
+        void reset() { _top = 0; assert (false); }
+        ~addr_map() { x10aux::dealloc(_ptrs); }
     };
 
 
@@ -235,32 +184,47 @@ namespace x10aux {
     // A growable buffer for serializing into
     class serialization_buffer {
     private:
-    	char *buffer;
+        char *buffer;
+        char *limit;
         char *cursor;
         addr_map map;
         bool size_flag;
+        bool write_flag;
+
+        void grow (size_t new_capacity);
 
     public:
 
-        serialization_buffer (void) : buffer(NULL), cursor(NULL), map() {}
+        serialization_buffer (void) : buffer(NULL), limit(NULL), cursor(NULL), map(), size_flag(false), write_flag(false) {}
 
-        ~serialization_buffer (void) { }
+        ~serialization_buffer (void) {
+            if (buffer!=NULL && write_flag == false) {
+                x10aux::system_dealloc(buffer);
+            }
+        }
 
-        void begin_count(void);
-        void begin_write(char *buf);
-        char* current_position() { return cursor; }
+        void begin_count(void) { size_flag = true; buffer = cursor = NULL; }
+        void begin_write(char *base, char *buf, int count) {
+            size_flag = false;
+            write_flag = true;
+            buffer = base;
+            cursor = buf;
+            limit = cursor + count + 1;
+        }
+
+        void grow (void);
 
         size_t length (void) { return cursor - buffer; }
-    //    size_t capacity (void) { return limit - buffer; }
+        size_t capacity (void) { return limit - buffer; }
 
-    //    char *steal() { char *buf = buffer; buffer = NULL; return buf; }
-        char *borrow() { return buffer; } // TODO:
+        char *steal() { char *buf = buffer; buffer = NULL; return buf; }
+        char *borrow() { return buffer; }
 
         static void serialize_reference(serialization_buffer &buf, x10::lang::Reference*);
         static void copyIn(serialization_buffer &buf, const void* data, x10_long length, size_t sizeOfT);
 
         template <class T> void manually_record_reference(T* val) {
-            map.get_position_or_add(val, length());
+            map.previous_position(val);
         }
         
         // Default case for primitives and other things that never contain pointers
@@ -301,32 +265,35 @@ namespace x10aux {
         _S_("Serializing "<<star_rating<TYPE>()<<" a "<<ANSI_SER<<TYPENAME(TYPE)<<ANSI_RESET<<": " \
                           <<(int)val<<" into buf: "<<&buf); \
         /* *(TYPE*) buf.cursor = val; // Cannot do this because of alignment */ \
+        if (buf.cursor + sizeof(TYPE) >= buf.limit) buf.grow(); \
         copy_bytes(buf.cursor, &val, sizeof(TYPE)); \
         buf.cursor += sizeof(TYPE); \
     }
     #define PRIMITIVE_WRITE(TYPE) \
-		template<> inline void serialization_buffer::Write<TYPE>::size(serialization_buffer &buf, \
-																	const TYPE &val) {\
-			buf.cursor += sizeof(TYPE); \
-		} \
+	template<> inline void serialization_buffer::Write<TYPE>::size(serialization_buffer &buf, \
+																const TYPE &val) {\
+		buf.cursor += sizeof(TYPE); \
+	} \
     template<> inline void serialization_buffer::Write<TYPE>::write(serialization_buffer &buf, \
                                                                 const TYPE &val) {\
         _S_("Serializing "<<star_rating<TYPE>()<<" a "<<ANSI_SER<<TYPENAME(TYPE)<<ANSI_RESET<<": " \
                           <<val<<" into buf: "<<&buf); \
         /* *(TYPE*) buf.cursor = val; // Cannot do this because of alignment */ \
+        if (buf.cursor + sizeof(TYPE) >= buf.limit) buf.grow(); \
         copy_bytes(buf.cursor, &val, sizeof(TYPE)); \
         buf.cursor += sizeof(TYPE); \
     }
     #define PRIMITIVE_VOLATILE_WRITE(TYPE) \
-		template<> inline void serialization_buffer::Write<volatile TYPE>::size(serialization_buffer &buf, \
-																	const volatile TYPE &val) {\
-			buf.cursor += sizeof(TYPE); \
-		} \
+	template<> inline void serialization_buffer::Write<volatile TYPE>::size(serialization_buffer &buf, \
+																const volatile TYPE &val) {\
+		buf.cursor += sizeof(TYPE); \
+	} \
     template<> inline void serialization_buffer::Write<volatile TYPE>::write(serialization_buffer &buf, \
                                                                          const volatile TYPE &val) {\
         _S_("Serializing "<<star_rating<TYPE>()<<" a volatile "<<ANSI_SER<<TYPENAME(TYPE)<<ANSI_RESET<<": " \
                           <<val<<" into buf: "<<&buf); \
         /* *(TYPE*) buf.cursor = val; // Cannot do this because of alignment */ \
+        if (buf.cursor + sizeof(TYPE) >= buf.limit) buf.grow(); \
         copy_bytes(buf.cursor, const_cast<TYPE*>(&val), sizeof(TYPE)); \
         buf.cursor += sizeof(TYPE); \
     }
@@ -349,18 +316,17 @@ namespace x10aux {
 
     // Case for references e.g. Reference*
     template<class T> struct serialization_buffer::Write<T*> {
-   	 static void size(serialization_buffer &buf, T* val);
+       	static void size(serialization_buffer &buf, T* val);
         static void write(serialization_buffer &buf, T* val);
     };
     template<class T> void serialization_buffer::Write<T*>::size(serialization_buffer &buf,
                                                                    T* val) {
         if (NULL != val) {
-        	  x10_long cur_pos = buf.length();
-            x10_long prev_pos = buf.map.get_position_or_add(val, cur_pos);
-            if (prev_pos != cur_pos) {
-                _S_("\tRepeated ("<<cur_pos<<") serialization of a "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" into buf: "<<&buf);
+            int pos = buf.map.previous_position(val);
+            if (pos != 0) {
+                _S_("\tRepeated ("<<pos<<") serialization of a "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" into buf: "<<&buf);
                 buf.write((x10aux::serialization_id_t) 0xFFFF);
-                buf.write((x10_long) cur_pos);
+                buf.write((x10_int) pos);
                 return;
             }
         }
@@ -379,6 +345,7 @@ namespace x10aux {
                                              size_t sizeOfT) {
         size_t numBytes = length * sizeOfT;
         if (!buf.size_flag) {
+            if (buf.cursor + numBytes >= buf.limit) buf.grow(buf.length() + numBytes);
             copy_bulk(buf.cursor, data, length, sizeOfT);
         }
         buf.cursor += numBytes;
@@ -429,32 +396,6 @@ namespace x10aux {
         }
     }
 
-    class serialization_result {
-    	char* buffer;
-    	size_t _length;
-    public:
-    	serialization_result() :buffer(NULL) { }
-    	~serialization_result() {
-			if (buffer!=NULL) {
-				x10aux::system_dealloc(buffer);
-			}
-    	}
-
-    	template <typename T> void serialize(const T &val) {
-    		assert(buffer == NULL);
-    		serialization_buffer buf;
-    		buf.begin_count();
-    		buf.write(val);
-    		_length = buf.length();
-    		buffer = x10aux::system_alloc<char>(_length);
-    		buf.begin_write(buffer, buffer);
-    		buf.write(val);
-    	}
-
-        size_t length (void) { return _length; }
-        char *steal() { char *buf = buffer; buffer = NULL; return buf; }
-        char *borrow() { return buffer; }
-    };
 
     // A buffer from which we can deserialize x10 objects
     class deserialization_buffer {
@@ -488,22 +429,22 @@ namespace x10aux {
         }
         // This has to be called every time a reference is created, but
         // before the rest of the object is deserialized!
-        template<typename T> void record_reference(T* r);
+        template<typename T> bool record_reference(T* r);
 
-//        template<typename T> void update_reference(T* r, T* newr);
+        template<typename T> void update_reference(T* r, T* newr);
 
         // So it can access the addr_map
         template<class T> friend struct Read;
     };
 
-    template<typename T> void deserialization_buffer::record_reference(T* r) {
-        map.add_at_position(r, cursor - buffer);
-        /*if (pos != 0) {
+    template<typename T> bool deserialization_buffer::record_reference(T* r) {
+        int pos = map.previous_position(r);
+        if (pos != 0) {
             _S_("\t"<<ANSI_SER<<ANSI_BOLD<<"OOPS!"<<ANSI_RESET<<" Attempting to repeatedly record a reference "<<((void*)r)<<" (already found at position "<<pos<<") in buf: "<<this);
         }
-        return !pos;*/
+        return !pos;
     }
-/*
+
     template<typename T> void deserialization_buffer::update_reference(T* r, T* newr) {
         int pos = map.previous_position(r);
         if (pos == 0) {
@@ -511,7 +452,7 @@ namespace x10aux {
         }
         map.set_at_position(pos, newr);
     }
- */
+    
     // Case for non-refs (includes simple primitives like x10_int and all structs)
     template<class T> struct deserialization_buffer::Read {
         GPUSAFE static T _(deserialization_buffer &buf);
@@ -574,12 +515,10 @@ namespace x10aux {
         _S_("Deserializing a "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" from buf: "<<&buf);
         x10aux::serialization_id_t code = buf.peek<x10aux::serialization_id_t>();
         if (code == (x10aux::serialization_id_t) 0xFFFF) {
-        	/* TODO:
             buf.read<x10aux::serialization_id_t>();
             int pos = (int) buf.read<x10_int>();
             _S_("\tRepeated ("<<pos<<") deserialization of a "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" from buf: "<<&buf);
             return buf.map.get_at_position<T>(pos);
-            */
         }
         // Deserialize it
         return reinterpret_cast<T*>(deserialize_reference(buf));
@@ -618,12 +557,12 @@ namespace x10aux {
     void set_prof_data(x10::lang::Runtime__Profile *prof, unsigned long long bytes, unsigned long long nanos);
 
     template <class T> T deep_copy(T o, x10::lang::Runtime__Profile *prof) {
-    	serialization_result buf;
+        serialization_buffer buf;
         unsigned long long before_nanos, before_bytes;
         if (prof!=NULL) {
             before_nanos = x10::lang::RuntimeNatives::nanoTime();
         }
-        buf.serialize(o);
+        buf.write(o);
         deserialization_buffer buf2(buf.borrow(), buf.length());
         T res = buf2.read<T>();
         if (prof!=NULL) {
@@ -632,33 +571,29 @@ namespace x10aux {
         return res;
     }
 
-    ///////////////////////////////////////////////
-
-    template <typename T> int count_ser_size(addr_map* shared_map, T* data, int offset, int count) {
-        serialization_buffer buf(shared_map);
+    template <typename T> int count_ser_size(T* data, int offset, int count) {
+        serialization_buffer buf;
         buf.begin_count();
         for (int i = 0; i < count; ++i) {
-            buf.write(data + offset + i);
+            buf.write(data[offset + i]);
         }
         return buf.length();
     }
 
-    template <typename T> void write_ser_data(addr_map* shared_map, T* data, int offset, int count, char* imc_ptr, int imc_offset) {
-        serialization_buffer buf(shared_map);
-        buf.begin_write(imc_ptr, imc_ptr + imc_offset);
-        for (int i = 0; i < count; ++i) {
-            buf.write(data + offset + i);
+    template <typename T> void write_ser_data(T* data, int data_offset, int data_count, signed char* imc_ptr, int imc_offset, int imc_count) {
+        serialization_buffer buf;
+        buf.begin_write((char*)imc_ptr, (char*)imc_ptr + imc_offset, imc_count);
+        for (int i = 0; i < data_count; ++i) {
+            buf.write(data[data_offset + i]);
         }
-        buf.check(imc_ptr + count);
     }
-/*
-    template <typename T> int read_deser_data(addr_map* shared_map, queue<int> resolv_queue, T* data, int data_offset, int data_count, void* imc_ptr, int len) {
-        deserialization_buffer buf(imc_ptr, len, shared_map, resolv_queue);
+
+    template <typename T> void read_deser_data(T* data, int data_offset, int data_count, signed char* imc_ptr, int imc_offset, int imc_count) {
+        deserialization_buffer buf((char*)imc_ptr + imc_offset, imc_count);
         for (int i = 0; i < data_count; ++i) {
             data[data_offset + i] = buf.read<T>();
         }
     }
-*/
 }
 
 #endif

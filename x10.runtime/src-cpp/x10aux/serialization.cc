@@ -21,32 +21,67 @@
 using namespace x10aux;
 using namespace x10::lang;
 
-void* addr_map::_get_or_add(void* key, void* val) {
-	map_type::iterator it = map.find(key);
-	if(it != map.end()) {
-		map.insert( std::pair<void*, void*>( key, val ) );
-		return val;
-	}
-    return it->second;
+void addr_map::_grow() {
+    int newSize = _size << 1;
+    _ptrs = x10aux::realloc(_ptrs, newSize*(sizeof(const void*)));
+    _size = newSize;
 }
 
-void addr_map::_add(void* key, void* val) {
-	assert(map.find(key) == map.end());
-	map[key] = val;
+void addr_map::_add(const void* ptr) {
+    if (_top == _size) {
+        _grow();
+    }
+    _ptrs[_top++] = ptr;
 }
 
-void* addr_map::_get(void* key) {
-	return map[key];
+int addr_map::_find(const void* ptr) {
+    for (int i = -1; i >= -_top; i--) {
+        if (_ptrs[_top+i] == ptr) {
+            return i;
+        }
+    }
+    return 0;
 }
 
-void serialization_buffer::begin_count(void) {
-    size_flag = true;
-    buffer = cursor = NULL;
+const void* addr_map::_get(int pos) {
+    if (pos < -_top || pos >= 0)
+        return NULL;
+    return _ptrs[_top+pos];
 }
 
-void serialization_buffer::begin_write(char *buf) {
-    size_flag = false;
-    buffer = cursor = buf;
+const void* addr_map::_set(int pos, const void* ptr) {
+    if (pos < -_top || pos >= 0)
+        return NULL;
+    const void* old = _ptrs[_top+pos];
+    _ptrs[_top+pos] = ptr;
+    return old;
+}
+
+int addr_map::_position(const void* p) {
+    int pos = _find(p);
+    if (pos != 0) {
+        return pos;
+    }
+    _add(p);
+    return 0;
+}
+
+void serialization_buffer::grow (void) {
+    size_t old_capacity = capacity();
+    size_t new_capacity = (size_t) (old_capacity * 2.0); // increase capacity by a factor
+    if (new_capacity<16) new_capacity = 16; // biggest primitive we might serialise -- a SIMD variable
+
+    grow(new_capacity);
+}
+
+void serialization_buffer::grow (size_t new_capacity) {
+    size_t new_length = length(); // no change in used portion of buffer
+    
+    buffer = (char*)x10aux::system_realloc(buffer, new_capacity);
+
+    // update pointers to use (potentially) new buffer
+    limit = buffer + new_capacity;
+    cursor = buffer + new_length;
 }
 
 void serialization_buffer::serialize_reference(serialization_buffer &buf,
