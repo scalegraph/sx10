@@ -643,18 +643,18 @@ public struct Team {
             val ser_offs = new Array[Int](places);
             val ser_counts = new Array[Int](places);
             val ser_src = ParallelSerialization.serialize(src.raw(), src_offs.raw(), src_counts.raw(), ser_offs.raw(), ser_counts.raw());
-            val der_counts = new Array[Int](places);
-            finish nativeAlltoall(id, role, ser_counts.raw(), 0, der_counts.raw(), 0, places);
-            val der_offs = new Array[Int](places + 1);
-            der_offs(0) = 0;
-            for (i in 0..(places-1)) der_offs(i+1) = der_counts(i) + der_offs(i);
-            val der_dst = new Array[Byte](der_offs(places));
-            finish nativeAlltoallv(id, role, ser_src, ser_offs.raw(), ser_counts.raw(), der_dst.raw(), der_offs.raw(), der_counts.raw());
+            val deser_counts = new Array[Int](places);
+            finish nativeAlltoall(id, role, ser_counts.raw(), 0, deser_counts.raw(), 0, 1);
+            val deser_offs = new Array[Int](places + 1);
+            deser_offs(0) = 0;
+            for (i in 0..(places-1)) deser_offs(i+1) = deser_counts(i) + deser_offs(i);
+            val deser_dst = new Array[Byte](deser_offs(places));
+            finish nativeAlltoallv(id, role, ser_src, ser_offs.raw(), ser_counts.raw(), deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
             val dst_counts = new Array[Int](places, count);
             val dst_offs = new Array[Int](places + 1);
             dst_offs(0) = 0;
             for (i in 0..(places-1)) dst_offs(i+1) = dst_counts(i) + dst_offs(i);
-            ParallelSerialization.deserialize(dst.raw(), dst_offs.raw(), dst_counts.raw(), der_dst.raw(), der_offs.raw(), der_counts.raw());
+            ParallelSerialization.deserialize(dst.raw(), dst_offs.raw(), dst_counts.raw(), deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
         }
         else {
             finish nativeAlltoall(id, role, src.raw(), src_off, dst.raw(), dst_off, count);
@@ -681,14 +681,14 @@ public struct Team {
             val ser_counts = new Array[Int](places);
             val ser_src = ParallelSerialization.serialize(src.raw(), src_offs.raw(), src_counts.raw(), ser_offs.raw(), ser_counts.raw());
 
-            val der_counts = new Array[Int](places);
-            finish nativeAlltoall(id, role, ser_counts.raw(), 0, der_counts.raw(), 0, places);
-            val der_offs = new Array[Int](places + 1);
-            der_offs(0) = 0;
-            for (i in 0..(places-1)) der_offs(i+1) = der_counts(i) + der_offs(i);
-            val der_dst = new Array[Byte](der_offs(places));
-            finish nativeAlltoallv(id, role, ser_src, ser_offs.raw(), ser_counts.raw(), der_dst.raw(), der_offs.raw(), der_counts.raw());
-            ParallelSerialization.deserialize(dst.raw(), dst_offs.raw(), dst_counts.raw(), der_dst.raw(), der_offs.raw(), der_counts.raw());
+            val deser_counts = new Array[Int](places);
+            finish nativeAlltoall(id, role, ser_counts.raw(), 0, deser_counts.raw(), 0, 1);
+            val deser_offs = new Array[Int](places + 1);
+            deser_offs(0) = 0;
+            for (i in 0..(places-1)) deser_offs(i+1) = deser_counts(i) + deser_offs(i);
+            val deser_dst = new Array[Byte](deser_offs(places));
+            finish nativeAlltoallv(id, role, ser_src, ser_offs.raw(), ser_counts.raw(), deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+            ParallelSerialization.deserialize(dst.raw(), dst_offs.raw(), dst_counts.raw(), deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
         }
         else {
             finish nativeAlltoallv(id, role, src.raw(), src_offs.raw(), src_counts.raw(), dst.raw(), dst_offs.raw(), dst_counts.raw());
