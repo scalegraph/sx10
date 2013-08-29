@@ -23,6 +23,10 @@
 #include <limits>
 #include <map>
 
+#if __GNUC__ >=4
+#include <tr1/unordered_map>
+#endif
+
 /* --------------------- 
  * Serialization support
  * ---------------------
@@ -161,7 +165,12 @@ namespace x10aux {
         //     to temporary objects allocated by custom serialization serialize methods.
         //     If we don't keep those objects live here, the storage may be reused during the
         //     serialization operation, resulting in incorrect detection of a repeated reference!
-    	typedef std::map<void*, void*, std::less<void*>, gc_allocator< std::pair<void*, void*> > > map_type;
+
+#if __GNUC__ >=4
+    	typedef std::tr1::unordered_map<void*, void*, std::tr1::hash<void*>, std::equal_to<void*>, gc_allocator< std::pair<void*, void*> > > map_type;
+#else
+    	typedef std::map<void*, void*, std::hash<void*>, std::equal_to<void*>, gc_allocator< std::pair<void*, void*> > > map_type;
+#endif
     	map_type map;
 
         void* _get_or_add(void* key, void* val);
