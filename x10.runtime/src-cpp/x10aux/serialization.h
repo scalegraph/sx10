@@ -23,7 +23,7 @@
 #include <limits>
 #include <map>
 
-#if __GNUC__ >=4
+#if defined(__GNUC__) && __GNUC__ >=4
 #include <tr1/unordered_map>
 #endif
 
@@ -166,7 +166,7 @@ namespace x10aux {
         //     If we don't keep those objects live here, the storage may be reused during the
         //     serialization operation, resulting in incorrect detection of a repeated reference!
 
-#if __GNUC__ >=4
+#if defined(__GNUC__) && __GNUC__ >=4
     	typedef std::tr1::unordered_map<void*, void*, std::tr1::hash<void*>, std::equal_to<void*>, gc_allocator< std::pair<void*, void*> > > map_type;
 #else
     	typedef std::map<void*, void*, std::hash<void*>, std::equal_to<void*>, gc_allocator< std::pair<void*, void*> > > map_type;
