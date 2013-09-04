@@ -1308,7 +1308,7 @@ void x10rt_net_allreduce (x10rt_team team, x10rt_place role, const void *sbuf, v
 	error("x10rt_net_allreduce not implemented");
 }
 
-void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg)
+void x10rt_net_team_members (x10rt_team team, x10rt_place *members)
 {
 	error("x10rt_net_team_members not implemented");
 }

@@ -276,11 +276,10 @@ namespace {
 
 }
 
-void x10rt_emu_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg)
+void x10rt_emu_team_members (x10rt_team team, x10rt_place *members)
 {
     TeamObj &t = *gtdb[team];
     memcpy(members, t.placev, t.memberc * sizeof(x10rt_place));
-    ch(arg);
 }
 
 static void team_new_decrement_counter (int *counter, x10rt_completion_handler2 *ch,

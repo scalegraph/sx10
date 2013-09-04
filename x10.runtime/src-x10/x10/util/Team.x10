@@ -28,7 +28,7 @@ import x10.util.concurrent.AtomicInteger;
  * from 0 to team.size() - 1.  Each member can only live at a particular place,
  * which is indicated by the user when the Team is created.
  */
-public struct Team {
+public class Team {
 
     private static struct DoubleIdx(value:Double, idx:Int) {}
 
@@ -43,42 +43,17 @@ public struct Team {
 
     /** A team that has one member at each place.
      */
-    public static WORLD = Team(0, new Array[Place](PlaceGroup.WORLD.numPlaces(), (i:Int)=>PlaceGroup.WORLD(i)));
+    public static WORLD = new Team(0, new Array[Place](PlaceGroup.WORLD.numPlaces(), (i:Int)=>PlaceGroup.WORLD(i)));
 
     /** The underlying representation of a team's identity.
      */
     private id: Int;
-    private members: PlaceLocalHandle[Array[Place](1)];
-    private roleplh: PlaceLocalHandle[Array[Int](1)];
+    transient private var members: Array[Place](1);
+    transient private var roleHere: Array[Int](1);
 
-    /** Returns the id of the team.
-     */
-    public def id() = id;
-
-    /** Returns the places of the team.
-     */
-    public def places() = members();
-
-    /** Returns the role of here
-     */
-    public def role() : Array[Int](1) = this.roleplh();
-
-    /** Returns the PlaceGroup of the places of the team.
-     */
-    public def placeGroup() : PlaceGroup = {
-        return new OrderedPlaceGroup(members());
-    }
-
-    /** Returns the place corresponding to the given role.
-     * @param role Our role in this team
-     */
-    public def place(role:Int) : Place = members()(role);
-
-    /** Returns the role corresponding to the given place.
-     * @param place Place in this team
-     */
-    public def role(place:Place) : Array[Int](1) = {
-        return role(members(), place);
+    private static def nativeMembers(id:Int, result:IndexedMemoryChunk[Int]) : void {
+        //@Native("java", "x10.x10rt.TeamSupport.nativeSplit(id, role, color, new_role, result);")
+        @Native("c++", "x10rt_team_members(id, (x10rt_place*)result->raw());") {}
     }
 
     private static def role(places:Array[Place](1), place:Place) {
@@ -90,33 +65,66 @@ public struct Team {
         return role.result();    
     }
     
+    private def setupMembers() {
+    	val numMembers = size();
+    	val membersimc = IndexedMemoryChunk.allocateUninitialized[Int](numMembers);
+    	nativeMembers(id, membersimc);
+    	members = new Array[Place](numMembers,  (i :Int) => Place(membersimc(i)));
+    	roleHere = role(members, here);
+    }
+
+    /** Returns the id of the team.
+     */
+    public def id() = id;
+
+    /** Returns the places of the team.
+     */
+    public def places() {
+    	if(members == null) setupMembers();
+    	return members;
+    }
+
+    /** Returns the role of here
+     */
+    public def role() : Array[Int](1) {
+    	if(members == null) setupMembers();
+    	return roleHere;
+    }
+
+    /** Returns the PlaceGroup of the places of the team.
+     */
+    public def placeGroup() : PlaceGroup = {
+        return new OrderedPlaceGroup(places());
+    }
+
+    /** Returns the place corresponding to the given role.
+     * @param role Our role in this team
+     */
+    public def place(role:Int) : Place = places()(role);
+
+    /** Returns the role corresponding to the given place.
+     * @param place Place in this team
+     */
+    public def role(place:Place) : Array[Int](1) = {
+        return role(places(), place);
+    }
+    
     private def this (id:Int, places:Array[Place](1)) {
         val pg = new OrderedPlaceGroup(places);
         this.id = id;
-        if (here == Place.FIRST_PLACE) {
-            this.members = PlaceLocalHandle.make[Array[Place](1)](pg, ()=>places);
-            this.roleplh = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>role(places, here));
-        }
-       else @Pragma(Pragma.FINISH_NONE) finish {
-            this.members = at (Place.FIRST_PLACE) Team.WORLD.members;
-            this.roleplh = at (Place.FIRST_PLACE) Team.WORLD.roleplh;
-        }
+        members = places;
+        roleHere = role(members, here);
     }
 
     /** Create a team by defining the place where each member lives.  This would usually be called before creating an async for each member of the team.
      * @param places The place of each member
      */
-    public def this (places:Array[Place](1)) {
-        this(places.raw(), places.size, new OrderedPlaceGroup(places));
-    }
-
-    private def this (places:IndexedMemoryChunk[Place], count:Int, pg:PlaceGroup) {
-        val result = IndexedMemoryChunk.allocateUninitialized[Int](1);
-        val pa = new Array[Place](places);
-        finish nativeMake(places, count, result);
-        this.id = result(0);
-        this.members = PlaceLocalHandle.make[Array[Place](1)](pg, ()=>pa);
-        this.roleplh = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>role(pa, here));
+    public def this (places :Array[Place](1)) {
+       val result = IndexedMemoryChunk.allocateUninitialized[Int](1);
+       finish nativeMake(places.raw(), places.size, result);
+       id = result(0);
+    	members = new Array[Place](places);
+    	roleHere = role(members, here);
     }
 
     private static def nativeMake (places:IndexedMemoryChunk[Place], count:Int, result:IndexedMemoryChunk[Int]) : void {
@@ -239,6 +247,7 @@ public struct Team {
      *
      */
     public def scatter[T] (role:Int, root:Int, src:Array[T], count:Int) {
+    	assert (role != root || src != null);
         val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
         scatter(id, role, root, getRawOrDummyChunk(src), 0, dst_raw, 0, count);
         return new Array[T](dst_raw);
@@ -407,7 +416,7 @@ public struct Team {
      * @return received array
      */
     public def gather[T] (role:Int, root:Int, src:Array[T], count:Int) {
-        val dst = role == root ? new Array[T](IndexedMemoryChunk.allocateUninitialized[T](count)) : null;
+        val dst = (role == root) ? new Array[T](IndexedMemoryChunk.allocateUninitialized[T](count * size())) : null;
         gather(role, root, src, 0, dst, 0, count);
         return dst;
     }
@@ -450,6 +459,7 @@ public struct Team {
      *
      * @param dst_counts The numbers of elements being transferred
      */
+
     public def gatherv[T] (role:Int, root:Int, src:Array[T], src_off:Int, src_count:Int, dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
         gatherv(id, role, root, getRawOrDummyChunk(src), src_off, src_count, getRawOrDummyChunk(dst), getRawOrDummyChunk(dst_offs), getRawOrDummyChunk(dst_counts));
     }
@@ -486,7 +496,7 @@ public struct Team {
     }
 
     public def gatherv[T] (role:Int, root:Int, src:Array[T], dst_offs:Array[Int], dst_counts:Array[Int] ) {
-        val dst = role == root ? new Array[T](IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0))) : null;
+        val dst = (role == root) ? new Array[T](IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0))) : null;
         gatherv(role, root, src, 0, src.size, dst, dst_offs, dst_counts);
         return dst;
     }
@@ -849,7 +859,8 @@ public struct Team {
      * @param op The operation to perform
      */
     public def reduce[T] (role:Int, root:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int, op:Int) : void {
-        finish nativeReduce(id, role, root, src.raw(), src_off, dst.raw(), dst_off, count, op);
+    	if(role == root) assert(dst != null);
+        finish nativeReduce(id, role, root, src.raw(), src_off, getRawOrDummyChunk(dst), dst_off, count, op);
     }
 
     private static def nativeReduce[T](id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int, op:Int) : void {
@@ -937,21 +948,11 @@ public struct Team {
         val result = IndexedMemoryChunk.allocateUninitialized[Int](1);
         finish nativeSplit(id, role, color, new_role, result);
         val new_id = result(0);
-        val place:Int = here.id;
         val new_size = nativeSize (new_id);
+    	 val dst_raw = IndexedMemoryChunk.allocateUninitialized[Int](new_size);
+        nativeMembers(new_id, dst_raw);
         
-    	val src_raw = IndexedMemoryChunk.allocateUninitialized[Int](1);
-    	src_raw(0) = place;
-    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[Int](new_size);
-        //nativeAllgather(new_id, new_role, src_raw, 0, dst_raw, 0, 1);
-        finish nativeMembers(new_id, dst_raw);
-        
-        return Team(new_id, new Array[Place](dst_raw.length(), (i:Int)=>new Place(dst_raw(i))));
-    }
-
-    private static def nativeMembers(id:Int, result:IndexedMemoryChunk[Int]) : void {
-        //@Native("java", "x10.x10rt.TeamSupport.nativeSplit(id, role, color, new_role, result);")
-        @Native("c++", "x10rt_team_members(id, (x10rt_place*)result->raw(), x10aux::coll_handler, x10aux::coll_enter());") {}
+        return new Team(new_id, new Array[Place](new_size, (i :Int) => Place(dst_raw(i))));
     }
 
     private static def nativeSplit(id:Int, role:Int, color:Int, new_role:Int, result:IndexedMemoryChunk[Int]) : void {
@@ -976,7 +977,7 @@ public struct Team {
         @Native("c++", "x10rt_team_del(id, role, x10aux::coll_handler, x10aux::coll_enter());") {}
     }
 
-    public def toString() = "Team(" + this.id + "," + this.members() +  ")";
+    public def toString() = "Team(" + this.id + "," + this.places() +  ")";
     public def equals(that:Team) = that.id==this.id;
     public def equals(that:Any) = that instanceof Team && (that as Team).id==this.id;
     public def hashCode()=id;
@@ -1026,9 +1027,9 @@ public struct Team {
         return scatterv(role, root, src, src_counts, src_offs, dst_count);
     }
 
-    public def scatterv[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int](1)) {
+    public def scatterv[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int]) {
         assert(role != root || src_counts != null);
-        val src_offs : Array[Int] = role == root ? countsToOffs(src_counts) : null;
+        val src_offs : Array[Int] = role == root ? countsToOffs(src_counts as Array[Int](1)) : null;
         debugln("scatterv", "src_offs: " +  src_offs);
         return scatterv[T](role, root, src, src_counts, src_offs);
     }
@@ -1050,7 +1051,7 @@ public struct Team {
 
     public def gatherv[T] (role:Int, root:Int, src:Array[T](1)) {
         assert(src != null);
-        val src_size = role == root ? src.size : Zero.get[Int]();
+        val src_size = (role == root) ? src.size : 0;
         val dst_counts = gather1[Int](role, root, src_size);
         debugln("gatherv", "dst_counts: " + dst_counts);
         return gatherv[T](role, root, src, dst_counts);
@@ -1058,10 +1059,10 @@ public struct Team {
 
     public def bcast[T] (role:Int, root:Int, src:Array[T]) {
         assert(role != root || src != null);
-        val src_size = role == root ? src.size : Zero.get[Int]();
+        val src_size = (role == root) ? src.size : 0;
         val count = bcast1(role, root, src_size);
         debugln("bcast", "count: " + count);
-        return bcast(role, root, src, count);
+        bcast(role, root, src, count);
     }
 
     public def allgatherv[T] (role:Int, src:Array[T]) {
