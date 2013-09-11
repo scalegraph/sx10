@@ -488,7 +488,7 @@ namespace x10aux {
         }
         // This has to be called every time a reference is created, but
         // before the rest of the object is deserialized!
-        template<typename T> bool record_reference(T* r);
+        template<typename T> void record_reference(T* r);
 
         template<typename T> void update_reference(T* r, T* newr);
 
@@ -496,22 +496,29 @@ namespace x10aux {
         template<class T> friend struct Read;
     };
 
-    template<typename T> bool deserialization_buffer::record_reference(T* r) {
-        x10_long cur_pos = consumed();
-        x10_long prev_pos = map.get_position_or_add(r, cur_pos);
+    template<typename T> void deserialization_buffer::record_reference(T* r) {
+        x10_long cur_pos = consumed() - 2; // back by the length of id (2 bytes)
+        map.add_at_position(r, cur_pos);
+        /*
+        x10_long prev_pos = map.add_at_position(r, cur_pos);
         if (prev_pos != cur_pos) {
             _S_("\t"<<ANSI_SER<<ANSI_BOLD<<"OOPS!"<<ANSI_RESET<<" Attempting to repeatedly record a reference "<<((void*)r)<<" (already found at position "<<prev_pos<<") in buf: "<<this);
         }
         return !prev_pos;
+        */
     }
 
+    // TODO: I do not understand the purpose of this method.
     template<typename T> void deserialization_buffer::update_reference(T* r, T* newr) {
-        x10_long cur_pos = consumed();
-        x10_long prev_pos = map.get_position_or_add(r, cur_pos);
+        x10_long cur_pos = consumed() - 2; // back by the length of id (2 bytes)
+        map.set_at_position(map._get(r), newr);
+        /*
+        x10_long prev_pos = map.add_at_position(r, cur_pos);
         if (prev_pos == cur_pos) {
             _S_("\t"<<ANSI_SER<<ANSI_BOLD<<"OOPS!"<<ANSI_RESET<<" Attempting to update a nonexistent reference "<<((void*)r)<<" in buf: "<<this);
         }
         map.set_at_position(prev_pos, newr);
+        */
     }
     
     // Case for non-refs (includes simple primitives like x10_int and all structs)
