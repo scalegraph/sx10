@@ -182,25 +182,24 @@ namespace x10aux {
         addr_map(int init_size = 4)
         { }
         /* Returns 0 if the pointer has not been recorded yet */
-        template<class T> x10_long get_position_or_add(const T* r, x10_long pos) {
-            x10_long prev_pos = (x10_long)_get_or_add((void*)r, (void*)pos);
-            if (pos == prev_pos) {
+        template<class T> x10_long get_position_or_add(const T* r) {
+            x10_long next_pos = map.size() + 1;
+            x10_long pos = (x10_long)_get_or_add((void*)r, (void*)next_pos);
+            if (pos == 0) {
                 _S_("\t\tRecorded new reference "<<((void*)r)<<" of type "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" at "<<pos<<" in map: "<<this);
             } else {
-                _S_("\t\tFound repeated reference "<<((void*)r)<<" of type "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" at "<<prev_pos<<" in map: "<<this);
+                _S_("\t\tFound repeated reference "<<((void*)r)<<" of type "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" at "<<pos<<" in map: "<<this);
             }
-            return prev_pos;
+            return pos;
         }
         template<class T> x10_long get_position(T* r) {
         	x10_long pos = (x10_long)_get((void*)r);
             _S_("\t\tRetrieving repeated reference "<<((void*) r)<<" of type "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" at "<<pos<<" (absolute) in map: "<<this);
             return pos;
         }
-        template<class T> void add_at_position(const T* r, x10_long pos) {
+        template<class T> void add_at_position(const T* r) {
+            x10_long pos = map.size() + 1;
             _add((void*)pos, (void*)r);
-            if (pos == 0) {
-                _S_("\t\tRecorded new reference "<<((void*)r)<<" of type "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" at "<<pos<<" (absolute) in map: "<<this);
-            }
         }
         template<class T> T* get_at_position(x10_long pos) {
             T* val = (T*)_get((void*)pos);
@@ -282,7 +281,7 @@ namespace x10aux {
         static void copyIn(serialization_buffer &buf, const void* data, x10_long length, size_t sizeOfT);
 
         template <class T> void manually_record_reference(T* val) {
-            map.get_position_or_add(val, length());
+            map.get_position_or_add(val);
         }
         
         // Default case for primitives and other things that never contain pointers
@@ -380,12 +379,11 @@ namespace x10aux {
     template<class T> void serialization_buffer::Write<T*>::size(serialization_buffer &buf,
                                                                    T* val) {
         if (NULL != val) {
-            x10_long cur_pos = buf.length();
-            x10_long prev_pos = buf.map.get_position_or_add(val, cur_pos);
-            if (prev_pos != cur_pos) {
-                _S_("\tRepeated ("<<prev_pos<<") serialization of a "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" into buf: "<<&buf);
+            x10_long pos = buf.map.get_position_or_add(val);
+            if (pos != 0) {
+                _S_("\tRepeated ("<<pos<<") serialization of a "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" into buf: "<<&buf);
                 buf.write((x10aux::serialization_id_t) 0xFFFF);
-                buf.write((x10_int) prev_pos);
+                buf.write((x10_int) pos);
                 return;
             }
         }
@@ -497,8 +495,7 @@ namespace x10aux {
     };
 
     template<typename T> void deserialization_buffer::record_reference(T* r) {
-        x10_long cur_pos = consumed() - 2; // back by the length of id (2 bytes)
-        map.add_at_position(r, cur_pos);
+        map.add_at_position(r);
         /*
         x10_long prev_pos = map.add_at_position(r, cur_pos);
         if (prev_pos != cur_pos) {
@@ -510,7 +507,6 @@ namespace x10aux {
 
     // TODO: I do not understand the purpose of this method.
     template<typename T> void deserialization_buffer::update_reference(T* r, T* newr) {
-        x10_long cur_pos = consumed() - 2; // back by the length of id (2 bytes)
         map.set_at_position(map._get(r), newr);
         /*
         x10_long prev_pos = map.add_at_position(r, cur_pos);

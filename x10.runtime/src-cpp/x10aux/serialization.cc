@@ -25,7 +25,7 @@ void* addr_map::_get_or_add(void* key, void* val) {
 	map_type::iterator it = map.find(key);
 	if(it == map.end()) {
 		map.insert( std::pair<void*, void*>( key, val ) );
-		return val;
+		return 0;
 	}
     return it->second;
 }
