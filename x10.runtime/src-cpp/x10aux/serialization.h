@@ -644,6 +644,15 @@ namespace x10aux {
         return buf.length();
     }
 
+    template <typename T> int count_ser_size(T data, int offset, int count) {
+        serialization_buffer buf;
+        buf.begin_count();
+        for (int i = 0; i < count; ++i) {
+            buf.write(&data[offset + i]);
+        }
+        return buf.length();
+    }
+
     template <typename T> void write_ser_data(T* data, int data_offset, int data_count, signed char* imc_ptr, int imc_offset, int imc_count) {
         serialization_buffer buf;
         buf.begin_write((char*)imc_ptr + imc_offset, imc_count);
@@ -652,10 +661,28 @@ namespace x10aux {
         }
     }
 
+    template <typename T> void write_ser_data(T data, int data_offset, int data_count, signed char* imc_ptr, int imc_offset, int imc_count) {
+        serialization_buffer buf;
+        buf.begin_write((char*)imc_ptr + imc_offset, imc_count);
+        for (int i = 0; i < data_count; ++i) {
+            buf.write(&data[data_offset + i]);
+        }
+    }
+
     template <typename T> void read_deser_data(T* data, int data_offset, int data_count, signed char* imc_ptr, int imc_offset, int imc_count) {
         deserialization_buffer buf((char*)imc_ptr + imc_offset, imc_count);
         for (int i = 0; i < data_count; ++i) {
             data[data_offset + i] = buf.read<T>();
+        }
+    }
+
+    template <typename T> void read_deser_data(T data, int data_offset, int data_count, signed char* imc_ptr, int imc_offset, int imc_count) {
+        typedef typename x10aux::remove_all_pointers<T>::type ELEM;
+        deserialization_buffer buf((char*)imc_ptr + imc_offset, imc_count);
+        for (int i = 0; i < data_count; ++i) {
+            T elem = new (&data[data_offset + i]) ELEM();
+            buf.record_reference(elem);
+            elem->_deserialize_body(buf);
         }
     }
 }
