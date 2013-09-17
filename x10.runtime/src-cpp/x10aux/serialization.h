@@ -648,7 +648,9 @@ namespace x10aux {
         serialization_buffer buf;
         buf.begin_count();
         for (int i = 0; i < count; ++i) {
-            buf.write(&data[offset + i]);
+            T elem = &data[offset + i];
+            buf.manually_record_reference(elem);
+            elem->_serialize_body(buf);
         }
         return buf.length();
     }
