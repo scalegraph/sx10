@@ -758,19 +758,25 @@ public class Team {
     }
 
     /** Indicates the operation to perform when reducing. */
-    public static val ADD = 0;
+    public static val ADD  = 0;
     /** Indicates the operation to perform when reducing. */
-    public static val MUL = 1;
+    public static val MUL  = 1;
     /** Indicates the operation to perform when reducing. */
-    public static val AND = 3;
+    public static val AND  = 3;
     /** Indicates the operation to perform when reducing. */
-    public static val OR  = 4;
+    public static val OR   = 4;
     /** Indicates the operation to perform when reducing. */
-    public static val XOR = 5;
+    public static val XOR  = 5;
     /** Indicates the operation to perform when reducing. */
-    public static val MAX = 6;
+    public static val BAND = 6;
     /** Indicates the operation to perform when reducing. */
-    public static val MIN = 7;
+    public static val BOR  = 7;
+    /** Indicates the operation to perform when reducing. */
+    public static val BXOR = 8;
+    /** Indicates the operation to perform when reducing. */
+    public static val MAX  = 9;
+    /** Indicates the operation to perform when reducing. */
+    public static val MIN  = 10;
 
     /* using overloading is the correct thing to do here since the set of supported
      * types are finite, however the java backend will not be able to distinguish
