@@ -2475,6 +2475,12 @@ MPI_Op mpi_red_arith_op_type(x10rt_red_op_type op) {
         return MPI_LOR;
     case X10RT_RED_OP_XOR:
         return MPI_LXOR;
+    case X10RT_RED_OP_BAND:
+        return MPI_BAND;
+    case X10RT_RED_OP_BOR:
+        return MPI_BOR;
+    case X10RT_RED_OP_BXOR:
+        return MPI_BXOR;
     case X10RT_RED_OP_MAX:
         return MPI_MAX;
     case X10RT_RED_OP_MIN:

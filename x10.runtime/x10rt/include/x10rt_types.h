@@ -150,13 +150,16 @@ typedef enum {
  * \see x10rt_allreduce
  */
 typedef enum {
-    X10RT_RED_OP_ADD = 0,
-    X10RT_RED_OP_MUL = 1,
-    X10RT_RED_OP_AND = 3,
-    X10RT_RED_OP_OR  = 4,
-    X10RT_RED_OP_XOR = 5,
-    X10RT_RED_OP_MAX = 6,
-    X10RT_RED_OP_MIN = 7
+    X10RT_RED_OP_ADD  = 0,
+    X10RT_RED_OP_MUL  = 1,
+    X10RT_RED_OP_AND  = 3,
+    X10RT_RED_OP_OR   = 4,
+    X10RT_RED_OP_XOR  = 5,
+    X10RT_RED_OP_BAND = 6,
+    X10RT_RED_OP_BOR  = 7,
+    X10RT_RED_OP_BXOR = 8,
+    X10RT_RED_OP_MAX  = 9,
+    X10RT_RED_OP_MIN  = 10
 } x10rt_red_op_type;
 
 /** The struct that must be used when using #X10RT_RED_TYPE_DBL_S32.
