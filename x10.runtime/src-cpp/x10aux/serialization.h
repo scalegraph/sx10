@@ -659,14 +659,18 @@ namespace x10aux {
         for (int i = 0; i < data_count; ++i) {
             buf.write(data[data_offset + i]);
         }
+        assert(buf.cursor == imc_ptr + imc_offset + imc_count);
     }
 
     template <typename T> void write_ser_data(T data, int data_offset, int data_count, signed char* imc_ptr, int imc_offset, int imc_count) {
         serialization_buffer buf;
         buf.begin_write((char*)imc_ptr + imc_offset, imc_count);
         for (int i = 0; i < data_count; ++i) {
-            buf.write(&data[data_offset + i]);
+            T elem = &data[data_offset + i];
+            buf.manually_record_reference(elem);
+            elem->_serialize_body(buf);
         }
+        assert(buf.cursor == imc_ptr + imc_offset + imc_count);
     }
 
     template <typename T> void read_deser_data(T* data, int data_offset, int data_count, signed char* imc_ptr, int imc_offset, int imc_count) {
@@ -674,6 +678,7 @@ namespace x10aux {
         for (int i = 0; i < data_count; ++i) {
             data[data_offset + i] = buf.read<T>();
         }
+        assert(buf.cursor == imc_ptr + imc_offset + imc_count);
     }
 
     template <typename T> void read_deser_data(T data, int data_offset, int data_count, signed char* imc_ptr, int imc_offset, int imc_count) {
@@ -684,6 +689,7 @@ namespace x10aux {
             buf.record_reference(elem);
             elem->_deserialize_body(buf);
         }
+        assert(buf.cursor == imc_ptr + imc_offset + imc_count);
     }
 }
 
