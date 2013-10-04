@@ -28,7 +28,7 @@ import x10.util.concurrent.AtomicInteger;
  * from 0 to team.size() - 1.  Each member can only live at a particular place,
  * which is indicated by the user when the Team is created.
  */
-public struct Team {
+public class Team {
 
     private static struct DoubleIdx(value:Double, idx:Int) {}
 
@@ -43,42 +43,17 @@ public struct Team {
 
     /** A team that has one member at each place.
      */
-    public static WORLD = Team(0, new Array[Place](PlaceGroup.WORLD.numPlaces(), (i:Int)=>PlaceGroup.WORLD(i)));
+    public static WORLD = new Team(0, new Array[Place](PlaceGroup.WORLD.numPlaces(), (i:Int)=>PlaceGroup.WORLD(i)));
 
     /** The underlying representation of a team's identity.
      */
     private id: Int;
-    private members: PlaceLocalHandle[Array[Place](1)];
-    private roleplh: PlaceLocalHandle[Array[Int](1)];
+    transient private var members: Array[Place](1);
+    transient private var roleHere: Array[Int](1);
 
-    /** Returns the id of the team.
-     */
-    public def id() = id;
-
-    /** Returns the places of the team.
-     */
-    public def places() = members();
-
-    /** Returns the role of here
-     */
-    public def role() : Array[Int](1) = this.roleplh();
-
-    /** Returns the PlaceGroup of the places of the team.
-     */
-    public def placeGroup() : PlaceGroup = {
-        return new OrderedPlaceGroup(members());
-    }
-
-    /** Returns the place corresponding to the given role.
-     * @param role Our role in this team
-     */
-    public def place(role:Int) : Place = members()(role);
-
-    /** Returns the role corresponding to the given place.
-     * @param place Place in this team
-     */
-    public def role(place:Place) : Array[Int](1) = {
-        return role(members(), place);
+    private static def nativeMembers(id:Int, result:IndexedMemoryChunk[Int]) : void {
+        //@Native("java", "x10.x10rt.TeamSupport.nativeSplit(id, role, color, new_role, result);")
+        @Native("c++", "x10rt_team_members(id, (x10rt_place*)result->raw());") {}
     }
 
     private static def role(places:Array[Place](1), place:Place) {
@@ -90,33 +65,66 @@ public struct Team {
         return role.result();    
     }
     
+    private def setupMembers() {
+    	val numMembers = size();
+    	val membersimc = IndexedMemoryChunk.allocateUninitialized[Int](numMembers);
+    	nativeMembers(id, membersimc);
+    	members = new Array[Place](numMembers,  (i :Int) => Place(membersimc(i)));
+    	roleHere = role(members, here);
+    }
+
+    /** Returns the id of the team.
+     */
+    public def id() = id;
+
+    /** Returns the places of the team.
+     */
+    public def places() {
+    	if(members == null) setupMembers();
+    	return members;
+    }
+
+    /** Returns the role of here
+     */
+    public def role() : Array[Int](1) {
+    	if(members == null) setupMembers();
+    	return roleHere;
+    }
+
+    /** Returns the PlaceGroup of the places of the team.
+     */
+    public def placeGroup() : PlaceGroup = {
+        return new OrderedPlaceGroup(places());
+    }
+
+    /** Returns the place corresponding to the given role.
+     * @param role Our role in this team
+     */
+    public def place(role:Int) : Place = places()(role);
+
+    /** Returns the role corresponding to the given place.
+     * @param place Place in this team
+     */
+    public def role(place:Place) : Array[Int](1) = {
+        return role(places(), place);
+    }
+    
     private def this (id:Int, places:Array[Place](1)) {
         val pg = new OrderedPlaceGroup(places);
         this.id = id;
-        if (here == Place.FIRST_PLACE) {
-            this.members = PlaceLocalHandle.make[Array[Place](1)](pg, ()=>places);
-            this.roleplh = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>role(places, here));
-        }
-       else @Pragma(Pragma.FINISH_NONE) finish {
-            this.members = at (Place.FIRST_PLACE) Team.WORLD.members;
-            this.roleplh = at (Place.FIRST_PLACE) Team.WORLD.roleplh;
-        }
+        members = places;
+        roleHere = role(members, here);
     }
 
     /** Create a team by defining the place where each member lives.  This would usually be called before creating an async for each member of the team.
      * @param places The place of each member
      */
-    public def this (places:Array[Place](1)) {
-        this(places.raw(), places.size, new OrderedPlaceGroup(places));
-    }
-
-    private def this (places:IndexedMemoryChunk[Place], count:Int, pg:PlaceGroup) {
-        val result = IndexedMemoryChunk.allocateUninitialized[Int](1);
-        val pa = new Array[Place](places);
-        finish nativeMake(places, count, result);
-        this.id = result(0);
-        this.members = PlaceLocalHandle.make[Array[Place](1)](pg, ()=>pa);
-        this.roleplh = PlaceLocalHandle.make[Array[Int](1)](pg, ()=>role(pa, here));
+    public def this (places :Array[Place](1)) {
+       val result = IndexedMemoryChunk.allocateUninitialized[Int](1);
+       finish nativeMake(places.raw(), places.size, result);
+       id = result(0);
+    	members = new Array[Place](places);
+    	roleHere = role(members, here);
     }
 
     private static def nativeMake (places:IndexedMemoryChunk[Place], count:Int, result:IndexedMemoryChunk[Int]) : void {
@@ -133,6 +141,12 @@ public struct Team {
     private static def nativeSize (id:Int) : Int {
         @Native("java", "return x10.x10rt.TeamSupport.nativeSize(id);")
         @Native("c++", "return (x10_int)x10rt_team_sz(id);") { return -1; }
+    }
+
+    public def needToSerialize[T] () : Boolean = nativeNeedToSerialize[T]();
+
+    private static def nativeNeedToSerialize[T] () : Boolean {
+        @Native("c++", "return x10aux::getRTT<TPMGL(T) >()->containsPtrs;") { return false; }
     }
 
     /** Blocks until all team members have reached the barrier.
@@ -169,7 +183,33 @@ public struct Team {
      * @param count The number of elements being transferred
      */
     public def scatter[T] (role:Int, root:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
-        finish nativeScatter(id, role, root, src.raw(), src_off, dst.raw(), dst_off, count);
+        scatter(id, role, root, getRawOrDummyChunk(src), src_off, dst.raw(), dst_off, count);
+    }
+
+    public def scatter[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
+        if (needToSerialize[T]()) {
+            if (role == root) {
+                val places = size();
+                val src_offs = new Array[Int](places, (i :Int) => i * count);
+                val src_counts = new Array[Int](places, count);
+                val ser_offs = new Array[Int](places);
+                val ser_counts = new Array[Int](places);
+                val ser_src = ParallelSerialization.serialize(src, src_offs.raw(), src_counts.raw(), ser_offs.raw(), ser_counts.raw());
+                val deser_counts = scatter[Int](role, root, ser_counts, 1);
+                val deser_dst = new Array[Byte](deser_counts(0));
+                finish nativeScatterv(id, role, root, ser_src, ser_offs.raw(), ser_counts.raw(), deser_dst.raw(), 0, deser_counts(0));
+                ParallelSerialization.deserialize(dst, dst_off, count, deser_dst.raw(), 0, deser_counts(0));
+            }
+            else {
+                val deser_counts = scatter[Int](role, root, null, 1);
+                val deser_dst = new Array[Byte](deser_counts(0));
+                finish nativeScatterv(id, role, root, dummyChunk[Byte](), dummyChunk[Int](), dummyChunk[Int](), deser_dst.raw(), 0, deser_counts(0));
+                ParallelSerialization.deserialize(dst, dst_off, count, deser_dst.raw(), 0, deser_counts(0));
+            }
+        }
+        else {
+            finish nativeScatter(id, role, root, src, src_off, dst, dst_off, count);
+        }
     }
 
     private static def nativeScatter[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
@@ -207,8 +247,9 @@ public struct Team {
      *
      */
     public def scatter[T] (role:Int, root:Int, src:Array[T], count:Int) {
+    	assert (role != root || src != null);
         val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
-        finish nativeScatter(id, role, root, getRawOrDummyChunk(src), 0, dst_raw, 0, count);
+        scatter(id, role, root, getRawOrDummyChunk(src), 0, dst_raw, 0, count);
         return new Array[T](dst_raw);
     }
 
@@ -235,7 +276,31 @@ public struct Team {
      * @param dst_count The numbers of elements being received
      */
     public def scatterv[T] (role:Int, root:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst:Array[T], dst_off:Int, dst_count:Int) : void {
-        finish nativeScatterv(id, role, root, getRawOrDummyChunk(src), getRawOrDummyChunk(src_offs), getRawOrDummyChunk(src_counts), getRawOrDummyChunk(dst), dst_off, dst_count);
+        scatterv(id, role, root, getRawOrDummyChunk(src), getRawOrDummyChunk(src_offs), getRawOrDummyChunk(src_counts), getRawOrDummyChunk(dst), dst_off, dst_count);
+    }
+
+    public def scatterv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], src_counts:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_off:Int, dst_count:Int) : void {
+        if (needToSerialize[T]()) {
+            if (role == root) {
+                val places = size();
+                val ser_offs = new Array[Int](places);
+                val ser_counts = new Array[Int](places);
+                val ser_src = ParallelSerialization.serialize(src, src_offs, src_counts, ser_offs.raw(), ser_counts.raw());
+                val deser_counts = scatter[Int](role, root, ser_counts, 1);
+                val deser_dst = new Array[Byte](deser_counts(0));
+                finish nativeScatterv(id, role, root, ser_src, ser_offs.raw(), ser_counts.raw(), deser_dst.raw(), 0, deser_counts(0));
+                ParallelSerialization.deserialize(dst, dst_off, dst_count, deser_dst.raw(), 0, deser_counts(0));
+            }
+            else {
+                val deser_counts = scatter[Int](role, root, null, 1);
+                val deser_dst = new Array[Byte](deser_counts(0));
+                finish nativeScatterv(id, role, root, dummyChunk[Byte](), dummyChunk[Int](), dummyChunk[Int](), deser_dst.raw(), 0, deser_counts(0));
+                ParallelSerialization.deserialize(dst, dst_off, dst_count, deser_dst.raw(), 0, deser_counts(0));
+            }
+        }
+        else {
+            finish nativeScatterv(id, role, root, src, src_offs, src_counts, dst, dst_off, dst_count);
+        }
     }
 
     private static def nativeScatterv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], src_counts:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_off:Int, dst_count:Int) : void {
@@ -295,7 +360,35 @@ public struct Team {
      * @param count The number of elements being transferred
      */
     public def gather[T] (role:Int, root:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
-        finish nativeGather(id, role, root, src.raw(), src_off, dst.raw(), dst_off, count);
+        gather(id, role, root, src.raw(), src_off, getRawOrDummyChunk(dst), dst_off, count);
+    }
+
+    public def gather[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
+        if (needToSerialize[T]()) {
+            if (role == root) {
+                val places = size();
+                val ser_src = ParallelSerialization.serialize(src, src_off, count);
+                val ser_count = ser_src.length();
+                val deser_counts = gather1[Int](role, root, ser_count);
+                val deser_offs = new Array[Int](places+1);
+                deser_offs(0) = 0;
+                for (i in 0..(places-1)) deser_offs(i+1) = deser_counts(i) + deser_offs(i);
+                val deser_dst = new Array[Byte](deser_offs(places));
+                finish nativeGatherv(id, role, root, ser_src, 0, ser_count, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+                val dst_counts = new Array[Int](places, count);
+                val dst_offs = new Array[Int](places, (i :Int) => i * count);
+                ParallelSerialization.deserialize(dst, dst_offs.raw(), dst_counts.raw(), deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+            }
+            else {
+                val ser_src = ParallelSerialization.serialize(src, src_off, count);
+                val ser_count = ser_src.length();
+                val deser_counts = gather1[Int](role, root, ser_count);
+                finish nativeGatherv(id, role, root, ser_src, 0, ser_count, dummyChunk[Byte](), dummyChunk[Int](), dummyChunk[Int]());
+            }
+        }
+        else {
+            finish nativeGather(id, role, root, src, src_off, dst, dst_off, count);
+        }
     }
 
     private static def nativeGather[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
@@ -323,7 +416,7 @@ public struct Team {
      * @return received array
      */
     public def gather[T] (role:Int, root:Int, src:Array[T], count:Int) {
-        val dst = role == root ? new Array[T](IndexedMemoryChunk.allocateUninitialized[T](count)) : null;
+        val dst = (role == root) ? new Array[T](IndexedMemoryChunk.allocateUninitialized[T](count * size())) : null;
         gather(role, root, src, 0, dst, 0, count);
         return dst;
     }
@@ -366,8 +459,35 @@ public struct Team {
      *
      * @param dst_counts The numbers of elements being transferred
      */
+
     public def gatherv[T] (role:Int, root:Int, src:Array[T], src_off:Int, src_count:Int, dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
-        finish nativeGatherv(id, role, root, getRawOrDummyChunk(src), src_off, src_count, getRawOrDummyChunk(dst), getRawOrDummyChunk(dst_offs), getRawOrDummyChunk(dst_counts));
+        gatherv(id, role, root, getRawOrDummyChunk(src), src_off, src_count, getRawOrDummyChunk(dst), getRawOrDummyChunk(dst_offs), getRawOrDummyChunk(dst_counts));
+    }
+
+    public def gatherv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, src_count:Int, dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
+        if (needToSerialize[T]()) {
+            if (role == root) {
+                val places = size();
+                val ser_src = ParallelSerialization.serialize(src, src_off, src_count);
+                val ser_count = ser_src.length();
+                val deser_counts = gather1[Int](role, root, ser_count);
+                val deser_offs = new Array[Int](places+1);
+                deser_offs(0) = 0;
+                for (i in 0..(places-1)) deser_offs(i+1) = deser_counts(i) + deser_offs(i);
+                val deser_dst = new Array[Byte](deser_offs(places));
+                finish nativeGatherv(id, role, root, ser_src, 0, ser_count, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+                ParallelSerialization.deserialize(dst, dst_offs, dst_counts, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+            }
+            else {
+                val ser_src = ParallelSerialization.serialize(src, src_off, src_count);
+                val ser_count = ser_src.length();
+                val deser_counts = gather1[Int](role, root, ser_count);
+                finish nativeGatherv(id, role, root, ser_src, 0, ser_count, dummyChunk[Byte](), dummyChunk[Int](), dummyChunk[Int]());
+            }
+        }
+        else {
+            finish nativeGatherv(id, role, root, src, src_off, src_count, dst, dst_offs, dst_counts);
+        }
     }
 
     private static def nativeGatherv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, src_count:Int, dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
@@ -376,7 +496,7 @@ public struct Team {
     }
 
     public def gatherv[T] (role:Int, root:Int, src:Array[T], dst_offs:Array[Int], dst_counts:Array[Int] ) {
-        val dst = role == root ? new Array[T](IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0))) : null;
+        val dst = (role == root) ? new Array[T](IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0))) : null;
         gatherv(role, root, src, 0, src.size, dst, dst_offs, dst_counts);
         return dst;
     }
@@ -412,7 +532,31 @@ public struct Team {
      * @param count The number of elements being transferred
      */
     public def bcast[T] (role:Int, root:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
-        finish nativeBcast(id, role, root, src.raw(), src_off, dst.raw(), dst_off, count);
+        bcast(id, role, root, getRawOrDummyChunk(src), src_off, dst.raw(), dst_off, count);
+    }
+
+    public def bcast[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
+        if (needToSerialize[T]()) {
+            if (role == root) {
+                val places = size();
+                val ser_src = ParallelSerialization.serialize(src, src_off, count);
+                val ser_count = ser_src.length();
+                val deser_count = bcast1[Int](role, root, ser_count);
+                val deser_dst = new Array[Byte](deser_count);
+                finish nativeBcast(id, role, root, ser_src, 0, deser_dst.raw(), 0, deser_count);
+                ParallelSerialization.deserialize(dst, dst_off, count, deser_dst.raw(), 0, deser_count);
+            }
+            else {
+                val deser_count = bcast1[Int](role, root, 0);
+                val deser_dst = new Array[Byte](deser_count);
+                finish nativeBcast(id, role, root, dummyChunk[Byte](), 0, deser_dst.raw(), 0, deser_count);
+                ParallelSerialization.deserialize(dst, dst_off, count, deser_dst.raw(), 0, deser_count);
+            }
+
+        }
+        else {
+            finish nativeBcast(id, role, root, src, src_off, dst, dst_off, count);
+        }
     }
 
     private static def nativeBcast[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
@@ -424,13 +568,13 @@ public struct Team {
     	val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
     	src_raw(0) = src;
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
-        finish nativeBcast(id, role, root, src_raw, 0, dst_raw, 0, 1);
+        bcast(id, role, root, src_raw, 0, dst_raw, 0, 1);
         return dst_raw(0);
     }
 
     public def bcast[T] (role:Int, root:Int, src:Array[T], count:Int) {
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](count);
-        finish nativeBcast(id, role, root, getRawOrDummyChunk(src), 0, dst_raw, 0, count);
+        bcast(id, role, root, getRawOrDummyChunk(src), 0, dst_raw, 0, count);
         return new Array[T](dst_raw);
     }
 
@@ -449,7 +593,27 @@ public struct Team {
     }
 
     public def allgather[T] (role:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
-        finish nativeAllgather(id, role, src.raw(), src_off, dst.raw(), dst_off, count);
+        allgather(id, role, src.raw(), src_off, dst.raw(), dst_off, count);
+    }
+
+    public def allgather[T](id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
+        if (needToSerialize[T]()) {
+            val places = size();
+            val ser_src = ParallelSerialization.serialize(src, src_off, count);
+            val ser_count = ser_src.length();
+            val deser_counts = allgather1[Int](role, ser_count);
+            val deser_offs = new Array[Int](places + 1);
+            deser_offs(0) = 0;
+            for (i in 0..(places-1)) deser_offs(i+1) = deser_counts(i) + deser_offs(i);
+            val deser_dst = new Array[Byte](deser_offs(places));
+            finish nativeAllgatherv(id, role, ser_src, 0, ser_count, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+            val dst_offs = new Array[Int](places, (i :Int) => i * count);
+            val dst_counts = new Array[Int](places, count);
+            ParallelSerialization.deserialize(dst, dst_offs.raw(), dst_counts.raw(), deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+        }
+        else {
+            finish nativeAllgather(id, role, src, src_off, dst, dst_off, count);
+        }
     }
 
     private static def nativeAllgather[T](id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
@@ -464,7 +628,25 @@ public struct Team {
     }
 
     public def allgatherv[T] (role:Int, src:Array[T], src_off:Int, src_count:Int, dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
-        finish nativeAllgatherv(id, role, src.raw(), src_off, src_count, dst.raw(), dst_offs.raw(), dst_counts.raw());
+        allgatherv(id, role, src.raw(), src_off, src_count, dst.raw(), dst_offs.raw(), dst_counts.raw());
+    }
+
+    public def allgatherv[T] (id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, src_count:Int, dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
+        if (needToSerialize[T]()) {
+            val places = size();
+            val ser_src = ParallelSerialization.serialize(src, src_off, src_count);
+            val ser_count = ser_src.length();
+            val deser_counts = allgather1[Int](role, ser_count);
+            val deser_offs = new Array[Int](places + 1);
+            deser_offs(0) = 0;
+            for (i in 0..(places-1)) deser_offs(i+1) = deser_counts(i) + deser_offs(i);
+            val deser_dst = new Array[Byte](deser_offs(places));
+            finish nativeAllgatherv(id, role, ser_src, 0, ser_count, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+            ParallelSerialization.deserialize(dst, dst_offs, dst_counts, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+        }
+        else {
+            finish nativeAllgatherv(id, role, src, src_off, src_count, dst, dst_offs, dst_counts);
+        }
     }
 
     private static def nativeAllgatherv[T] (id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, src_count:Int, dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
@@ -492,7 +674,33 @@ public struct Team {
      * @param count The number of elements being transferred
      */
     public def alltoall[T] (role:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
-        finish nativeAlltoall(id, role, src.raw(), src_off, dst.raw(), dst_off, count);
+        alltoall(id, role, src.raw(), src_off, dst.raw(), dst_off, count);
+    }
+
+    public def alltoall[T](id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
+        if (needToSerialize[T]()) {
+            val places = size();
+            val src_counts = new Array[Int](places, count);
+            val src_offs = new Array[Int](places, (i :Int) => i * count);
+            val ser_offs = new Array[Int](places);
+            val ser_counts = new Array[Int](places);
+            val ser_src = ParallelSerialization.serialize(src, src_offs.raw(), src_counts.raw(), ser_offs.raw(), ser_counts.raw());
+            val deser_counts = new Array[Int](places);
+            finish nativeAlltoall(id, role, ser_counts.raw(), 0, deser_counts.raw(), 0, 1);
+            val deser_offs = new Array[Int](places + 1);
+            deser_offs(0) = 0;
+            for (i in 0..(places-1)) deser_offs(i+1) = deser_counts(i) + deser_offs(i);
+            val deser_dst = new Array[Byte](deser_offs(places));
+            finish nativeAlltoallv(id, role, ser_src, ser_offs.raw(), ser_counts.raw(), deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+            val dst_counts = new Array[Int](places, count);
+            val dst_offs = new Array[Int](places + 1);
+            dst_offs(0) = 0;
+            for (i in 0..(places-1)) dst_offs(i+1) = dst_counts(i) + dst_offs(i);
+            ParallelSerialization.deserialize(dst, dst_offs.raw(), dst_counts.raw(), deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+        }
+        else {
+            finish nativeAlltoall(id, role, src, src_off, dst, dst_off, count);
+        }
     }
 
     private static def nativeAlltoall[T](id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
@@ -504,12 +712,32 @@ public struct Team {
         assert(src != null);
     	assert(src.size % size() == 0);
     	val dst_raw = IndexedMemoryChunk.allocateUninitialized[T](src.size);
-        finish nativeAlltoall(id, role, src.raw(), 0, dst_raw, 0, src.size / size());
+        alltoall(id, role, src.raw(), 0, dst_raw, 0, src.size / size());
         return new Array[T](dst_raw);
     }
     
     public def alltoallv[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
-        finish nativeAlltoallv(id, role, src.raw(), src_offs.raw(), src_counts.raw(), dst.raw(), dst_offs.raw(), dst_counts.raw());
+        alltoallv(id, role, src.raw(), src_offs.raw(), src_counts.raw(), dst.raw(), dst_offs.raw(), dst_counts.raw());
+    }
+
+    public def alltoallv[T] (id:Int, role:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], src_counts:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
+        if (needToSerialize[T]()) {
+            val places = size();
+            val ser_offs = new Array[Int](places);
+            val ser_counts = new Array[Int](places);
+            val ser_src = ParallelSerialization.serialize(src, src_offs, src_counts, ser_offs.raw(), ser_counts.raw());
+            val deser_counts = new Array[Int](places);
+            finish nativeAlltoall(id, role, ser_counts.raw(), 0, deser_counts.raw(), 0, 1);
+            val deser_offs = new Array[Int](places + 1);
+            deser_offs(0) = 0;
+            for (i in 0..(places-1)) deser_offs(i+1) = deser_counts(i) + deser_offs(i);
+            val deser_dst = new Array[Byte](deser_offs(places));
+            finish nativeAlltoallv(id, role, ser_src, ser_offs.raw(), ser_counts.raw(), deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+            ParallelSerialization.deserialize(dst, dst_offs, dst_counts, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+        }
+        else {
+            finish nativeAlltoallv(id, role, src, src_offs, src_counts, dst, dst_offs, dst_counts);
+        }
     }
 
     private static def nativeAlltoallv[T] (id:Int, role:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], src_counts:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
@@ -530,19 +758,25 @@ public struct Team {
     }
 
     /** Indicates the operation to perform when reducing. */
-    public static val ADD = 0;
+    public static val ADD  = 0;
     /** Indicates the operation to perform when reducing. */
-    public static val MUL = 1;
+    public static val MUL  = 1;
     /** Indicates the operation to perform when reducing. */
-    public static val AND = 3;
+    public static val AND  = 3;
     /** Indicates the operation to perform when reducing. */
-    public static val OR  = 4;
+    public static val OR   = 4;
     /** Indicates the operation to perform when reducing. */
-    public static val XOR = 5;
+    public static val XOR  = 5;
     /** Indicates the operation to perform when reducing. */
-    public static val MAX = 6;
+    public static val BAND = 6;
     /** Indicates the operation to perform when reducing. */
-    public static val MIN = 7;
+    public static val BOR  = 7;
+    /** Indicates the operation to perform when reducing. */
+    public static val BXOR = 8;
+    /** Indicates the operation to perform when reducing. */
+    public static val MAX  = 9;
+    /** Indicates the operation to perform when reducing. */
+    public static val MIN  = 10;
 
     /* using overloading is the correct thing to do here since the set of supported
      * types are finite, however the java backend will not be able to distinguish
@@ -631,7 +865,8 @@ public struct Team {
      * @param op The operation to perform
      */
     public def reduce[T] (role:Int, root:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int, op:Int) : void {
-        finish nativeReduce(id, role, root, src.raw(), src_off, dst.raw(), dst_off, count, op);
+    	if(role == root) assert(dst != null);
+        finish nativeReduce(id, role, root, src.raw(), src_off, getRawOrDummyChunk(dst), dst_off, count, op);
     }
 
     private static def nativeReduce[T](id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int, op:Int) : void {
@@ -719,21 +954,11 @@ public struct Team {
         val result = IndexedMemoryChunk.allocateUninitialized[Int](1);
         finish nativeSplit(id, role, color, new_role, result);
         val new_id = result(0);
-        val place:Int = here.id;
         val new_size = nativeSize (new_id);
+    	 val dst_raw = IndexedMemoryChunk.allocateUninitialized[Int](new_size);
+        nativeMembers(new_id, dst_raw);
         
-    	val src_raw = IndexedMemoryChunk.allocateUninitialized[Int](1);
-    	src_raw(0) = place;
-    	val dst_raw = IndexedMemoryChunk.allocateUninitialized[Int](new_size);
-        //nativeAllgather(new_id, new_role, src_raw, 0, dst_raw, 0, 1);
-        finish nativeMembers(new_id, dst_raw);
-        
-        return Team(new_id, new Array[Place](dst_raw.length(), (i:Int)=>new Place(dst_raw(i))));
-    }
-
-    private static def nativeMembers(id:Int, result:IndexedMemoryChunk[Int]) : void {
-        //@Native("java", "x10.x10rt.TeamSupport.nativeSplit(id, role, color, new_role, result);")
-        @Native("c++", "x10rt_team_members(id, (x10rt_place*)result->raw(), x10aux::coll_handler, x10aux::coll_enter());") {}
+        return new Team(new_id, new Array[Place](new_size, (i :Int) => Place(dst_raw(i))));
     }
 
     private static def nativeSplit(id:Int, role:Int, color:Int, new_role:Int, result:IndexedMemoryChunk[Int]) : void {
@@ -758,7 +983,7 @@ public struct Team {
         @Native("c++", "x10rt_team_del(id, role, x10aux::coll_handler, x10aux::coll_enter());") {}
     }
 
-    public def toString() = "Team(" + this.id + "," + this.members() +  ")";
+    public def toString() = "Team(" + this.id + "," + this.places() +  ")";
     public def equals(that:Team) = that.id==this.id;
     public def equals(that:Any) = that instanceof Team && (that as Team).id==this.id;
     public def hashCode()=id;
@@ -808,9 +1033,9 @@ public struct Team {
         return scatterv(role, root, src, src_counts, src_offs, dst_count);
     }
 
-    public def scatterv[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int](1)) {
+    public def scatterv[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int]) {
         assert(role != root || src_counts != null);
-        val src_offs : Array[Int] = role == root ? countsToOffs(src_counts) : null;
+        val src_offs : Array[Int] = role == root ? countsToOffs(src_counts as Array[Int](1)) : null;
         debugln("scatterv", "src_offs: " +  src_offs);
         return scatterv[T](role, root, src, src_counts, src_offs);
     }
@@ -832,7 +1057,7 @@ public struct Team {
 
     public def gatherv[T] (role:Int, root:Int, src:Array[T](1)) {
         assert(src != null);
-        val src_size = role == root ? src.size : Zero.get[Int]();
+        val src_size = (role == root) ? src.size : 0;
         val dst_counts = gather1[Int](role, root, src_size);
         debugln("gatherv", "dst_counts: " + dst_counts);
         return gatherv[T](role, root, src, dst_counts);
@@ -840,10 +1065,10 @@ public struct Team {
 
     public def bcast[T] (role:Int, root:Int, src:Array[T]) {
         assert(role != root || src != null);
-        val src_size = role == root ? src.size : Zero.get[Int]();
+        val src_size = (role == root) ? src.size : 0;
         val count = bcast1(role, root, src_size);
         debugln("bcast", "count: " + count);
-        return bcast(role, root, src, count);
+        bcast(role, root, src, count);
     }
 
     public def allgatherv[T] (role:Int, src:Array[T]) {

@@ -442,7 +442,7 @@ X10RT_C void x10rt_lgl_allreduce (x10rt_team team, x10rt_place role,
  * \param ch As in #x10rt_team_translate
  * \param arg As in #x10rt_team_translate
  */
-X10RT_C void x10rt_lgl_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg);
+X10RT_C void x10rt_lgl_team_members (x10rt_team team, x10rt_place *members);
 
 /** \see #x10rt_scatterv
  * \param team As in #x10rt_scatterv

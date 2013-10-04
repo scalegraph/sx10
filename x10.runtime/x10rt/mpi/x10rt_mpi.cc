@@ -2176,7 +2176,7 @@ void x10rt_net_team_del (x10rt_team team, x10rt_place role,
     return;
 }
 
-void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg)
+void x10rt_net_team_members (x10rt_team team, x10rt_place *members)
 {
     assert(global_state.init);
     assert(!global_state.finalized);
@@ -2216,7 +2216,6 @@ void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_comple
 
     MPI_Group_free(&MPI_GROUP_WORLD);
     MPI_Group_free(&grp);
-    ch(arg);
 }
 
 x10rt_place x10rt_net_team_sz (x10rt_team team)
@@ -2255,11 +2254,7 @@ void x10rt_net_team_split (x10rt_team parent, x10rt_place parent_role,
     x10rt_place *placev = ChkAlloc<x10rt_place>(placec * sizeof(x10rt_place));
 
     if (parent_role == 0) {
-        {
-            int finished = 0;
-            x10rt_net_team_members(parent, placev, x10rt_net_one_setter, &finished);
-            while (!finished) x10rt_net_probe_ex(true);
-        }
+       x10rt_net_team_members(parent, placev);
         {
             int finished = 0;
             x10rt_net_team_barrier_for_blocking(placec, placev, x10rt_net_one_setter, &finished);
@@ -2480,6 +2475,12 @@ MPI_Op mpi_red_arith_op_type(x10rt_red_op_type op) {
         return MPI_LOR;
     case X10RT_RED_OP_XOR:
         return MPI_LXOR;
+    case X10RT_RED_OP_BAND:
+        return MPI_BAND;
+    case X10RT_RED_OP_BOR:
+        return MPI_BOR;
+    case X10RT_RED_OP_BXOR:
+        return MPI_BXOR;
     case X10RT_RED_OP_MAX:
         return MPI_MAX;
     case X10RT_RED_OP_MIN:
@@ -2887,7 +2888,7 @@ void x10rt_net_gather (x10rt_team team, x10rt_place role, x10rt_place root, cons
 
     MPI_Comm comm = mpi_tdb.comm(team);
     int gsize = x10rt_net_team_sz(team);
-    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(gsize * count * el) : dbuf;
+    void *buf = (role == root && sbuf == dbuf) ? ChkAlloc<void>(gsize * count * el) : dbuf;
 
     MPI_COLLECTIVE(Gather, Igather, (void *)sbuf, count, get_mpi_datatype(el), buf, count, get_mpi_datatype(el), root, comm);
 
@@ -2909,9 +2910,9 @@ void x10rt_net_gather (x10rt_team team, x10rt_place role, x10rt_place root, cons
 
 static void x10rt_net_handler_gather (struct CollectivePostprocessEnv cpe) {
     X10RT_NET_DEBUG("%s", "done");
-    if (SAVED(sbuf) == SAVED(dbuf)) {
-	memcpy(SAVED(dbuf), SAVED(buf), SAVED(gsize) * SAVED(count) * SAVED(el));
-	free(SAVED(buf));
+    if (SAVED(role) == SAVED(root) && SAVED(sbuf) == SAVED(dbuf)) {
+		memcpy(SAVED(dbuf), SAVED(buf), SAVED(gsize) * SAVED(count) * SAVED(el));
+		free(SAVED(buf));
     }
     SAVED(ch)(SAVED(arg));
     MPI_COLLECTIVE_POSTPROCESS_END
