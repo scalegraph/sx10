@@ -17,6 +17,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.FileNotFoundException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.io.PrintWriter;
@@ -80,6 +81,7 @@ import polyglot.types.Type;
 import polyglot.types.TypeSystem;
 import polyglot.types.Types;
 import polyglot.util.CodeWriter;
+import polyglot.util.DiffWriter;
 import polyglot.util.ErrorInfo;
 import polyglot.util.ErrorQueue;
 import polyglot.util.InternalCompilerError;
@@ -111,6 +113,7 @@ import x10cpp.postcompiler.Linux_CXXCommandBuilder;
 import x10cpp.postcompiler.PostCompileProperties;
 import x10cpp.postcompiler.SharedLibProperties;
 import x10cpp.postcompiler.SunOS_CXXCommandBuilder;
+import x10cpp.postcompiler.CXXMakeBuilder;
 import x10cpp.types.X10CPPContext_c;
 import static x10cpp.visit.ASTQuery.getCppRep;
 import static x10cpp.visit.ASTQuery.getStringPropertyInit;
@@ -344,11 +347,12 @@ public class X10CPPTranslator extends Translator {
     	try {
     		dest_path.mkdirs();
 			FileInputStream src = new FileInputStream(new File(src_path_+file));
-	    	FileOutputStream dest = new FileOutputStream(new File(dest_path_+file));
+	    	DiffWriter dest = new DiffWriter(new File(dest_path_+file));
 	    	int b;
 	    	while ((b = src.read()) != -1) {
 	    		dest.write(b);
 	    	}
+            dest.close();
     	} catch (IOException e) {
         	System.err.println("While copying "+file + " from "+src_path_+" to "+dest_path_);
     		System.err.println(e);
@@ -555,7 +559,8 @@ public class X10CPPTranslator extends Translator {
 	 * "[pre-command with options (usually g++)] [(#|%) [post-options (usually extra files)] [(#|%) [library options]]]".
 	 * Using '%' instead of '#' to delimit a section will cause the default values in that section to be omitted.
 	 */
-	public static boolean postCompile(X10CPPCompilerOptions options, Compiler compiler, ErrorQueue eq) {
+	public static boolean postCompile(X10CPPCompilerOptions options, Compiler compiler, ErrorQueue eq) throws FileNotFoundException,IOException
+    {
 		if (eq.hasErrors())
 			return false;
 
@@ -606,7 +611,14 @@ public class X10CPPTranslator extends Translator {
 			CXXCommandBuilder ccb = CXXCommandBuilder.getCXXCommandBuilder(options, x10rt, shared_lib_props, eq);
 			String[] cxxCmd = ccb.buildCXXCommandLine(compilationUnits);
 
-			if (!doPostCompile(options, eq, compilationUnits, cxxCmd)) return false;
+            if (options.make) {
+                CXXMakeBuilder cmb = new CXXMakeBuilder(options, x10rt, shared_lib_props, eq);
+                String[] makeCmd = cmb.buildCXXMakefile(compilationUnits);
+			    if (!doPostCompile(options, eq, compilationUnits, makeCmd)) return false;
+            }
+            else {
+			    if (!doPostCompile(options, eq, compilationUnits, cxxCmd)) return false;
+            }
 			
 			if (options.buildX10Lib != null) {
 			    if (shared_lib_props.staticLib) {

@@ -41,6 +41,9 @@ public class X10CPPCompilerOptions extends x10.X10CompilerOptions {
      */
     public boolean gpt = false;
 
+    public boolean make = false;
+    public final List<String> makeOptions = new ArrayList<String>();
+
     public final List<String> extraPreArgs = new ArrayList<String>();
     public final List<String> extraPostArgs = new ArrayList<String>();
     
@@ -73,6 +76,16 @@ public class X10CPPCompilerOptions extends x10.X10CompilerOptions {
  
         if (args[i].equals("-cxx-postarg")) {
             extraPostArgs.add(args[++i]);
+            return ++i;
+        }
+
+        if (args[i].equals("-make")) {
+            make = true;
+            return ++i;
+        }
+
+        if (args[i].equals("-makeoption")) {
+            makeOptions.add(args[++i]);
             return ++i;
         }
 
