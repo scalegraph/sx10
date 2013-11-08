@@ -2,8 +2,6 @@ package x10cpp.postcompiler;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -14,33 +12,16 @@ import polyglot.util.QuotedStringTokenizer;
 import x10.X10CompilerOptions;
 
 public class CXXMakeBuilder extends CXXCommandBuilder {
-    DiffWriter dw;
     CXXCommandBuilder ccb;
 
-    public CXXMakeBuilder(X10CompilerOptions options, PostCompileProperties x10rt_props, SharedLibProperties shared_lib_props, ErrorQueue eq) throws FileNotFoundException, IOException
+    public CXXMakeBuilder(X10CompilerOptions options, PostCompileProperties x10rt_props, SharedLibProperties shared_lib_props, ErrorQueue eq)
     {
-        dw = new DiffWriter(new File(options.output_directory, "Makefile"));
         ccb = getCXXCommandBuilder(options, x10rt_props, shared_lib_props, eq);
         setData(options, x10rt_props, shared_lib_props, eq);
     }
 
-    public void println(String str) throws IOException
-    {
-        dw.println(str);
-    }
-
-    public void println(String preToken, Collection<String> tokenArray) throws IOException
-    {
-        StringBuilder str = new StringBuilder();
-        str.append(preToken);
-        for (String token : tokenArray) {
-            str.append(token+" ");
-        }
-        dw.println(str.toString());
-    }
-
     /** Construct the C++ compilation command */
-    public final String[] buildCXXMakefile(Collection<String> outputFiles) throws IOException
+    public final String[] buildCXXMakefile(Collection<String> outputFiles) 
     {
         String post_compiler = options.post_compiler;
         if (post_compiler.contains("javac")) {
@@ -107,29 +88,45 @@ public class CXXMakeBuilder extends CXXCommandBuilder {
         }
 
 
-        println("SRC=", srcFiles);
-        println("OBJS=$(patsubst %.cc,%.o,$(SRC))");
-        println("DEPENDS=$(patsubst %.cc,%.d,$(SRC))");
-        println("FIRST=", firstTokens);
-        println("PREARGS=", preArgs);
-        println("SECOND=", secondTokens);
-        println("POSTARGS=", postArgs);
-        println("THIRD=", thirdTokens);
+        try {
+            DiffWriter dw = new DiffWriter(new File(options.output_directory, "Makefile"));
 
-        println("all: $(OBJS)");
-        println("\t$(FIRST) $(PREARGS) $(OBJS) $(SECOND) $(POSTARGS) $(THIRD)");
-        println(".cc.o:");
-        println("\t$(FIRST) $(PREARGS) -MMD -MF $(patsubst %.cc,%.d,$<) -c $< -o $@ $(SECOND) $(POSTARGS) $(THIRD)");
-        println("-include $(DEPENDS)");
+            println(dw, "SRC=", srcFiles);
+            dw.println("OBJS=$(patsubst %.cc,%.o,$(SRC))");
+            dw.println("DEPENDS=$(patsubst %.cc,%.d,$(SRC))");
+            println(dw, "FIRST=", firstTokens);
+            println(dw, "PREARGS=", preArgs);
+            println(dw, "SECOND=", secondTokens);
+            println(dw, "POSTARGS=", postArgs);
+            println(dw, "THIRD=", thirdTokens);
 
-        dw.flush();
-        dw.close();
+            dw.println("all: $(OBJS)");
+            dw.println("\t$(FIRST) $(PREARGS) $(OBJS) $(SECOND) $(POSTARGS) $(THIRD)");
+            dw.println(".cc.o:");
+            dw.println("\t$(FIRST) $(PREARGS) -MMD -MF $(patsubst %.cc,%.d,$<) -c $< -o $@ $(SECOND) $(POSTARGS) $(THIRD)");
+            dw.println("-include $(DEPENDS)");
+
+            dw.flush();
+            dw.close();
+        } catch (IOException e) {
+			System.out.println(e);
+        }
 
         ArrayList<String> cxxCmd = new ArrayList<String>();
         cxxCmd.add("make");
         cxxCmd.add("all");
         cxxCmd.addAll(options.makeOptions);
         return cxxCmd.toArray(new String[cxxCmd.size()]);
+    }
+
+    private void println(DiffWriter dw, String preToken, Collection<String> tokenArray) throws IOException
+    {
+        StringBuilder str = new StringBuilder();
+        str.append(preToken);
+        for (String token : tokenArray) {
+            str.append(token+" ");
+        }
+        dw.println(str.toString());
     }
 
 }

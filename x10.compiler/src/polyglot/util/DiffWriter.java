@@ -32,7 +32,7 @@ public class DiffWriter extends Writer
       return !wdata.toString().equals(rdata.toString());
   }
 
-  public void write(int c) throws IOException
+  public void write(int c)
   {
     if( c <= 0xFF) {
       wdata.append((char)c);
@@ -48,7 +48,7 @@ public class DiffWriter extends Writer
     }
   }
   
-  public void write(char[] cbuf, int off, int len) throws IOException
+  public void write(char[] cbuf, int off, int len)
   {
     for( int i = 0; i < len; i++)
     {
@@ -56,12 +56,12 @@ public class DiffWriter extends Writer
     }
   }
 
-  public void write(String str, int off, int len) throws IOException
+  public void write(String str, int off, int len)
   {
     write(str.toCharArray(), off, len);
   }
 
-  public void println(String str) throws IOException
+  public void println(String str)
   {
     String str_ = str + "\n";
     write(str_.toCharArray(), 0, str_.length());

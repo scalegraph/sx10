@@ -17,7 +17,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.FileNotFoundException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.io.PrintWriter;
@@ -559,7 +558,7 @@ public class X10CPPTranslator extends Translator {
 	 * "[pre-command with options (usually g++)] [(#|%) [post-options (usually extra files)] [(#|%) [library options]]]".
 	 * Using '%' instead of '#' to delimit a section will cause the default values in that section to be omitted.
 	 */
-	public static boolean postCompile(X10CPPCompilerOptions options, Compiler compiler, ErrorQueue eq) throws FileNotFoundException,IOException
+	public static boolean postCompile(X10CPPCompilerOptions options, Compiler compiler, ErrorQueue eq)
     {
 		if (eq.hasErrors())
 			return false;
