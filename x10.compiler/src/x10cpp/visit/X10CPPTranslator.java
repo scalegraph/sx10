@@ -610,14 +610,7 @@ public class X10CPPTranslator extends Translator {
 			CXXCommandBuilder ccb = CXXCommandBuilder.getCXXCommandBuilder(options, x10rt, shared_lib_props, eq);
 			String[] cxxCmd = ccb.buildCXXCommandLine(compilationUnits);
 
-            if (options.make) {
-                CXXMakeBuilder cmb = new CXXMakeBuilder(options, x10rt, shared_lib_props, eq);
-                String[] makeCmd = cmb.buildCXXMakefile(compilationUnits);
-			    if (!doPostCompile(options, eq, compilationUnits, makeCmd)) return false;
-            }
-            else {
-			    if (!doPostCompile(options, eq, compilationUnits, cxxCmd)) return false;
-            }
+			if (!doPostCompile(options, eq, compilationUnits, cxxCmd)) return false;
 			
 			if (options.buildX10Lib != null) {
 			    if (shared_lib_props.staticLib) {

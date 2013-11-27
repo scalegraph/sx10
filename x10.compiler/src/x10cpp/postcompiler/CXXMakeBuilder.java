@@ -14,14 +14,13 @@ import x10.X10CompilerOptions;
 public class CXXMakeBuilder extends CXXCommandBuilder {
     CXXCommandBuilder ccb;
 
-    public CXXMakeBuilder(X10CompilerOptions options, PostCompileProperties x10rt_props, SharedLibProperties shared_lib_props, ErrorQueue eq)
+    public CXXMakeBuilder(CXXCommandBuilder ccb)
     {
-        ccb = getCXXCommandBuilder(options, x10rt_props, shared_lib_props, eq);
-        setData(options, x10rt_props, shared_lib_props, eq);
+        this.ccb = ccb;
     }
 
     /** Construct the C++ compilation command */
-    public final String[] buildCXXMakefile(Collection<String> outputFiles) 
+    public String[] buildCXXCommandLine(Collection<String> outputFiles) 
     {
         String post_compiler = options.post_compiler;
         if (post_compiler.contains("javac")) {
@@ -114,8 +113,8 @@ public class CXXMakeBuilder extends CXXCommandBuilder {
 
         ArrayList<String> cxxCmd = new ArrayList<String>();
         cxxCmd.add("make");
-        cxxCmd.add("all");
         cxxCmd.addAll(options.makeOptions);
+        cxxCmd.add("all");
         return cxxCmd.toArray(new String[cxxCmd.size()]);
     }
 

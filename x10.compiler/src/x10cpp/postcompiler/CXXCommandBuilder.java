@@ -265,7 +265,7 @@ public class CXXCommandBuilder {
     }
 
     /** Construct the C++ compilation command */
-    public final String[] buildCXXCommandLine(Collection<String> outputFiles) {
+    public String[] buildCXXCommandLine(Collection<String> outputFiles) {
         String post_compiler = options.post_compiler;
         if (post_compiler.contains("javac")) {
             post_compiler = defaultPostCompiler();
@@ -365,7 +365,7 @@ public class CXXCommandBuilder {
      * @param eq          The error queue to use to report warnings and errors during compilation.
      * @return a CXXCommandBuilder instance that will use options and x10rt_props
      */
-    public static CXXCommandBuilder getCXXCommandBuilder(X10CompilerOptions options, PostCompileProperties x10rt_props, SharedLibProperties shared_lib_props, ErrorQueue eq) {
+    public static CXXCommandBuilder getCXXCommandBuilder(X10CPPCompilerOptions options, PostCompileProperties x10rt_props, SharedLibProperties shared_lib_props, ErrorQueue eq) {
         String platform = x10rt_props.props.getProperty("X10LIB_PLATFORM", "unknown");
         CXXCommandBuilder cbb;
         if (platform.startsWith("win32_") || platform.startsWith("cygwin")) {
@@ -390,6 +390,12 @@ public class CXXCommandBuilder {
             cbb = new CXXCommandBuilder();
         }
         cbb.setData(options, x10rt_props, shared_lib_props, eq);
+        
+        if(options.make) {
+        	CXXMakeBuilder cmb = new CXXMakeBuilder(cbb);
+        	cmb.setData(options, x10rt_props, shared_lib_props, eq);
+        	return cmb;
+        }
         return cbb;
     }
     

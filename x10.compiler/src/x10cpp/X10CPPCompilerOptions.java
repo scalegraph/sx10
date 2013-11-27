@@ -84,7 +84,7 @@ public class X10CPPCompilerOptions extends x10.X10CompilerOptions {
             return ++i;
         }
 
-        if (args[i].equals("-makeoption")) {
+        if (args[i].equals("-make-arg")) {
             makeOptions.add(args[++i]);
             return ++i;
         }
@@ -117,6 +117,8 @@ public class X10CPPCompilerOptions extends x10.X10CompilerOptions {
                      "the default values in that section to be omitted.");
         usageForFlag(out, "-cxx-prearg <arg>", "Add <arg> to the C++ compilation command line before the list of files");
         usageForFlag(out, "-cxx-postarg <arg>", "Add <arg> to the C++ compilation command line after the list of files");
+        usageForFlag(out, "-make", "Use Makefile to compile C++ files");
+        usageForFlag(out, "-make-arg <arg>", "Add <arg> to make command line");
         usageForFlag(out, "-c", "compile only to .cc");
 
 

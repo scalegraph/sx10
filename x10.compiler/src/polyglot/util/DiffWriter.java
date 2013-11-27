@@ -11,25 +11,11 @@ public class DiffWriter extends Writer
 {
   File file;
   StringBuilder wdata = null;
-  StringBuilder rdata = null;
 
-  public DiffWriter(File f) throws IOException
+  public DiffWriter(File f)
   {
     this.file = f;
     this.wdata = new StringBuilder();
-    if (file.exists()) {
-      this.rdata = new StringBuilder();
-      FileReader r = new FileReader(file);
-      int ch;
-      while((ch = r.read()) != -1) {
-        rdata.append((char)ch);
-      }
-      r.close();
-    }
-  }
-
-  public boolean diff() {
-      return !wdata.toString().equals(rdata.toString());
   }
 
   public void write(int c)
@@ -65,6 +51,19 @@ public class DiffWriter extends Writer
   {
     String str_ = str + "\n";
     write(str_.toCharArray(), 0, str_.length());
+  }
+
+  private boolean diff() throws IOException {
+	  StringBuilder rdata = new StringBuilder();
+    if (file.exists()) {
+        FileReader r = new FileReader(file);
+        int ch;
+        while((ch = r.read()) != -1) {
+          rdata.append((char)ch);
+        }
+        r.close();
+      }
+      return !wdata.toString().equals(rdata.toString());
   }
 
   public void close() throws IOException
