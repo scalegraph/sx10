@@ -116,9 +116,11 @@ namespace x10aux {
             gc_init_done = true;
         }
         if (containsPtrs) {
-            ret = GC_MALLOC_IGNORE_OFF_PAGE(size);
+            ret = GC_MALLOC(size);
+            //ret = GC_MALLOC_IGNORE_OFF_PAGE(size);
         } else {
-            ret = GC_MALLOC_ATOMIC_IGNORE_OFF_PAGE(size);
+            ret = GC_MALLOC_ATOMIC(size);
+            //ret = GC_MALLOC_ATOMIC_IGNORE_OFF_PAGE(size);
         }
 
 #else
