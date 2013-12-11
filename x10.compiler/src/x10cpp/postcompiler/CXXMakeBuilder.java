@@ -19,6 +19,21 @@ public class CXXMakeBuilder extends CXXCommandBuilder {
         this.ccb = ccb;
     }
 
+    public String getOutputFormat()
+    {
+        StringBuilder sb = new StringBuilder();
+        if (options.buildX10Lib != null && sharedLibProps.staticLib) {
+             sb.append("-c");
+        } else {
+            File exe = targetFilePath();
+            if (exe != null) {
+                sb.append("-o ");
+                sb.append(exe.getAbsolutePath().replace(File.separatorChar,'/'));
+            }
+        }
+        return sb.toString();
+    }
+
     /** Construct the C++ compilation command */
     public String[] buildCXXCommandLine(Collection<String> outputFiles) 
     {
@@ -48,14 +63,11 @@ public class CXXMakeBuilder extends CXXCommandBuilder {
         }
 
         ArrayList<String> preArgs = new ArrayList<String>();
+        String output = null;
         boolean skipArgs = token.equals("%");
         if (!skipArgs) {
             ccb.addPreArgs(preArgs);
-            if (options.buildX10Lib != null && sharedLibProps.staticLib) {
-                preArgs.add("-c");
-            } else {
-                addExecutablePath(preArgs);
-            }
+            output = getOutputFormat();
         }
 
         ArrayList<String> srcFiles = new ArrayList<String>();
@@ -95,12 +107,13 @@ public class CXXMakeBuilder extends CXXCommandBuilder {
             dw.println("DEPENDS=$(patsubst %.cc,%.d,$(SRC))");
             println(dw, "FIRST=", firstTokens);
             println(dw, "PREARGS=", preArgs);
+            dw.println("OUTPUT=" + output);
             println(dw, "SECOND=", secondTokens);
             println(dw, "POSTARGS=", postArgs);
             println(dw, "THIRD=", thirdTokens);
 
             dw.println("all: $(OBJS)");
-            dw.println("\t$(FIRST) $(PREARGS) $(OBJS) $(SECOND) $(POSTARGS) $(THIRD)");
+            dw.println("\t$(FIRST) $(PREARGS) $(OUTPUT) $(OBJS) $(SECOND) $(POSTARGS) $(THIRD)");
             dw.println(".cc.o:");
             dw.println("\t$(FIRST) $(PREARGS) -MMD -MF $(patsubst %.cc,%.d,$<) -c $< -o $@ $(SECOND) $(POSTARGS) $(THIRD)");
             dw.println("-include $(DEPENDS)");
