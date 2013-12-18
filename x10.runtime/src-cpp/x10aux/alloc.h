@@ -107,6 +107,7 @@ namespace x10aux {
         return ret;
     }
 
+/*
     // this functin used in place of alloc_internal use ignore off page feature to avoid memory leak
     inline void* alloc_chunk(size_t size, bool containsPtrs) {
         void * ret;
@@ -128,7 +129,7 @@ namespace x10aux {
 #endif
         return ret;
     }
-
+*/
     template<class T>inline T* system_alloc(size_t size = sizeof(T)) {
         _M_("system_alloc: Allocating " << size << " bytes of type " << TYPENAME(T));
 
