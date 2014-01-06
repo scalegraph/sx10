@@ -2022,7 +2022,7 @@ static void send_team_blocking_finished (x10rt_place placec, x10rt_place *placev
     x10rt_serbuf b;
     x10rt_serbuf_init(&b, 0, coll_state.TEAM_BLOCKING_FINISHED_ID);
     x10rt_serbuf_write(&b, &placec);
-    x10rt_serbuf_write(&b, &placev);
+    x10rt_serbuf_write_ex(&b, placev, sizeof(*placev), placec);
     x10rt_net_send_msg(&b.p);
     x10rt_serbuf_free(&b);
 }
