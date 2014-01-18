@@ -2537,7 +2537,7 @@ MPI_Op mpi_red_op_type(x10rt_red_type dtype, x10rt_red_op_type op) {
 #define TOSTR(x) TOSTR_I(x)
 #define TOSTR_I(x) #x
 
-#if MPI_VERSION >= 3 || (defined(OPEN_MPI) && ( OMPI_MAJOR_VERSION >= 2 || (OMPI_MAJOR_VERSION == 1 && OMPI_MINOR_VERSION >= 8))) || (defined(MVAPICH2_NUMVERSION) && MVAPICH2_NUMVERSION == 10900002)
+#if MPI_VERSION >= 3 || (defined(OPEN_MPI) && ( OMPI_MAJOR_VERSION >= 2 || (OMPI_MAJOR_VERSION == 1 && OMPI_MINOR_VERSION >= 7))) || (defined(MVAPICH2_NUMVERSION) && MVAPICH2_NUMVERSION == 10900002)
 #define MPI_COLLECTIVE(name, iname, ...) \
      CollectivePostprocess *cp = new CollectivePostprocess(); \
      MPI_Request &req = cp->req; \
