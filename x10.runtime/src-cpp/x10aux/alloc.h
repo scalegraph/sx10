@@ -16,6 +16,7 @@
 
 #ifdef X10_USE_BDWGC
 #define GC_THREADS
+//#define GC_DEBUG
 #include "gc.h"
 #endif
 
@@ -23,7 +24,11 @@
 #include <cstring>
 #include <new> // [DC] took me an hour to work out that we needed this for placement new
 
+#include <x10aux/lock.h>
+
 namespace x10aux {
+
+	extern reentrant_lock alloc_lock;
 
 #ifdef THREAD_TABLE_SZ
     // bdwgc cap on the number of threads
@@ -86,6 +91,7 @@ namespace x10aux {
 
     inline void* alloc_internal(size_t size, bool containsPtrs) {
         void *ret;
+        alloc_lock.lock();
 #ifdef X10_USE_BDWGC        
         if (!gc_init_done) {
             GC_INIT();
@@ -99,6 +105,7 @@ namespace x10aux {
 #else
         ret = ::malloc(size);
 #endif        
+        alloc_lock.unlock();
 
         _M_("\t-> " << (void*)ret);
         if (ret == NULL && size > 0) {
@@ -107,33 +114,12 @@ namespace x10aux {
         return ret;
     }
 
-/*
-    // this functin used in place of alloc_internal use ignore off page feature to avoid memory leak
-    inline void* alloc_chunk(size_t size, bool containsPtrs) {
-        void * ret;
-#ifdef X10_USE_BDWGC
-        if (!gc_init_done) {
-            GC_INIT();
-            gc_init_done = true;
-        }
-        if (containsPtrs) {
-            ret = GC_MALLOC(size);
-            //ret = GC_MALLOC_IGNORE_OFF_PAGE(size);
-        } else {
-            ret = GC_MALLOC_ATOMIC(size);
-            //ret = GC_MALLOC_ATOMIC_IGNORE_OFF_PAGE(size);
-        }
-
-#else
-        ret = ::malloc(size);
-#endif
-        return ret;
-    }
-*/
     template<class T>inline T* system_alloc(size_t size = sizeof(T)) {
         _M_("system_alloc: Allocating " << size << " bytes of type " << TYPENAME(T));
 
+        alloc_lock.lock();
         T* ret = (T*)::malloc(size);
+        alloc_lock.unlock();
         if (ret == NULL && size > 0) {
             reportOOM(size);
         }
@@ -144,7 +130,9 @@ namespace x10aux {
     template<class T> T* system_realloc(T* src, size_t dsz) {
         _M_("system_alloc: Reallocing chunk " << (void*)src << " of type " << TYPENAME(T));
 
+        alloc_lock.lock();
         T* ret = (T*)::realloc(src, dsz);
+        alloc_lock.unlock();
         if (ret == NULL && dsz > 0) {
             reportOOM(dsz);
         }

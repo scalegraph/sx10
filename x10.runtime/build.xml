@@ -18,6 +18,7 @@
     <property name="bdwgc.dir" location="${basedir}/src-cpp/bdwgc-${bdwgc.version}"/>
     <property name="bdwgc.tar" value="bdwgc-${bdwgc.version}.tar.gz"/>
     <property name="bdwgc.url" value="http://x10.sourceforge.net/dependencies/${bdwgc.tar}"/>
+    <property name="bdwgc.cflags" value="-g -O2"/>
     <property name="make.exe" value="make"/>
     <property name="bash.exe" value="bash"/>
     <property name="tar.exe" value="tar"/>
@@ -508,6 +509,7 @@
                           <arg value="--enable-large-config" />
                           <arg value="--enable-parallel-mark" />
                           <arg value="--prefix=${bdwgc.platform.dir}/install" />
+			  <env key="CFLAGS" value="${bdwgc.cflags}" />
                         </exec>
                       </else>
                     </if>

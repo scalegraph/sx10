@@ -38,6 +38,10 @@
 
 using namespace x10aux;
 
+namespace x10aux {
+	reentrant_lock alloc_lock;
+}
+
 void x10aux::reportOOM(size_t size) {
     _M_("Out of memory allocating " << size << " bytes");
 #ifndef NO_EXCEPTIONS
@@ -111,11 +115,13 @@ bool x10aux::gc_init_done;
 
 void *x10aux::realloc_internal (void *src, size_t dsz) {
     void *ret;
+    alloc_lock.lock();
 #ifdef X10_USE_BDWGC
     ret = GC_REALLOC(src, dsz);
 #else
     ret = ::realloc(src, dsz);
 #endif
+    alloc_lock.unlock();
     if (ret==NULL && dsz>0) {
         reportOOM(dsz);
     }
@@ -125,11 +131,13 @@ void *x10aux::realloc_internal (void *src, size_t dsz) {
 void x10aux::dealloc_internal (const void *obj_) {
     if (!x10aux::disable_dealloc) {
         void *obj = const_cast<void*>(obj_); // free does not take const void *
+        alloc_lock.lock();
 #ifdef X10_USE_BDWGC
         GC_FREE(obj);
 #else
         ::free(obj);
 #endif        
+        alloc_lock.unlock();
     }
 }
 
