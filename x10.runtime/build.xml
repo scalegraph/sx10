@@ -2,7 +2,7 @@
 <!DOCTYPE project [<!ENTITY buildfile SYSTEM "./build-user.xml">]>
 <project name="x10.runtime" default="dist" basedir=".">
     &buildfile;
-    <property name="bdwgc.version" value="7.2d"/>
+    <property name="bdwgc.version" value="7.4.0"/>
     <property name="x10.home" value="${basedir}/.."/>
     <property name="x10.dist.location" value="${x10.home}/x10.dist"/>
     <property name="x10.constraints.location" location="${x10.home}/x10.constraints"/>
@@ -16,8 +16,12 @@
     <property name="jar" value="x10.jar"/>
     <property name="math.jar" value="${lib}/commons-math3-3.0.jar"/>
     <property name="bdwgc.dir" location="${basedir}/src-cpp/bdwgc-${bdwgc.version}"/>
-    <property name="bdwgc.tar" value="bdwgc-${bdwgc.version}.tar.gz"/>
-    <property name="bdwgc.url" value="http://x10.sourceforge.net/dependencies/${bdwgc.tar}"/>
+    <property name="bdwgc.name" value="gc-${bdwgc.version}"/>
+    <property name="libatomic.name" value="libatomic_ops-${bdwgc.version}"/>
+    <property name="bdwgc.tar" value="${bdwgc.name}.tar.gz"/>
+    <property name="libatomic.tar" value="${libatomic.name}.tar.gz"/>
+    <property name="bdwgc.url" value="http://www.hpl.hp.com/personal/Hans_Boehm/gc/gc_source/${bdwgc.tar}"/>
+    <property name="libatomic.url" value="http://www.hpl.hp.com/personal/Hans_Boehm/gc/gc_source/${libatomic.tar}"/>
     <property name="make.exe" value="make"/>
     <property name="bash.exe" value="bash"/>
     <property name="tar.exe" value="tar"/>
@@ -619,16 +623,26 @@
 		  <retry>
 		    <get usetimestamp="true" src="${bdwgc.url}" dest="${bdwgc.dir}/${bdwgc.tar}"/>
 		  </retry>
+                  <retry>
+                    <get usetimestamp="true" src="${libatomic.url}" dest="${bdwgc.dir}/${libatomic.tar}"/>
+                  </retry>
 		</sequential>
 	</target>
 			
     <target name="patch-bdwgc" depends="download-bdwgc" unless="bdwgc.skip.patch">
         <sequential>
             <!-- Can't use the untar rule in ant because it bungles symbolic links. Sigh -->
-            <exec executable="${tar.exe}" dir="${bdwgc.dir}/src">
+            <exec executable="${tar.exe}" dir="${bdwgc.dir}">
                 <arg value="xzf" />
                 <arg value="${bdwgc.platform.dir}/${bdwgc.tar}" />
             </exec>
+	    <exec executable="${tar.exe}" dir="${bdwgc.dir}">
+                <arg value="xzf" />
+                <arg value="${bdwgc.platform.dir}/${libatomic.tar}" />
+            </exec>
+	    
+	    <move file="${bdwgc.dir}/${bdwgc.name}" tofile="${bdwgc.dir}/src" />
+	    <move file="${bdwgc.dir}/${libatomic.name}" tofile="${bdwgc.dir}/src/libatomic_ops" />
 
 	    <!-- Patches to apply for bdwgc version 7.2d -->
 	    <if>
