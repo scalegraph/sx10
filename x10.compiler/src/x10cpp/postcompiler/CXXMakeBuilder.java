@@ -108,14 +108,14 @@ public class CXXMakeBuilder extends CXXCommandBuilder {
             println(dw, "FIRST=", firstTokens);
             println(dw, "PREARGS=", preArgs);
             dw.println("OUTPUT=" + output);
-            println(dw, "SECOND=", secondTokens);
             println(dw, "POSTARGS=", postArgs);
-            println(dw, "THIRD=", thirdTokens);
 
             dw.println("all: $(OBJS)");
-            dw.println("\t$(FIRST) $(PREARGS) $(OUTPUT) $(OBJS) $(SECOND) $(POSTARGS) $(THIRD)");
+            dw.println("\t$(FIRST) $(PREARGS) $(OUTPUT) $(OBJS) $(POSTARGS)");
             dw.println(".cc.o:");
-            dw.println("\t$(FIRST) $(PREARGS) -MMD -MF $(patsubst %.cc,%.d,$<) -c $< -o $@ $(SECOND) $(POSTARGS) $(THIRD)");
+            dw.println("\t$(FIRST) $(PREARGS) -MMD -MF $(patsubst %.cc,%.d,$<) -c $< -o $@");
+            dw.println("clean:");
+            dw.println("\trm $(OBJS) $(DEPENDS)");
             dw.println("-include $(DEPENDS)");
 
             dw.flush();
