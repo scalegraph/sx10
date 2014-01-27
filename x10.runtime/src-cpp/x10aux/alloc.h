@@ -16,12 +16,15 @@
 
 #ifdef X10_USE_BDWGC
 #define GC_THREADS
+//#define GC_DEBUG
 #include "gc.h"
 #endif
 
 #include <cstdlib>
 #include <cstring>
 #include <new> // [DC] took me an hour to work out that we needed this for placement new
+
+#include <x10aux/lock.h>
 
 namespace x10aux {
 
@@ -82,11 +85,18 @@ namespace x10aux {
 
 #ifdef X10_USE_BDWGC
 	extern bool gc_init_done;
+	extern reentrant_lock alloc_lock;
+#define BDWGC_LOCK alloc_lock.lock()
+#define BDWGC_UNLOCK alloc_lock.unlock()
+#else
+#define BDWGC_LOCK
+#define BDWGC_UNLOCK
 #endif
 
     inline void* alloc_internal(size_t size, bool containsPtrs) {
         void *ret;
-#ifdef X10_USE_BDWGC        
+#ifdef X10_USE_BDWGC
+        BDWGC_LOCK;
         if (!gc_init_done) {
             GC_INIT();
             gc_init_done = true;
@@ -96,6 +106,7 @@ namespace x10aux {
         } else {
             ret = GC_MALLOC_ATOMIC(size);
         }
+        BDWGC_UNLOCK;
 #else
         ret = ::malloc(size);
 #endif        
@@ -107,33 +118,12 @@ namespace x10aux {
         return ret;
     }
 
-/*
-    // this functin used in place of alloc_internal use ignore off page feature to avoid memory leak
-    inline void* alloc_chunk(size_t size, bool containsPtrs) {
-        void * ret;
-#ifdef X10_USE_BDWGC
-        if (!gc_init_done) {
-            GC_INIT();
-            gc_init_done = true;
-        }
-        if (containsPtrs) {
-            ret = GC_MALLOC(size);
-            //ret = GC_MALLOC_IGNORE_OFF_PAGE(size);
-        } else {
-            ret = GC_MALLOC_ATOMIC(size);
-            //ret = GC_MALLOC_ATOMIC_IGNORE_OFF_PAGE(size);
-        }
-
-#else
-        ret = ::malloc(size);
-#endif
-        return ret;
-    }
-*/
     template<class T>inline T* system_alloc(size_t size = sizeof(T)) {
         _M_("system_alloc: Allocating " << size << " bytes of type " << TYPENAME(T));
 
+        BDWGC_LOCK;
         T* ret = (T*)::malloc(size);
+        BDWGC_UNLOCK;
         if (ret == NULL && size > 0) {
             reportOOM(size);
         }
@@ -144,7 +134,9 @@ namespace x10aux {
     template<class T> T* system_realloc(T* src, size_t dsz) {
         _M_("system_alloc: Reallocing chunk " << (void*)src << " of type " << TYPENAME(T));
 
+        BDWGC_LOCK;
         T* ret = (T*)::realloc(src, dsz);
+        BDWGC_UNLOCK;
         if (ret == NULL && dsz > 0) {
             reportOOM(dsz);
         }
@@ -154,7 +146,9 @@ namespace x10aux {
 
     template<class T> inline void system_dealloc(const T* obj_) {
         _M_("system_alloc: Freeing chunk " << (void*)obj_ << " of type " << TYPENAME(T));
+        BDWGC_LOCK;
         ::free((void*)obj_);
+        BDWGC_UNLOCK;
     }
 
     template<class T> inline T* alloc(size_t size = sizeof(T), bool containsPtrs = true) {
