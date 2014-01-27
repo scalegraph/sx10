@@ -38,10 +38,6 @@
 
 using namespace x10aux;
 
-namespace x10aux {
-	reentrant_lock alloc_lock;
-}
-
 void x10aux::reportOOM(size_t size) {
     _M_("Out of memory allocating " << size << " bytes");
 #ifndef NO_EXCEPTIONS
@@ -111,17 +107,18 @@ char * x10aux::alloc_utils::strndup(const char* old, int len) {
 
 #ifdef X10_USE_BDWGC
 bool x10aux::gc_init_done;
+x10aux::reentrant_lock x10aux::alloc_lock;
 #endif        
 
 void *x10aux::realloc_internal (void *src, size_t dsz) {
     void *ret;
-    alloc_lock.lock();
 #ifdef X10_USE_BDWGC
+    BDWGC_LOCK;
     ret = GC_REALLOC(src, dsz);
+    BDWGC_UNLOCK;
 #else
     ret = ::realloc(src, dsz);
 #endif
-    alloc_lock.unlock();
     if (ret==NULL && dsz>0) {
         reportOOM(dsz);
     }
@@ -131,28 +128,34 @@ void *x10aux::realloc_internal (void *src, size_t dsz) {
 void x10aux::dealloc_internal (const void *obj_) {
     if (!x10aux::disable_dealloc) {
         void *obj = const_cast<void*>(obj_); // free does not take const void *
-        alloc_lock.lock();
 #ifdef X10_USE_BDWGC
+        BDWGC_LOCK;
         GC_FREE(obj);
+        BDWGC_UNLOCK;
 #else
         ::free(obj);
 #endif        
-        alloc_lock.unlock();
     }
 }
 
 size_t x10aux::heap_size() {
+	size_t heap_size;
 #ifdef X10_USE_BDWGC
-    return GC_get_heap_size();
+    BDWGC_LOCK;
+    heap_size = GC_get_heap_size();
+    BDWGC_UNLOCK;
 #else
     // TODO: an actual useful implementation of this function when we aren't using GC.
-    return (size_t)(-1);
+    heap_size = (size_t)(-1);
 #endif
+    return heap_size;
 }
 
 void x10aux::trigger_gc() {
 #ifdef X10_USE_BDWGC
+    BDWGC_LOCK;
     GC_gcollect();
+    BDWGC_UNLOCK;
 #else
     // DO nothing.
 #endif

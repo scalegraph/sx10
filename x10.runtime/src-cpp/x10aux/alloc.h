@@ -28,8 +28,6 @@
 
 namespace x10aux {
 
-	extern reentrant_lock alloc_lock;
-
 #ifdef THREAD_TABLE_SZ
     // bdwgc cap on the number of threads
     // we need to cap the number of threads in XRX
@@ -87,12 +85,18 @@ namespace x10aux {
 
 #ifdef X10_USE_BDWGC
 	extern bool gc_init_done;
+	extern reentrant_lock alloc_lock;
+#define BDWGC_LOCK alloc_lock.lock()
+#define BDWGC_UNLOCK alloc_lock.unlock()
+#else
+#define BDWGC_LOCK
+#define BDWGC_UNLOCK
 #endif
 
     inline void* alloc_internal(size_t size, bool containsPtrs) {
         void *ret;
-        alloc_lock.lock();
-#ifdef X10_USE_BDWGC        
+#ifdef X10_USE_BDWGC
+        BDWGC_LOCK;
         if (!gc_init_done) {
             GC_INIT();
             gc_init_done = true;
@@ -102,10 +106,10 @@ namespace x10aux {
         } else {
             ret = GC_MALLOC_ATOMIC(size);
         }
+        BDWGC_UNLOCK;
 #else
         ret = ::malloc(size);
 #endif        
-        alloc_lock.unlock();
 
         _M_("\t-> " << (void*)ret);
         if (ret == NULL && size > 0) {
@@ -117,9 +121,9 @@ namespace x10aux {
     template<class T>inline T* system_alloc(size_t size = sizeof(T)) {
         _M_("system_alloc: Allocating " << size << " bytes of type " << TYPENAME(T));
 
-        alloc_lock.lock();
+        BDWGC_LOCK;
         T* ret = (T*)::malloc(size);
-        alloc_lock.unlock();
+        BDWGC_UNLOCK;
         if (ret == NULL && size > 0) {
             reportOOM(size);
         }
@@ -130,9 +134,9 @@ namespace x10aux {
     template<class T> T* system_realloc(T* src, size_t dsz) {
         _M_("system_alloc: Reallocing chunk " << (void*)src << " of type " << TYPENAME(T));
 
-        alloc_lock.lock();
+        BDWGC_LOCK;
         T* ret = (T*)::realloc(src, dsz);
-        alloc_lock.unlock();
+        BDWGC_UNLOCK;
         if (ret == NULL && dsz > 0) {
             reportOOM(dsz);
         }
@@ -142,7 +146,9 @@ namespace x10aux {
 
     template<class T> inline void system_dealloc(const T* obj_) {
         _M_("system_alloc: Freeing chunk " << (void*)obj_ << " of type " << TYPENAME(T));
+        BDWGC_LOCK;
         ::free((void*)obj_);
+        BDWGC_UNLOCK;
     }
 
     template<class T> inline T* alloc(size_t size = sizeof(T), bool containsPtrs = true) {
