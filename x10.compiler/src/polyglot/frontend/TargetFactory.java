@@ -26,6 +26,7 @@ import polyglot.types.QName;
 import polyglot.util.CodeWriter;
 import polyglot.util.InternalCompilerError;
 import polyglot.util.UnicodeWriter;
+import polyglot.util.DiffWriter;
 
 /** A <code>TargetFactory</code> is responsible for opening output files. */
 public class TargetFactory
@@ -68,7 +69,7 @@ public class TargetFactory
 	    parent.mkdirs(); // ignore return; new FileWriter will check
 	}
 
-	return new UnicodeWriter(new FileWriter(outputFile));
+	return new DiffWriter(outputFile);
     }
 
     /** Return a file object for the output of the source file in the given package. */
