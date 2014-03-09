@@ -287,7 +287,7 @@ public final class Runtime {
         }
 
         // park until given work to do -> idle thread
-        def take(worker:Worker):Activity {
+        def take(random:Random, worker:Worker):Activity {
             if (BUSY_WAITING) return null;
             if (idleCount - spareNeeded >= NTHREADS - 1) return null; // better safe than sorry
             lock.lock();
@@ -301,26 +301,36 @@ public final class Runtime {
             lock.unlock();
             
             // inspect other worker's queue
+            var next :Int = random.nextInt(count);
+            val init = next;
             var activity :Activity = null;
-            for (next in 0..(count-1)) {
+            do {
                 if (next < MAX_THREADS && null != workers(next)) { // avoid race with increase method
-                    activity = workers(next).steal();
+                    activity = workers(next).steal(); break;
                   }
-              }
+                if (++next == count) next = 0;
+              } while(next != init);
             
-            // park
             lock.lock();
             if(activity != null) {
-            	if(parkedWorkers(i) != worker) {
-                // received 2 activities -> push 1 activity to the queue
-                worker.push(worker.activity);
+              // deal got activity
+              if(idleCount > 0) {
+	              val idle = spareCount + --idleCount;
+	              val idleWorker = parkedWorkers(idle);
+	              idleWorker.activity = activity;
+	              parkedWorkers(idle) = null;
+              	if(idleWorker != worker) {
+	                lock.unlock();
+	                idleWorker.unpark();
+	                lock.lock();
+	                }
                 }
               else {
-                --idleCount;
-                parkedWorkers(i) = null;
+                // happens when this worker have been given an activity 
+                worker.push(activity);
                 }
-            	worker.activity = activity;
               }
+            // park
             while (parkedWorkers(i) == worker) {
                 lock.unlock();
                 Worker.park();
@@ -331,7 +341,7 @@ public final class Runtime {
         }
         
         // deal the top activity in the queue to idle worker if any
-        def give(worker :Worker) :void {
+        def deal(worker :Worker) :void {
             if (BUSY_WAITING) return;
             if (idleCount - spareNeeded <= 0) return;
             lock.lock();
@@ -467,7 +477,12 @@ public final class Runtime {
         // run activities while waiting on finish
         def join(latch:SimpleLatch):void {
             val tmp = activity; // save current activity
-            while (loop2(latch));
+    try {
+        	  while (loop2(latch));
+    } catch (t:CheckedThrowable) {
+        println("Uncaught exception in worker thread");
+        t.printStackTrace();
+    }
             activity = tmp; // restore current activity
         }
 
@@ -568,7 +583,7 @@ public final class Runtime {
         }
 
         // attempt to deal the top activity in the queue to idle worker
-        def deal(worker :Worker):void { workers.give(worker); }
+        def deal(worker :Worker):void { workers.deal(worker); }
 
         // release permit (called by worker upon termination)
         def release():void {
@@ -597,7 +612,7 @@ public final class Runtime {
                 if (++next == workers.count) next = 0;
                 if (i-- == 0) {
                     if (null != activity || latch()) return activity;
-                    activity = workers.take(worker);
+                    activity = workers.take(random, worker);
                     i = 2;
                 }
             }
