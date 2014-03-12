@@ -306,7 +306,9 @@ public final class Runtime {
             var activity :Activity = null;
             do {
                 if (next < MAX_THREADS && null != workers(next)) { // avoid race with increase method
-                    activity = workers(next).steal(); break;
+                    val w = workers(next);
+					while(w.size() > 0 && (activity = w.steal()) == null) ;
+					if(activity != null) break;
                   }
                 if (++next == count) next = 0;
               } while(next != init);
@@ -350,18 +352,19 @@ public final class Runtime {
                 lock.unlock();
                 return;
             }
-            val activity = worker.steal();
-            if(activity == null) { // the activity is already stolen
-                lock.unlock();
-                return;
-            }
+			var activity :Activity = null;
+			while(worker.size() > 0 && (activity = worker.steal()) == null) ;
+			if(activity == null) {
+            	lock.unlock();
+				return ;
+			}
             val i = spareCount + --idleCount;
             val idleWorker = parkedWorkers(i);
             idleWorker.activity = activity;
             parkedWorkers(i) = null;
             lock.unlock();
             idleWorker.unpark();
-            return;
+			return;
         }
 
         // account for terminated thread
