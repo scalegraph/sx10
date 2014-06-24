@@ -151,10 +151,20 @@ namespace x10aux {
         BDWGC_UNLOCK;
     }
 
+    template<class T> struct is_pointer { static const bool value = false; };
+    template<class T> struct is_pointer<T*> { static const bool value = true; };
+
     template<class T> inline T* alloc(size_t size = sizeof(T), bool containsPtrs = true) {
         _M_("Allocating " << size << " bytes of type " << TYPENAME(T));
+        if(is_pointer<T>::value) containsPtrs = true;
         return (T*)alloc_internal(size, containsPtrs);
     }
+
+
+//    template<class T> inline T* alloc(size_t size = sizeof(T), bool containsPtrs = true) {
+//        _M_("Allocating " << size << " bytes of type " << TYPENAME(T));
+//        return (T*)alloc_internal(size, containsPtrs);
+//    }
 
     template<class T> T* realloc(T* src, size_t dsz) {
         _M_("Reallocing chunk " << (void*)src << " of type " << TYPENAME(T));

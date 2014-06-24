@@ -731,7 +731,7 @@ public class Emitter {
 	            cs.writeln("const x10aux::RuntimeType** parents = NULL; ");
 	        }
 	        cs.write("rtt.initStageTwo(\""+x10name+"\","+kind+", "+numParents+ ", parents, 0, NULL, NULL);");
-	        if (ct.isX10Struct() && isPointerless(ct)) {
+	        if (/*ct.isX10Struct() &&*/ isPointerless(ct)) {
 	            cs.newline(); cs.write("rtt.containsPtrs = false;");
 	        }
 	        cs.end(); cs.newline();
@@ -797,7 +797,7 @@ public class Emitter {
     // are pointers.  Used to mark the RTT of the struct as pointerless, thus enabling
     // Rails and Arrays of pointerless structs to be allocated with GC_MALLOC_ATOMIC
     private boolean isPointerless(X10ClassType ct) {
-        assert ct.isX10Struct() : "Only structs should be checked to see if they are pointerless";
+        //assert ct.isX10Struct() : "Only structs should be checked to see if they are pointerless";
         
         if (ASTQuery.getCppRep(ct.x10Def()) != null) return false; // be conservative on @NativeRep
 
