@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.types.reflect;
@@ -254,34 +254,42 @@ public class ClassFile {
       {
       case Constant.CLASS:
       case Constant.STRING:
-	value = new Integer(in.readUnsignedShort());
+      case Constant.METHOD_TYPE: // @since 1.8
+	value = Integer.valueOf(in.readUnsignedShort());
 	break;
       case Constant.FIELD_REF:
       case Constant.METHOD_REF:
       case Constant.INTERFACE_METHOD_REF:
       case Constant.NAME_AND_TYPE:
+      case Constant.INVOKE_DYNAMIC: // @since 1.8
 	value = new int[2];
 
 	((int[]) value)[0] = in.readUnsignedShort();
 	((int[]) value)[1] = in.readUnsignedShort();
 	break;
       case Constant.INTEGER:
-	value = new Integer(in.readInt());
+	value = Integer.valueOf(in.readInt());
 	break;
       case Constant.FLOAT:
-	value = new Float(in.readFloat());
+	value = Float.valueOf(in.readFloat());
 	break;
       case Constant.LONG:
 	// Longs take up 2 constant pool entries.
-	value = new Long(in.readLong());
+	value = Long.valueOf(in.readLong());
 	break;
       case Constant.DOUBLE:
 	// Doubles take up 2 constant pool entries.
-	value = new Double(in.readDouble());
+	value = Double.valueOf(in.readDouble());
 	break;
       case Constant.UTF8:
 	value = in.readUTF();
 	break;
+      case Constant.METHOD_HANDLE: // @since 1.8
+        value = new int[2];
+
+        ((int[]) value)[0] = in.readUnsignedByte();
+        ((int[]) value)[1] = in.readUnsignedShort();
+        break;
       default:
 	throw new ClassFormatError("Invalid constant tag: " + tag);
       }

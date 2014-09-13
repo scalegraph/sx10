@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef x10aux_GL_h
@@ -20,11 +20,11 @@
 #include <GL/glut.h>
 #endif
 
-#include <x10/array/Array.h>
+//#include <x10.regionarray/Array.h>
 
 namespace x10 { namespace gl {
 
-    template<class T> void array_hack (x10aux::ref<x10::array::Array<T> > arr, void *ptr)
+    template<class T> void array_hack (x10::lang::Rail<T> arr, void *ptr)
     {
         // go straight to hell, do not pass go, do not collect $200
         arr->FMGL(raw)->data = (x10_ulong)(ptr);

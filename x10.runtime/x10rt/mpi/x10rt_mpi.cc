@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2013.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 /* MPICH2 mpi.h wants to not have SEEK_SET etc defined for C++ bindings */
@@ -60,6 +60,9 @@ static void x10rt_net_coll_init(int *argc, char ** *argv, x10rt_msg_type *counte
 #define X10RT_MAX_PEEK_DEPTH            (16)
 #define X10RT_MAX_OUTSTANDING_SENDS     (256)
 #define X10RT_DATATYPE_TBL_SIZE         (256)
+#define X10RT_MPI_DEBUG_PRINT "X10RT_MPI_DEBUG_PRINT"
+#define X10RT_MPI_THREAD_MULTIPLE "X10RT_MPI_THREAD_MULTIPLE"
+#define X10RT_MPI_FORCE_COLLECTIVES "X10RT_MPI_FORCE_COLLECTIVES"
 
 /* Generic utility funcs */
 template <class T> T* ChkAlloc(size_t len) {
@@ -142,6 +145,15 @@ typedef enum {
     X10RT_REQ_TYPE_UNDEFINED            = -1
 } X10RT_REQ_TYPES;
 
+/* differentiate from x10rt_{get|put}_req
+ * to save precious bytes from packet size
+ * for each PUT/GET */
+typedef struct _x10rt_nw_req {
+    int                       type;
+    int                       msg_len;
+    int                       len;
+} x10rt_nw_req;
+
 typedef struct _x10rt_get_req {
     int                       type;
     int                       dest_place;
@@ -156,15 +168,6 @@ typedef struct _x10rt_put_req {
     int                       msg_len;
     int                       len;
 } x10rt_put_req;
-
-/* differentiate from x10rt_{get|put}_req
- * to save precious bytes from packet size
- * for each PUT/GET */
-typedef struct _x10rt_nw_req {
-    int                       type;
-    int                       msg_len;
-    int                       len;
-} x10rt_nw_req;
 
 class x10rt_req {
         int                   type;
@@ -347,6 +350,7 @@ class x10rt_internal_state {
         bool                finalized;
         pthread_mutex_t     lock;
         bool                is_mpi_multithread;
+        bool				report_nonblocking_coll;
         int                 rank;
         int                 nprocs;
         MPI_Comm            mpi_comm;
@@ -370,6 +374,7 @@ class x10rt_internal_state {
             init                = false;
             finalized           = false;
             is_mpi_multithread  = false;
+            report_nonblocking_coll	= false;
         }
         void Init() {
             init          = true;
@@ -438,7 +443,7 @@ struct CollState {
             }
             UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
         }
-        is_enabled_debug_print = getenv("X10RT_MPI_DEBUG_PRINT")!=NULL;
+        is_enabled_debug_print = checkBoolEnvVar(getenv(X10RT_MPI_DEBUG_PRINT));
     }
 
     ~CollState() {
@@ -464,6 +469,10 @@ struct CollState {
 
 static CollState     coll_state;
 
+x10rt_error x10rt_net_preinit(char* connInfoBuffer, int connInfoBufferSize) {
+	return X10RT_ERR_UNSUPPORTED;
+}
+
 x10rt_error x10rt_net_init(int *argc, char ** *argv, x10rt_msg_type *counter) {
     assert(!global_state.finalized);
     assert(!global_state.init);
@@ -471,7 +480,7 @@ x10rt_error x10rt_net_init(int *argc, char ** *argv, x10rt_msg_type *counter) {
     global_state.Init();
 
     int provided;
-    if(NULL != getenv("X10RT_MPI_THREAD_MULTIPLE")) {
+    if(checkBoolEnvVar(getenv(X10RT_MPI_THREAD_MULTIPLE))) {
         global_state.is_mpi_multithread = true;
         if (MPI_SUCCESS != MPI_Init_thread(argc, argv, 
                     MPI_THREAD_MULTIPLE, &provided)) {
@@ -482,10 +491,10 @@ x10rt_error x10rt_net_init(int *argc, char ** *argv, x10rt_msg_type *counter) {
         if (MPI_THREAD_MULTIPLE != provided) {
             if (0 == global_state.rank) {
                 fprintf(stderr, "[%s:%d] Underlying MPI implementation"
-                        " needs to provide MPI_THREAD_MULTIPLE threading level\n",
+                        " needs to provide "X10RT_MPI_THREAD_MULTIPLE" threading level\n",
                         __FILE__, __LINE__);
-                fprintf(stderr, "[%s:%d] Alternatively, you could unset env var"
-                        " X10RT_MPI_THREAD_MULTIPLE from you environment\n",
+                fprintf(stderr, "[%s:%d] Alternatively, you could unset env var "
+                        X10RT_MPI_THREAD_MULTIPLE" from you environment\n",
                         __FILE__, __LINE__);
             }
             if (MPI_SUCCESS != MPI_Finalize()) {
@@ -501,6 +510,11 @@ x10rt_error x10rt_net_init(int *argc, char ** *argv, x10rt_msg_type *counter) {
             abort();
         }
     }
+
+    if (checkBoolEnvVar(getenv(X10RT_MPI_FORCE_COLLECTIVES))) {
+    	global_state.report_nonblocking_coll = true;
+    }
+
     if (MPI_SUCCESS != MPI_Comm_size(MPI_COMM_WORLD, &global_state.nprocs)) {
         fprintf(stderr, "[%s:%d] Error in MPI_Comm_size\n",
                 __FILE__, __LINE__);
@@ -533,6 +547,8 @@ x10rt_error x10rt_net_init(int *argc, char ** *argv, x10rt_msg_type *counter) {
                 __FILE__, __LINE__);
         abort();
     }
+    
+    x10rt_net_coll_init(argc, argv, counter);
 
     x10rt_net_coll_init(argc, argv, counter);
 
@@ -588,15 +604,22 @@ void x10rt_net_register_get_receiver(x10rt_msg_type msg_type,
     global_state.getCb2Tbl[msg_type] = cb2;
 }
 
-void x10rt_net_internal_barrier (void)
-{
-    abort(); // FUNCTION IS ON DEATH ROW
-}
-
 x10rt_place x10rt_net_nhosts(void) {
     assert(global_state.init);
     assert(!global_state.finalized);
     return global_state.nprocs;
+}
+
+x10rt_place x10rt_net_ndead (void) {
+	return 0; // place failure is not handled by this implementation.
+}
+
+bool x10rt_net_is_place_dead (x10rt_place p) {
+	return false; // place failure is not handled by this implementation.
+}
+
+x10rt_error x10rt_net_get_dead (x10rt_place *dead_places, x10rt_place len) {
+	return X10RT_ERR_UNSUPPORTED; // place failure is not handled by this implementation.
 }
 
 x10rt_place x10rt_net_here(void) {
@@ -1120,10 +1143,21 @@ x10rt_error x10rt_net_probe (void) {
     return X10RT_ERR_OK;
 }
 
+bool x10rt_net_blocking_probe_support(void)
+{
+	return false;
+}
+
 x10rt_error x10rt_net_blocking_probe (void) {
     // TODO: make this blocking.  For now, just call probe.
     x10rt_net_probe_ex(false);
     return X10RT_ERR_OK;
+}
+
+x10rt_error x10rt_net_unblock_probe (void)
+{
+	// TODO: once blocking_probe is implemented, this needs to do something.  Fine for now.
+	return X10RT_ERR_OK;
 }
 
 static void x10rt_net_probe_ex (bool network_only) {
@@ -1214,16 +1248,15 @@ void x10rt_net_finalize(void) {
     global_state.finalized = true;
 }
 
-int x10rt_net_supports (x10rt_opt o) {
-    X10RT_NET_DEBUG("o = %d", o);
-    switch (o) {
-        case X10RT_OPT_COLLECTIVES:
-        case X10RT_OPT_COLLECTIVES_APPEND:
-             return 1;
-             break;
-        default:
-            return 0;
-    }
+x10rt_coll_type x10rt_net_coll_support () {
+    if (global_state.report_nonblocking_coll)
+	    return X10RT_COLL_ALLNONBLOCKINGCOLLECTIVES;
+	else
+        return X10RT_COLL_ALLBLOCKINGCOLLECTIVES;
+}
+
+bool x10rt_net_remoteop_support () {
+	return false;
 }
 
 void x10rt_net_remote_op (x10rt_place place, x10rt_remote_ptr victim,
@@ -2022,7 +2055,8 @@ static void send_team_blocking_finished (x10rt_place placec, x10rt_place *placev
     x10rt_serbuf b;
     x10rt_serbuf_init(&b, 0, coll_state.TEAM_BLOCKING_FINISHED_ID);
     x10rt_serbuf_write(&b, &placec);
-    x10rt_serbuf_write_ex(&b, placev, sizeof(*placev), placec);
+    //x10rt_serbuf_write_ex(&b, placev, sizeof(*placev), placec);
+    x10rt_serbuf_write(&b, &placev);
     x10rt_net_send_msg(&b.p);
     x10rt_serbuf_free(&b);
 }
@@ -2176,7 +2210,7 @@ void x10rt_net_team_del (x10rt_team team, x10rt_place role,
     return;
 }
 
-void x10rt_net_team_members (x10rt_team team, x10rt_place *members)
+void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg)
 {
     assert(global_state.init);
     assert(!global_state.finalized);
@@ -2216,6 +2250,7 @@ void x10rt_net_team_members (x10rt_team team, x10rt_place *members)
 
     MPI_Group_free(&MPI_GROUP_WORLD);
     MPI_Group_free(&grp);
+    ch(arg);
 }
 
 x10rt_place x10rt_net_team_sz (x10rt_team team)
@@ -2238,122 +2273,122 @@ x10rt_place x10rt_net_team_sz (x10rt_team team)
     return sz;
 }
 
-void x10rt_net_team_split (x10rt_team parent, x10rt_place parent_role,
-                           x10rt_place color, x10rt_place new_role,
-                           x10rt_completion_handler2 *ch, void *arg)
-{
-    assert(global_state.init);
-    assert(!global_state.finalized);
-
-    X10RT_NET_DEBUG("parent=%d, parent_role=%d, color=%d, new_role=%d", parent, parent_role, color, new_role);
-
-    MPI_Comm comm = mpi_tdb[parent];
-    int gsize = x10rt_net_team_sz(parent);
-
-    x10rt_place placec = x10rt_net_team_sz(parent);
-    x10rt_place *placev = ChkAlloc<x10rt_place>(placec * sizeof(x10rt_place));
-
-    if (parent_role == 0) {
-       x10rt_net_team_members(parent, placev);
-        {
-            int finished = 0;
-            x10rt_net_team_barrier_for_blocking(placec, placev, x10rt_net_one_setter, &finished);
-            while (!finished) x10rt_net_probe_ex(true);
-        }
-    }
-
-    {
-	int finished = 0;
-	x10rt_net_barrier(parent, parent_role, x10rt_net_one_setter, &finished);
-	while (!finished) x10rt_net_probe_ex(true);
-    }
-
-    MPI_Comm new_comm;
-    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    if (MPI_SUCCESS != MPI_Comm_split(comm, color, new_role, &new_comm)) {
-        fprintf(stderr, "[%s:%d] %s\n",
-                __FILE__, __LINE__, "Error in MPI_Comm_split");
-        abort();
-    }
-    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
-
-    if (parent_role == 0) {
-        send_team_blocking_finished(placec, placev);
-    }
-
-    // role 0 must exist
-    int *colors = new int[gsize];
-    {
-	int finished = 0;
-	x10rt_net_gather(parent, parent_role, 0, &color, colors, sizeof(x10rt_place), 1, x10rt_net_one_setter, &finished);
-	while (!finished) x10rt_net_probe_ex(true);
-    }
-
-    int *new_team_ids = NULL;
-    if (parent_role == 0) {
-
-	std::sort(colors, colors+gsize);
-	std::map<x10rt_place, int> color_mapping;
-	assert(gsize > 0);
-	int prev = colors[0]; // one or more roles exist
-	int count = 0;
-	for (int i = 0; i < gsize; ++i) {
-		if (prev != colors[i]) {
-			prev = colors[i];
-			++count;
-		}
-		color_mapping[colors[i]] = count;
-	}
-	int new_team_count = count + 1;
-
-	std::vector<x10rt_place> new_team_ids(gsize);
-	for (int i = 0; i < gsize; ++i) {
-		new_team_ids[i] = color_mapping[colors[i]];
-	}
-	delete[] colors;
-
-    x10rt_place home = x10rt_net_here();
-	int msg_id = coll_state.TEAM_SPLIT_ALLOCATE_TEAM_ID;
-	const size_t cont_len = sizeof(MPI_Comm) + sizeof(x10rt_team) + (1 + gsize)  * sizeof(x10rt_place);
-	char *cont = static_cast<char *>(malloc(cont_len));
-	MPI_Comm *comm1 = reinterpret_cast<MPI_Comm *>(cont);
-	x10rt_team *team1 = reinterpret_cast<x10rt_team *>(&comm1[1]);
-	x10rt_place *role_and_colors = reinterpret_cast<x10rt_place *>(&team1[1]);
-	comm1[0] = new_comm;
-	team1[0] = parent;
-	role_and_colors[0] = parent_role;
-	memcpy(&role_and_colors[1], &new_team_ids[0], gsize * sizeof(x10rt_place));
-	x10rt_remote_ptr ch_ = reinterpret_cast<x10rt_remote_ptr>(ch);
-	x10rt_remote_ptr arg_ = reinterpret_cast<x10rt_remote_ptr>(arg);
-
-	x10rt_serbuf b;
-	x10rt_serbuf_init(&b, 0, coll_state.TEAM_ALLOCATE_NEW_TEAMS_ID);
-	x10rt_serbuf_write(&b, &new_team_count);
-	x10rt_serbuf_write(&b, &msg_id);
-	x10rt_serbuf_write(&b, &home);
-	x10rt_serbuf_write(&b, &cont_len);
-	x10rt_serbuf_write_ex(&b, cont, sizeof(*cont), cont_len);
-	x10rt_serbuf_write(&b, &ch_);
-	x10rt_serbuf_write(&b, &arg_);
-	x10rt_net_send_msg(&b.p);
-	x10rt_serbuf_free(&b);
-
-	free(cont);
-    } else {
-	int new_team_id;
-	{
-		int finished = 0;
-		x10rt_net_scatter(parent, parent_role, 0, new_team_ids, &new_team_id, sizeof(x10rt_team), 1, x10rt_net_one_setter, &finished);
-		while (!finished) x10rt_net_probe_ex(true);
-	}
-	if (new_team_ids != NULL)
-		delete[] new_team_ids;
-
-
-	mpi_tdb.allocTeam(new_team_id, new_comm);
-	ch(new_team_id, arg);
-    }
-}
+//void x10rt_net_team_split (x10rt_team parent, x10rt_place parent_role,
+//                           x10rt_place color, x10rt_place new_role,
+//                           x10rt_completion_handler2 *ch, void *arg)
+//{
+//    assert(global_state.init);
+//    assert(!global_state.finalized);
+//
+//    X10RT_NET_DEBUG("parent=%d, parent_role=%d, color=%d, new_role=%d", parent, parent_role, color, new_role);
+//
+//    MPI_Comm comm = mpi_tdb[parent];
+//    int gsize = x10rt_net_team_sz(parent);
+//
+//    x10rt_place placec = x10rt_net_team_sz(parent);
+//    x10rt_place *placev = ChkAlloc<x10rt_place>(placec * sizeof(x10rt_place));
+//
+//    if (parent_role == 0) {
+//       x10rt_net_team_members(parent, placev);
+//        {
+//            int finished = 0;
+//            x10rt_net_team_barrier_for_blocking(placec, placev, x10rt_net_one_setter, &finished);
+//            while (!finished) x10rt_net_probe_ex(true);
+//        }
+//    }
+//
+//    {
+//	int finished = 0;
+//	x10rt_net_barrier(parent, parent_role, x10rt_net_one_setter, &finished);
+//	while (!finished) x10rt_net_probe_ex(true);
+//    }
+//
+//    MPI_Comm new_comm;
+//    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
+//    if (MPI_SUCCESS != MPI_Comm_split(comm, color, new_role, &new_comm)) {
+//        fprintf(stderr, "[%s:%d] %s\n",
+//                __FILE__, __LINE__, "Error in MPI_Comm_split");
+//        abort();
+//    }
+//    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+//
+//    if (parent_role == 0) {
+//        send_team_blocking_finished(placec, placev);
+//    }
+//
+//    // role 0 must exist
+//    int *colors = new int[gsize];
+//    {
+//	int finished = 0;
+//	x10rt_net_gather(parent, parent_role, 0, &color, colors, sizeof(x10rt_place), 1, x10rt_net_one_setter, &finished);
+//	while (!finished) x10rt_net_probe_ex(true);
+//    }
+//
+//    int *new_team_ids = NULL;
+//    if (parent_role == 0) {
+//
+//	std::sort(colors, colors+gsize);
+//	std::map<x10rt_place, int> color_mapping;
+//	assert(gsize > 0);
+//	int prev = colors[0]; // one or more roles exist
+//	int count = 0;
+//	for (int i = 0; i < gsize; ++i) {
+//		if (prev != colors[i]) {
+//			prev = colors[i];
+//			++count;
+//		}
+//		color_mapping[colors[i]] = count;
+//	}
+//	int new_team_count = count + 1;
+//
+//	std::vector<x10rt_place> new_team_ids(gsize);
+//	for (int i = 0; i < gsize; ++i) {
+//		new_team_ids[i] = color_mapping[colors[i]];
+//	}
+//	delete[] colors;
+//
+//    x10rt_place home = x10rt_net_here();
+//	int msg_id = coll_state.TEAM_SPLIT_ALLOCATE_TEAM_ID;
+//	const size_t cont_len = sizeof(MPI_Comm) + sizeof(x10rt_team) + (1 + gsize)  * sizeof(x10rt_place);
+//	char *cont = static_cast<char *>(malloc(cont_len));
+//	MPI_Comm *comm1 = reinterpret_cast<MPI_Comm *>(cont);
+//	x10rt_team *team1 = reinterpret_cast<x10rt_team *>(&comm1[1]);
+//	x10rt_place *role_and_colors = reinterpret_cast<x10rt_place *>(&team1[1]);
+//	comm1[0] = new_comm;
+//	team1[0] = parent;
+//	role_and_colors[0] = parent_role;
+//	memcpy(&role_and_colors[1], &new_team_ids[0], gsize * sizeof(x10rt_place));
+//	x10rt_remote_ptr ch_ = reinterpret_cast<x10rt_remote_ptr>(ch);
+//	x10rt_remote_ptr arg_ = reinterpret_cast<x10rt_remote_ptr>(arg);
+//
+//	x10rt_serbuf b;
+//	x10rt_serbuf_init(&b, 0, coll_state.TEAM_ALLOCATE_NEW_TEAMS_ID);
+//	x10rt_serbuf_write(&b, &new_team_count);
+//	x10rt_serbuf_write(&b, &msg_id);
+//	x10rt_serbuf_write(&b, &home);
+//	x10rt_serbuf_write(&b, &cont_len);
+//	x10rt_serbuf_write_ex(&b, cont, sizeof(*cont), cont_len);
+//	x10rt_serbuf_write(&b, &ch_);
+//	x10rt_serbuf_write(&b, &arg_);
+//	x10rt_net_send_msg(&b.p);
+//	x10rt_serbuf_free(&b);
+//
+//	free(cont);
+//    } else {
+//	int new_team_id;
+//	{
+//		int finished = 0;
+//		x10rt_net_scatter(parent, parent_role, 0, new_team_ids, &new_team_id, sizeof(x10rt_team), 1, x10rt_net_one_setter, &finished);
+//		while (!finished) x10rt_net_probe_ex(true);
+//	}
+//	if (new_team_ids != NULL)
+//		delete[] new_team_ids;
+//
+//
+//	mpi_tdb.allocTeam(new_team_id, new_comm);
+//	ch(new_team_id, arg);
+//    }
+//}
 
 int x10rt_red_type_length(x10rt_red_type dtype) {
     switch (dtype) {
@@ -2369,6 +2404,7 @@ int x10rt_red_type_length(x10rt_red_type dtype) {
     BORING(X10RT_RED_TYPE_DBL)
     BORING(X10RT_RED_TYPE_FLT)
     BORING(X10RT_RED_TYPE_DBL_S32)
+    BORING(X10RT_RED_TYPE_COMPLEX_DBL)
 #undef BORING
     default:
         fprintf(stderr, "[%s:%d] unexpected argument. got: %d\n",
@@ -2446,6 +2482,8 @@ MPI_Datatype mpi_red_type(x10rt_red_type dtype) {
         return MPI_DOUBLE;
     case X10RT_RED_TYPE_FLT:
         return MPI_FLOAT;
+    case X10RT_RED_TYPE_COMPLEX_DBL:
+        return MPI_DOUBLE_COMPLEX;
     default:
         fprintf(stderr, "[%s:%d] unexpected argument. got: %d\n",
                 __FILE__, __LINE__, dtype);
@@ -2517,6 +2555,7 @@ MPI_Op mpi_red_op_type(x10rt_red_type dtype, x10rt_red_op_type op) {
     case X10RT_RED_TYPE_U64:
     case X10RT_RED_TYPE_DBL:
     case X10RT_RED_TYPE_FLT:
+    case X10RT_RED_TYPE_COMPLEX_DBL:
         return mpi_red_arith_op_type(op);
     case X10RT_RED_TYPE_DBL_S32:
         return mpi_red_loc_op_type(op);
@@ -2537,7 +2576,7 @@ MPI_Op mpi_red_op_type(x10rt_red_type dtype, x10rt_red_op_type op) {
 #define TOSTR(x) TOSTR_I(x)
 #define TOSTR_I(x) #x
 
-#if MPI_VERSION >= 3 || (defined(OPEN_MPI) && ( OMPI_MAJOR_VERSION >= 2 || (OMPI_MAJOR_VERSION == 1 && OMPI_MINOR_VERSION >= 7))) || (defined(MVAPICH2_NUMVERSION) && MVAPICH2_NUMVERSION == 10900002)
+#if MPI_VERSION >= 3 || (defined(OPEN_MPI) && ( OMPI_MAJOR_VERSION >= 2 || (OMPI_MAJOR_VERSION == 1 && OMPI_MINOR_VERSION >= 8))) || (defined(MVAPICH2_NUMVERSION) && MVAPICH2_NUMVERSION == 10900002)
 #define MPI_COLLECTIVE(name, iname, ...) \
      CollectivePostprocess *cp = new CollectivePostprocess(); \
      MPI_Request &req = cp->req; \
@@ -2888,7 +2927,8 @@ void x10rt_net_gather (x10rt_team team, x10rt_place role, x10rt_place root, cons
 
     MPI_Comm comm = mpi_tdb.comm(team);
     int gsize = x10rt_net_team_sz(team);
-    void *buf = (role == root && sbuf == dbuf) ? ChkAlloc<void>(gsize * count * el) : dbuf;
+    void *buf = (sbuf == dbuf) ? ChkAlloc<void>(gsize * count * el) : dbuf;
+    //void *buf = (role == root && sbuf == dbuf) ? ChkAlloc<void>(gsize * count * el) : dbuf;
 
     MPI_COLLECTIVE(Gather, Igather, (void *)sbuf, count, get_mpi_datatype(el), buf, count, get_mpi_datatype(el), root, comm);
 
@@ -3126,6 +3166,7 @@ static int sizeof_dtype(x10rt_red_type dtype)
         BORING_MACRO(X10RT_RED_TYPE_DBL);
         BORING_MACRO(X10RT_RED_TYPE_FLT);
         BORING_MACRO(X10RT_RED_TYPE_DBL_S32);
+        BORING_MACRO(X10RT_RED_TYPE_COMPLEX_DBL);
         #undef BORING_MACRO
         default: fprintf(stderr, "Corrupted type? %x\n", dtype); abort();
     }
@@ -3267,6 +3308,126 @@ static void x10rt_net_handler_scan (struct CollectivePostprocessEnv cpe) {
 #undef MPI_COLLECTIVE_NAME
 }
 
+void x10rt_net_team_split (x10rt_team parent, x10rt_place parent_role,
+                           x10rt_place color, x10rt_place new_role,
+                           x10rt_completion_handler2 *ch, void *arg)
+{
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
+    X10RT_NET_DEBUG("parent=%d, parent_role=%d, color=%d, new_role=%d", parent, parent_role, color, new_role);
+
+    MPI_Comm comm = mpi_tdb[parent];
+    int gsize = x10rt_net_team_sz(parent);
+
+    x10rt_place placec = x10rt_net_team_sz(parent);
+    x10rt_place *placev = ChkAlloc<x10rt_place>(placec * sizeof(x10rt_place));
+
+    if (parent_role == 0) {
+        {
+            int finished = 0;
+            x10rt_net_team_members(parent, placev, x10rt_net_one_setter, &finished);
+            while (!finished) x10rt_net_probe_ex(true);
+        }
+        {
+            int finished = 0;
+            x10rt_net_team_barrier_for_blocking(placec, placev, x10rt_net_one_setter, &finished);
+            while (!finished) x10rt_net_probe_ex(true);
+        }
+    }
+
+    {
+	int finished = 0;
+	x10rt_net_barrier(parent, parent_role, x10rt_net_one_setter, &finished);
+	while (!finished) x10rt_net_probe_ex(true);
+    }
+
+    MPI_Comm new_comm;
+    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    if (MPI_SUCCESS != MPI_Comm_split(comm, color, new_role, &new_comm)) {
+        fprintf(stderr, "[%s:%d] %s\n",
+                __FILE__, __LINE__, "Error in MPI_Comm_split");
+        abort();
+    }
+    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+
+    if (parent_role == 0) {
+        send_team_blocking_finished(placec, placev);
+    }
+
+    // role 0 must exist
+    int *colors = new int[gsize];
+    {
+	int finished = 0;
+	x10rt_net_gather(parent, parent_role, 0, &color, colors, sizeof(x10rt_place), 1, x10rt_net_one_setter, &finished);
+	while (!finished) x10rt_net_probe_ex(true);
+    }
+
+    int *new_team_ids = NULL;
+    if (parent_role == 0) {
+
+	std::sort(colors, colors+gsize);
+	std::map<x10rt_place, int> color_mapping;
+	assert(gsize > 0);
+	int prev = colors[0]; // one or more roles exist
+	int count = 0;
+	for (int i = 0; i < gsize; ++i) {
+		if (prev != colors[i]) {
+			prev = colors[i];
+			++count;
+		}
+		color_mapping[colors[i]] = count;
+	}
+	int new_team_count = count + 1;
+
+	std::vector<x10rt_place> new_team_ids(gsize);
+	for (int i = 0; i < gsize; ++i) {
+		new_team_ids[i] = color_mapping[colors[i]];
+	}
+	delete[] colors;
+
+    x10rt_place home = x10rt_net_here();
+	int msg_id = coll_state.TEAM_SPLIT_ALLOCATE_TEAM_ID;
+	const size_t cont_len = sizeof(MPI_Comm) + sizeof(x10rt_team) + (1 + gsize)  * sizeof(x10rt_place);
+	char *cont = static_cast<char *>(malloc(cont_len));
+	MPI_Comm *comm1 = reinterpret_cast<MPI_Comm *>(cont);
+	x10rt_team *team1 = reinterpret_cast<x10rt_team *>(&comm1[1]);
+	x10rt_place *role_and_colors = reinterpret_cast<x10rt_place *>(&team1[1]);
+	comm1[0] = new_comm;
+	team1[0] = parent;
+	role_and_colors[0] = parent_role;
+	memcpy(&role_and_colors[1], &new_team_ids[0], gsize * sizeof(x10rt_place));
+	x10rt_remote_ptr ch_ = reinterpret_cast<x10rt_remote_ptr>(ch);
+	x10rt_remote_ptr arg_ = reinterpret_cast<x10rt_remote_ptr>(arg);
+
+	x10rt_serbuf b;
+	x10rt_serbuf_init(&b, 0, coll_state.TEAM_ALLOCATE_NEW_TEAMS_ID);
+	x10rt_serbuf_write(&b, &new_team_count);
+	x10rt_serbuf_write(&b, &msg_id);
+	x10rt_serbuf_write(&b, &home);
+	x10rt_serbuf_write(&b, &cont_len);
+	x10rt_serbuf_write_ex(&b, cont, sizeof(*cont), cont_len);
+	x10rt_serbuf_write(&b, &ch_);
+	x10rt_serbuf_write(&b, &arg_);
+	x10rt_net_send_msg(&b.p);
+	x10rt_serbuf_free(&b);
+
+	free(cont);
+    } else {
+	int new_team_id;
+	{
+		int finished = 0;
+		x10rt_net_scatter(parent, parent_role, 0, new_team_ids, &new_team_id, sizeof(x10rt_team), 1, x10rt_net_one_setter, &finished);
+		while (!finished) x10rt_net_probe_ex(true);
+	}
+	if (new_team_ids != NULL)
+		delete[] new_team_ids;
+
+
+	mpi_tdb.allocTeam(new_team_id, new_comm);
+	ch(new_team_id, arg);
+    }
+}
 
 /** \} */
 

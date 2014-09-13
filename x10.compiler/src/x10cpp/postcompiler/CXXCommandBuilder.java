@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10cpp.postcompiler;
@@ -108,17 +108,16 @@ public class CXXCommandBuilder {
 
     
     protected final boolean usingXLC() {
-        return defaultPostCompiler().contains("xlC");
+        return defaultPostCompiler().contains("xlC") || 
+               defaultPostCompiler().contains("mpCC") ||
+	       defaultPostCompiler().contains("xlcxx");
     }
     
-    protected final boolean bluegene() {
-        return bluegeneP() || bluegeneQ();
-    }
-    protected final boolean bluegeneP() {
-        return platform.contains("bgp");
-    }
     protected final boolean bluegeneQ() {
-        return platform.contains("bgq");
+        return getPlatform().contains("bgq");
+    }
+    protected final boolean fx10() {
+        return getPlatform().contains("fx10");
     }
 
     /** 
@@ -151,10 +150,16 @@ public class CXXCommandBuilder {
             cxxCmd.add(usingXLC() ? "-O3" : "-O2");
             cxxCmd.add(usingXLC() ? "-qinline" : "-finline-functions");
             cxxCmd.add("-DNO_TRACING");
-            if (usingXLC() && !bluegene()) {
-                cxxCmd.add("-qhot");
-                cxxCmd.add("-qtune=auto");
-                cxxCmd.add("-qarch=auto");
+            if (fx10()) {
+                cxxCmd.add("-Kfast");
+            }
+            if (usingXLC()) {
+                if (bluegeneQ()) {
+                    cxxCmd.add("-qhot");
+                    cxxCmd.add("-qtune=qp");
+                    cxxCmd.add("-qsimd=auto");
+                    cxxCmd.add("-qarch=qp");
+                }
             }
         }
 
@@ -163,6 +168,9 @@ public class CXXCommandBuilder {
                                + ":1540-1101"    // Do not warn about non-void functions with no return
                                + ":1540-1102"    // Do not warn about uninitialized variables
                                + ":1500-029");   // Do not warn about being unable to inline when optimizing
+        } else if (fx10()) {
+            cxxCmd.add("-Xg");        	
+            cxxCmd.add("-w");
         } else {
             cxxCmd.add("-Wno-long-long");        // Do not warn about using long long
             cxxCmd.add("-Wno-unused-parameter"); // Do not warn about unused parameters
@@ -226,7 +234,9 @@ public class CXXCommandBuilder {
         cxxCmd.addAll(x10rt.libs);
 
         if (options.gpt) {
+            cxxCmd.add("-Wl,--no-as-needed");
             cxxCmd.add("-lprofiler");
+            cxxCmd.add("-Wl,--as-needed");
         }
         
         if (options.buildX10Lib != null) {
@@ -374,15 +384,15 @@ public class CXXCommandBuilder {
         	cbb = new Linux_CXXCommandBuilder();
         } else if (platform.startsWith("aix_")) {
         	cbb = new AIX_CXXCommandBuilder();
-        } else if (platform.startsWith("sunos_")) {
+        } else if (platform.startsWith("sunos")) {
         	cbb = new SunOS_CXXCommandBuilder();
         } else if (platform.startsWith("macosx_") || platform.startsWith("darwin")) {
         	cbb = new MacOSX_CXXCommandBuilder();
         } else if (platform.startsWith("freebsd_")) {
         	cbb = new FreeBSD_CXXCommandBuilder();
-        } else if (platform.startsWith("bgp")) {
-        	cbb = new Linux_CXXCommandBuilder();            
         } else if (platform.startsWith("bgq")) {
+            cbb = new Linux_CXXCommandBuilder();            
+        } else if (platform.startsWith("fx10")) {
             cbb = new Linux_CXXCommandBuilder();            
         } else {   
             eq.enqueue(ErrorInfo.WARNING,
@@ -410,7 +420,8 @@ public class CXXCommandBuilder {
     	ans.add("sm_13");
     	ans.add("sm_20");
     	ans.add("sm_21");
-    	//ans.add("sm_30");
+    	ans.add("sm_30");
+    	ans.add("sm_35"); // requires CUDA Toolkit 5.0 Version 1.1 or newer
     	return ans;
     }
 
@@ -420,6 +431,9 @@ public class CXXCommandBuilder {
         //ans.add("-Xptxas");
         //ans.add("-v");
         for (PrecompiledLibrary pcl : options.x10libs) {
+            if (options.x10_config.DEBUG) {
+                ans.add("-I"+pcl.absolutePathToRoot+"/include-dbg");
+            }
         	ans.add("-I"+pcl.absolutePathToRoot+"/include");
         }
         return ans;

@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10;
@@ -18,6 +18,6 @@ public class Version extends polyglot.main.Version {
     public String name() { return "x10"; }
 
     public int major() { return 2; }
-    public int minor() { return 3; }
-    public int patch_level() { return 1; }
+    public int minor() { return 4; }
+    public int patch_level() { return 2; }
 }

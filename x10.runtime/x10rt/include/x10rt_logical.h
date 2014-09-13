@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2013.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef X10RT_LOGICAL_H
@@ -39,8 +39,6 @@
 enum x10rt_lgl_cat {
 /** A host on the network. */
   X10RT_LGL_HOST,
-/** An SPE within a CELL. */
-  X10RT_LGL_SPE,
 /** A CUDA-capable GPU. */
   X10RT_LGL_CUDA
 };
@@ -50,7 +48,7 @@ enum x10rt_lgl_cat {
 struct x10rt_lgl_cfg_accel {
     /** The kind of accelerator. */
     x10rt_lgl_cat cat;
-    /** The identity of the hardware within the system (e.g. device id, SPE id, etc.). */
+    /** The identity of the hardware within the system (e.g. device id, etc.). */
     unsigned index;
 };
 
@@ -59,6 +57,16 @@ struct x10rt_lgl_cfg_accel {
  * \returns Text describing the error, or NULL if no error has occured.
  */
 X10RT_C const char *x10rt_lgl_error_msg (void);
+
+/** Partially initialize the X10RT API logical layer.
+ *
+ * \see #x10rt_preinit
+ *
+ * \param connInfoBuffer As in x10rt_preinit.
+ *
+ * \param connInfoBufferSize As in x10rt_preinit.
+ */
+X10RT_C x10rt_error x10rt_lgl_preinit (char* connInfoBuffer, int connInfoBufferSize);
 
 /** Initialize the X10RT API logical layer.  This versions uses the X10RT_ACCELS environment
  * variable.
@@ -187,6 +195,15 @@ x10rt_place x10rt_lgl_nplaces (void);
 /** \see #x10rt_nhosts */
 x10rt_place x10rt_lgl_nhosts (void);
 
+/** \see #x10rt_ndead */
+x10rt_place x10rt_lgl_ndead (void);
+
+/** \see #x10rt_is_place_dead */
+bool x10rt_lgl_is_place_dead (x10rt_place p);
+
+/** \see #x10rt_get_dead */
+x10rt_error x10rt_lgl_get_dead (x10rt_place *dead_places, x10rt_place len);
+
 /** \see #x10rt_here */
 x10rt_place x10rt_lgl_here (void);
 
@@ -293,11 +310,19 @@ X10RT_C void x10rt_lgl_blocks_threads (x10rt_place d, x10rt_msg_type type, int d
  */
 X10RT_C x10rt_error x10rt_lgl_probe (void);
 
+/**
+ * Check to see if a call to blocking_probe has been implemented, or if it's just a wrapper for probe
+ * Returns true if blocking_probe is real, or false if it will always return immediately
+ */
+X10RT_C bool x10rt_lgl_blocking_probe_support (void);
 
 /** Probe all the underlying backends, blocking if nothing is available.  \see #x10rt_blocking_probe
  */
 X10RT_C x10rt_error x10rt_lgl_blocking_probe (void);
 
+/** Unblock anything stuck in blocking_probe  \see #x10rt_unblock_probe
+ */
+X10RT_C x10rt_error x10rt_lgl_unblock_probe (void);
 
 /** Clean up the logical layer.  Called by #x10rt_finalize.
  */
@@ -307,6 +332,9 @@ X10RT_C void x10rt_lgl_finalize (void);
  * \see #x10rt_supports
  */
 X10RT_C x10rt_answer x10rt_lgl_supports (x10rt_opt o);
+/** Return what level of collectives the network transport supports
+ */
+X10RT_C x10rt_coll_type x10rt_lgl_coll_support ();
 
 /** \see #x10rt_team_new
  * \param placec As in #x10rt_team_new

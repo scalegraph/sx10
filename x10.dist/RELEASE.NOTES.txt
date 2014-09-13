@@ -1,17 +1,37 @@
-Release 2.3.1
+X10 Release 2.4.2
 
-MAJOR CHANGES
+HIGHLIGHTS OF THIS RELEASE
 
-No major changes were made in the X10 language
-specification and implementation in this release.
+There were no significant language changes or 
+incompatible class library API changes made in 
+this release of X10. 
 
-Please consult the language specification for the details of
-any minor language changes and specification clarifications made in
+An implementation of the X10 GlobalLoadBalancing framework (GLB)
+has been incorporated into the x10 standard library in the
+x10.glb package. Additional sample X10 programs using GLB 
+are available in samples/GLB.
+
+We have completed the work on a (single host) pure Java launcher
+for Managed X10.  This allows multi-place execution on Managed X10
+on a single Windows host without requiring cygwin.  This capability
+is available from X10DT when launching a Managed X10 application on
+a local Windows host.
+
+Support for the closed source x10rt_pgas implementation and
+the BlueGene/P platform was removed from X10 starting with 
 this release.
+
+Several bugs in the CUDA backend present in X10 2.4.0 and 2.4.1
+were corrected in this release.  All CUDA sample programs 
+now compile and run successfully using the latest (v5.5) release
+of the NVIDIA CUDA Toolkit.
 
 LIMITATIONS OF THIS RELEASE
 
-The following features described in the 2.3 language manual do not
+The size and index of arrays must be less than 2^31 with Managed X10.
+An attempt to allocate a longer array causes IllegalArgumentException. 
+
+The following features described in the 2.4 language manual do not
 currently work and may be fixed in the subsequent releases:
   - Non-static type definitions as class or interface members
     (static type defs do work)
@@ -35,36 +55,35 @@ CPU cycles busy waiting for messages to arrive from the network.
 The generated C++ code requires g++ 4.2 or better to be compiled; 
 we do almost all of our testing against g++ 4.4.
   + On AIX and Power/Linux, you may either use g++ 4.2 or better or 
-    xlC 10.1.0.4 or better. 
-  + Some versions of Xcode on MacOS default to using the Clang C++
-    front-end; Clang cannot compile the generated C++ code; you need to
-    use the g++ front-end.  To do this export CC=gcc; CXX=g++.  
+    xlC 11.1 or better. 
 
 SUMMARY OF ISSUES RESOLVED IN THIS RELEASE
 
-Below is a summary of JIRA issues addressed for the X10 2.3.1
+Below is a summary of JIRA issues addressed for the X10 2.4.2
 
-Release Notes - X10 - Version X10 2.3.1
+** New Features and Improvement
+    * [XTENLANG-2970] - Editing pass over X10 website updating for X10 2.4
+    * [XTENLANG-3276] - Incorporate Global Load Balancing Framework (GLB) into X10 standard library
+    * [XTENLANG-3325] - Pure Java launcher for Managed X10 (single node)
+    * [XTENLANG-3335] - Add Synthetic annotation to classes, fields, or methods that don't appear in the source code
+    * [XTENLANG-3336] - Hide synthetic classes, methods, and fields from x10doc
+    * [XTENLANG-3338] - Use statement expressions instead of apply of closure literals in internal expansions of ASTs
+    * [XTENLANG-3339] - Remove x10rt_pgas and BlueGene/P support
+    * [XTENLANG-3345] - File should have a useful toString method
+    * [XTENLANG-3359] - Implement map and reduce for x10.array.DistArray
 
-** New Features and Improvements
-    * [XTENLANG-2069] - Implement Team API for Managed X10
-    * [XTENLANG-3145] - Need a way to configure machines with multiple IP addresses
-    * [XTENLANG-3165] - Eliminate requirement to preload all X10 classes by Managed X10
+** Bugs
+    * [XTENLANG-3299] - Compiler NPE when optimizing because of incorrect implementation of alpha renaming
+    * [XTENLANG-3334] - Method/constructor guard is not printed properly
+    * [XTENLANG-3346] - x10c with Java8 dislikes methods returning java.lang.Class
+    * [XTENLANG-3347] - x10doc doesn't work with Java8
+    * [XTENLANG-3348] - Cannot define an X10 class that implements a java interface that extends java.lang.Comparable
+    * [XTENLANG-3357] - Resilient X10 fails with ClockUseException
+    * [XTENLANG-3362] - Closure captures transient instance field directly instead of 'this'
 
-** Bug
-    * [XTENLANG-2793] - Fallback path in pure Java for forceSinglePlace not available in some Team methods (KMeansSPMD)
-    * [XTENLANG-3140] - Exception checking fails if the methods of a class are in the wrong order
-    * [XTENLANG-3143] - Compiler not allowing a method override when there is a simple subtyping constraint
-    * [XTENLANG-3144] - Generic overridden overloaded method with parameter does not match with superclass method
-    * [XTENLANG-3159] - CUDA broken on 2.3 release (X10RT: async 72 is not a CUDA kernel)
-    * [XTENLANG-3163] - Failure to generate dynamic constraint check on access to global reference
-
-** Task
-    * [XTENLANG-3142] - Synchronize languagespec testcases with language spec document
-    * [XTENLANG-3160] - Use balanced gc policy for IBM Java 7 64bit
 
 For the details of JIRA issues fixed in this release, see
-http://jira.codehaus.org/secure/ReleaseNote.jspa?projectId=11812&version=18657:
+http: http://jira.codehaus.org/secure/ReleaseNote.jspa?version=19827&projectId=11812
 
 Please use the X10 JIRA to report bugs, after ensuring the problem is
 not already reported:

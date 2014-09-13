@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef X10AUX_CONFIG_H
@@ -18,7 +18,6 @@
 
 /*
  * The following performance macros are supported:
- *   NO_EXCEPTIONS     - remove all exception-related code
  *   NO_CHECKS         - same as NO_BOUNDS_CHECKS NO_NULL_CHECKS NO_PLACE_CHECKS NO_ASSERTIONS
  *   NO_BOUNDS_CHECKS  - remove all bounds-checking code
  *   NO_NULL_CHECKS    - remove all null-checking code
@@ -30,8 +29,6 @@
  *   X10_USE_BDWGC     - enable BDW conservative GC
  *
  * The following debugging macros are supported:
- *   TRACE_CAST        - trace casts
- *   TRACE_ALLOC       - trace allocation operations
  *   TRACE_ENV_VAR     - turn on support for the tracing variables listed below
  *
  * Note, tracing is not actually enabled unless the following environment variables are defined:
@@ -82,11 +79,7 @@
 #define PLACE_CHECK_BOOL true
 #endif
 
-#ifdef __bg__
-#define DEFAULT_STATIC_THREADS true
-#else
 #define DEFAULT_STATIC_THREADS false
-#endif
 
 #define ENV_CONGRUENT_BASE "X10_CONGRUENT_BASE"
 #define ENV_CONGRUENT_SIZE "X10_CONGRUENT_SIZE"
@@ -206,31 +199,15 @@ namespace x10aux {
 
 #define _DEBUG_MSG(col,type,msg) do { \
     std::stringstream ss; \
-    if (x10aux::x10rt_initialized) \
-        ss << ANSI_BOLD << x10aux::here << ": " << col << type << ": " << ANSI_RESET << msg; \
+    if (::x10aux::x10rt_initialized)                                    \
+        ss << ANSI_BOLD << ::x10aux::here << ": " << col << type << ": " << ANSI_RESET << msg; \
     else \
         ss << ANSI_BOLD << col << type << ": " << ANSI_RESET << msg; \
     fprintf(stderr,"%s\n",ss.str().c_str()); \
 } while (0)
 
-#define ANSI_ALLOC ANSI_WHITE
-#define ANSI_CAST ANSI_RED
 #define ANSI_SER ANSI_CYAN
 #define ANSI_X10RT ANSI_BLUE
-
-#if !defined(NO_IOSTREAM) && defined(TRACE_ALLOC)
-#include <stdio.h>
-#define _M_(x) _DEBUG_MSG(ANSI_ALLOC,"MM",x)
-#else
-#define _M_(x)
-#endif
-
-#if !defined(NO_IOSTREAM) && defined(TRACE_CAST)
-#include <stdio.h>
-#define _CAST_(x) _DEBUG_MSG(ANSI_CAST,"CAST",x)
-#else
-#define _CAST_(x)
-#endif
 
 #if !defined(NO_IOSTREAM) && defined(TRACE_ENV_VAR)
 #include <stdio.h>

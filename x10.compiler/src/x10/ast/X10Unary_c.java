@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.ast;
@@ -183,7 +183,7 @@ public class X10Unary_c extends Unary_c {
 
             if (et != null) {
                 // Check that there's a binary operator with the right return type
-                IntLit lit = nf.IntLit(position(), IntLit.INT, 1);
+                IntLit lit = nf.IntLit(position(), IntLit.Kind.get(et), 1);
                 try {
                     lit = Converter.check(lit, tc);
                 } catch (SemanticException e) {

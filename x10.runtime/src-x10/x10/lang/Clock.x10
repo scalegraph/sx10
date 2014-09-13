@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.lang;
@@ -41,11 +41,11 @@ public final class Clock(name:String) {
         return clock;
     }
 
-    public static FIRST_PHASE = 1;
+    public static FIRST_PHASE = 1n;
     // NOTE: all transient fields must always be accessed as this.root().f (and at place this.root.home), 
     // not this.f
-    private transient var count:Int = 1;
-    private transient var alive:Int = 1;
+    private transient var count:Int = 1n;
+    private transient var alive:Int = 1n;
     private transient var phase:Int = FIRST_PHASE;
 
     private def this(name:String) {
@@ -55,7 +55,7 @@ public final class Clock(name:String) {
     // should be accessed through root()
     @Pinned private def resumeLocal()  {
         atomic 
-            if (--alive == 0) {
+            if (--alive == 0n) {
                 alive = count;
                 ++phase;
             }
@@ -65,7 +65,7 @@ public final class Clock(name:String) {
         atomic {
             --count;
             if (-ph != phase) {
-                if (--alive == 0) {
+                if (--alive == 0n) {
                     alive = count;
                     ++phase;
                 }
@@ -108,7 +108,7 @@ public final class Clock(name:String) {
             if (ph > 0) me.resumeLocal();
             when (abs < me.phase);
         }
-        put(abs + 1);
+        put(abs + 1n);
     }
     @Global def dropUnsafe() {
         val ph = remove();
@@ -126,7 +126,7 @@ public final class Clock(name:String) {
     }
     public @Global def registered():Boolean = Runtime.activity().clockPhases().containsKey(this);
     public @Global def dropped():Boolean = !registered();
-    public @Global def phase():int {
+    public @Global def phase():Int {
         if (dropped()) clockUseException("phase");
         return Math.abs(get());
     }

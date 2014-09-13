@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10cpp.postcompiler;
@@ -24,12 +24,18 @@ public class MacOSX_CXXCommandBuilder extends CXXCommandBuilder {
         super.addPreArgs(cxxCmd);
         cxxCmd.add("-msse2");
         cxxCmd.add("-mfpmath=sse");
+        cxxCmd.add("-Wno-unused-value");
+//        cxxCmd.add("-Wno-logical-op-parentheses"); gcc does not like this flag
     }
 
     public void addPostArgs(ArrayList<String> cxxCmd) {
         super.addPostArgs(cxxCmd);
 
         for (PrecompiledLibrary pcl:options.x10libs) {
+            if (options.x10_config.DEBUG && !options.x10_config.DEBUG_APP_ONLY) {
+                cxxCmd.add("-Wl,-rpath");
+                cxxCmd.add("-Wl,"+pcl.absolutePathToRoot+"/lib-dbg");
+            }
             cxxCmd.add("-Wl,-rpath");
             cxxCmd.add("-Wl,"+pcl.absolutePathToRoot+"/lib");
         }

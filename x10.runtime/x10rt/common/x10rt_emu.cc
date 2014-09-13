@@ -6,8 +6,12 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2013.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
+
+#if defined(__CYGWIN__) || defined(__FreeBSD__)
+#undef __STRICT_ANSI__ // Strict ANSI mode is too strict in Cygwin and FreeBSD
+#endif
 
 #include <x10rt_net.h>
 #include <x10rt_internal.h>
@@ -64,6 +68,7 @@ namespace {
     }
 
 }
+
 void x10rt_emu_remote_op (x10rt_place place, x10rt_remote_ptr victim,
                           x10rt_op_type type, unsigned long long value)
 {
@@ -83,6 +88,14 @@ void x10rt_emu_remote_op (x10rt_place place, x10rt_remote_ptr victim,
     x10rt_net_send_msg(&b.p);
     x10rt_net_probe();
     x10rt_serbuf_free(&b);
+}
+
+void x10rt_emu_remote_ops (x10rt_remote_op_params *opv, size_t opc)
+{
+    for (size_t i=0 ; i<opc ; ++i) {
+        x10rt_op_type type = (x10rt_op_type)opv[i].op;
+        x10rt_emu_remote_op(opv[i].dest, opv[i].dest_buf, type, opv[i].value);
+    }
 }
 
 void x10rt_emu_init (x10rt_msg_type *counter)

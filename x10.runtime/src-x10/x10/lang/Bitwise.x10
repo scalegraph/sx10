@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.lang;
@@ -17,14 +17,14 @@ import x10.compiler.NativeRep;
 /**
  * A set of common bitwise operations.
  */
-@NativeRep("c++", "x10::lang::Bitwise<#T >*", "x10::lang::Bitwise<#T >", null)
+@NativeRep("c++", "x10::lang::Bitwise< #T >*", "x10::lang::Bitwise< #T >", null)
 public interface Bitwise[T] {
     /**
      * A bitwise complement operator.
      * Computes a bitwise complement (NOT) of the operand.
      * @return the bitwise complement of the current entity.
      */
-    @Native("c++", "x10::lang::Bitwise<#T >::__tilde(#this)")
+    @Native("c++", "::x10::lang::Bitwise< #T >::__tilde(#this)")
     operator ~ this: T;
 
     /**
@@ -33,7 +33,7 @@ public interface Bitwise[T] {
      * @param that the other entity
      * @return the bitwise AND of the current entity and the other entity.
      */
-    @Native("c++", "x10::lang::Bitwise<#T >::__ampersand(#this, #that)")
+    @Native("c++", "::x10::lang::Bitwise< #T >::__ampersand(#this, #that)")
     operator this & (that: T): T;
 
     /**
@@ -42,7 +42,7 @@ public interface Bitwise[T] {
      * @param that the other entity
      * @return the bitwise OR of the current entity and the other entity.
      */
-    @Native("c++", "x10::lang::Bitwise<#T >::__bar(#this, #that)")
+    @Native("c++", "::x10::lang::Bitwise< #T >::__bar(#this, #that)")
     operator this | (that: T): T;
 
     /**
@@ -51,7 +51,7 @@ public interface Bitwise[T] {
      * @param that the other entity
      * @return the bitwise XOR of the current entity and the other entity.
      */
-    @Native("c++", "x10::lang::Bitwise<#T >::__caret(#this, #that)")
+    @Native("c++", "::x10::lang::Bitwise< #T >::__caret(#this, #that)")
     operator this ^ (that: T): T;
 
     /**
@@ -62,8 +62,8 @@ public interface Bitwise[T] {
      * @param count the shift count
      * @return the current entity shifted left by count.
      */
-    @Native("c++", "x10::lang::Bitwise<#T >::__left(#this, #count)")
-    operator this << (count: Int): T;
+    @Native("c++", "::x10::lang::Bitwise< #T >::__left(#this, #count)")
+    operator this << (count: Long): T;
 
     /**
      * A bitwise right shift operator.
@@ -73,8 +73,8 @@ public interface Bitwise[T] {
      * @param count the shift count
      * @return the current entity shifted right by count.
      */
-    @Native("c++", "x10::lang::Bitwise<#T >::__right(#this, #count)")
-    operator this >> (count: Int): T;
+    @Native("c++", "::x10::lang::Bitwise< #T >::__right(#this, #count)")
+    operator this >> (count: Long): T;
 
     /**
      * A bitwise logical right shift operator (zero-fill).
@@ -86,7 +86,7 @@ public interface Bitwise[T] {
      * @param count the shift count
      * @return the current entity shifted right by count with high bits zero-filled.
      */
-    @Native("c++", "x10::lang::Bitwise<#T >::__unsigned_right(#this, #count)")
-    operator this >>> (count: Int): T;
+    @Native("c++", "::x10::lang::Bitwise< #T >::__unsigned_right(#this, #count)")
+    operator this >>> (count: Long): T;
 }
 

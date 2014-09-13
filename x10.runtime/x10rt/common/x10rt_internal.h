@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2013.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef X10RT_INTERNAL_H
@@ -37,26 +37,6 @@ namespace {
 // win32 implementation
 #endif
 
-static inline void vfatal (char *&err_msg, const char *format, va_list va_args)
-{
-    //TODO: make build allow vsnprintf
-    int sz = vsnprintf(NULL, 0, format, va_args);
-    //int sz = 1024;
-    free(err_msg);
-    err_msg = (char*)malloc(sz);
-    vsprintf(err_msg, format, va_args);
-}
-
-static inline void fatal (char *&err_msg, const char *format, ...)
-{
-    va_list va_args;
-    va_start(va_args, format);
-
-    vfatal(err_msg, format, va_args);
-
-    va_end(va_args);
-}
-
 template<class T> static inline T* safe_malloc (size_t f=1, size_t a=0) {
     size_t sz = f*sizeof(T) + a;
     return sz==0 ? 0 : (T*)malloc(sz);
@@ -68,6 +48,10 @@ template<class T> static inline T* safe_realloc (T *old, size_t f=1, size_t a=0)
 }
 
 static inline void safe_free (void *p) { free (p); }
+
+static inline bool checkBoolEnvVar(char* value) {
+	return (value && !(strcasecmp("false", value) == 0) && !(strcasecmp("0", value) == 0) && !(strcasecmp("f", value) == 0));
+}
 
 namespace {
 
@@ -143,6 +127,7 @@ X10RT_C void x10rt_emu_init (x10rt_msg_type *counter);
 X10RT_C void x10rt_emu_remote_op (x10rt_place place, x10rt_remote_ptr remote_addr,
                                   x10rt_op_type type, unsigned long long value);
 
+X10RT_C void x10rt_emu_remote_ops (x10rt_remote_op_params *ops, size_t num_ops);
 
 X10RT_C void x10rt_emu_coll_init (x10rt_msg_type *counter);
 

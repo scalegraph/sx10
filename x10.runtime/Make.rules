@@ -6,7 +6,7 @@
 #  You may obtain a copy of the License at
 #      http://www.opensource.org/licenses/eclipse-1.0.php
 #
-#  (C) Copyright IBM Corporation 2006-2010.
+#  (C) Copyright IBM Corporation 2006-2014.
 #
 
 #########################
@@ -41,24 +41,27 @@ endif
 #CXXFLAGS += -H
 
 ifdef OPTIMIZE
-  CXXFLAGS += -DNO_TRACING
-  X10CPPFLAGS += -optimize
+  override CXXFLAGS += -DNO_TRACING
+  override X10CPPFLAGS += -optimize
 endif
 ifdef NO_CHECKS
-  CXXFLAGS += -DNO_CHECKS
-  X10CPPFLAGS += -NO_CHECKS
+  override CXXFLAGS += -DNO_CHECKS
+  override X10CPPFLAGS += -NO_CHECKS
+endif
+ifdef FLATTEN_EXPRESSIONS
+  override X10CPPFLAGS += -FLATTEN_EXPRESSIONS
 endif
 ifdef EXPERIMENTAL
-  X10CPPFLAGS += -EXPERIMENTAL
+  override X10CPPFLAGS += -EXPERIMENTAL
 endif
 
 ifdef ENABLE_GCC_SYMBOLS
-  CXXFLAGS += -g
+  override CXXFLAGS += -g
 endif
 
 ifdef DEBUG
-  CXXFLAGS += -g -DDEBUG_SUPPORT
-  X10CPPFLAGS += -DEBUG
+  override CXXFLAGS += -g -DDEBUG_SUPPORT
+  override X10CPPFLAGS += -DEBUG
 endif
 
 # This has to be here, because it impacts x10rt_types.h
@@ -70,7 +73,7 @@ endif
 
 # Impacts inline functions in header files, so it has to be sticky in the properties file
 ifdef HOMOGENEOUS
-  CXXFLAGS += -DHOMOGENEOUS
+  override CXXFLAGS += -DHOMOGENEOUS
   override X10RT_PROPS_CXXFLAGS += -DHOMOGENEOUS
   override XRX_PROPS_CXXFLAGS += -DHOMOGENEOUS
 endif
@@ -86,23 +89,45 @@ endif
 
 ifdef JAVA_HOME
   ifeq ($(shell uname -s),AIX)
-      JNI_INCLUDES = -I"$(JAVA_HOME)"/include -I"$(JAVA_HOME)"/include/aix
+    JNI_INCLUDES = -I"$(JAVA_HOME)"/include -I"$(JAVA_HOME)"/include/aix
+    jarch=$(shell uname -p)
+    JNI_LIBS = -L"$(JAVA_HOME)"/jre/lib/$(jarch)/j9vm
   else
   ifeq ($(shell uname -s),Linux)
     JNI_INCLUDES = -I"$(JAVA_HOME)"/include -I"$(JAVA_HOME)"/include/linux
+    jarch=$(shell uname -p)
+    ifeq ($(jarch),x86_64)
+      jarch=amd64
+    endif
+    JNI_LIBS = -L"$(JAVA_HOME)"/jre/lib/$(jarch)/j9vm -L"$(JAVA_HOME)"/jre/lib/$(jarch)/server -L"$(JAVA_HOME)"/jre/lib/$(jarch)/client
   else
   ifeq ($(firstword $(subst _, ,$(shell uname -s))),CYGWIN)
-    JAVA_CYGPATH = $(shell cygpath '$(JAVA_HOME)')
-    JNI_INCLUDES = -I"$(JAVA_CYGPATH)"/include -I"$(JAVA_CYGPATH)"/include/win32
+    # Intentionally not setting JNI_INCLUDES and JNI_LIBS
+    # We don't want to build the jni-bindings for x10rt on cygwin
   else
   ifeq ($(shell uname -s),Darwin)
     JNI_INCLUDES = -I"$(JAVA_HOME)"/include -I"$(JAVA_HOME)"/include/darwin
+    jarch=$(shell uname -p)
+    ifeq ($(jarch),x86_64)
+      jarch=amd64
+    endif
+    JNI_LIBS = -L"$(JAVA_HOME)"/jre/lib/$(jarch)/server -L"$(JAVA_HOME)"/jre/lib/$(jarch)/client
   else
   ifeq ($(shell uname -s),SunOS)
     JNI_INCLUDES = -I"$(JAVA_HOME)"/include -I"$(JAVA_HOME)"/include/solaris
+    jarch=$(shell uname -p)
+    ifeq ($(jarch),x86_64)
+      jarch=amd64
+    endif
+    JNI_LIBS = -L"$(JAVA_HOME)"/jre/lib/$(jarch)/server -L"$(JAVA_HOME)"/jre/lib/$(jarch)/client
   else
   ifeq ($(shell uname -s),FreeBSD)
     JNI_INCLUDES = -I"$(JAVA_HOME)"/include -I"$(JAVA_HOME)"/include/freebsd
+    jarch=$(shell uname -p)
+    ifeq ($(jarch),x86_64)
+      jarch=amd64
+    endif
+    JNI_LIBS = -L"$(JAVA_HOME)"/jre/lib/$(jarch)/server -L"$(JAVA_HOME)"/jre/lib/$(jarch)/client
   endif
   endif
   endif
@@ -113,45 +138,16 @@ endif
 
 ifndef NO_VAR_OVERRIDE
 
-ifdef ENABLE_CROSS_COMPILE_BGP
-  export X10_STATIC_LIB=1
-  export X10RT_PLATFORM=bgp
-  export CROSS_COMPILE_BLUEGENE=true
-
-  override MPICXX=/bgsys/drivers/ppcfloor/comm/bin/mpicxx
-  ifdef USE_GCC
-    override CXX = /bgsys/drivers/ppcfloor/gnu-linux/bin/powerpc-bgp-linux-g++
-    override LDFLAGS += -lpthread
-    override CC =/bgsys/drivers/ppcfloor/gnu-linux/bin/powerpc-bgp-linux-gcc
-    ifdef OPTIMIZE
-      override CXXFLAGS += -O2 -finline-functions
-    endif
-  endif
-  ifdef USE_XLC
-    # have to override CXX, but let user specify CUSTOM_XLC if they
-    # need something other than just xlC_r to be used as CXX
-    ifdef CUSTOM_XLC
-      override CXX = $(CUSTOM_XLC)
-      override CC = $(CUSTOM_XLC)
-    else
-      override CXX = bgxlC_r
-      override CC = bgxlc_r     
-    endif
-    ifdef OPTIMIZE
-      override CXXFLAGS += -O3 -qinline
-    endif
-    override CXXFLAGS += -qsuppress=1540-0809:1500-029:1540-1101:1540-1102
-    override CXXFLAGS += $(XLC_EXTRA_FLAGS)
-  endif
-endif
-
 ifdef ENABLE_CROSS_COMPILE_BGQ
   export X10RT_PLATFORM=bgq
   export CROSS_COMPILE_BLUEGENE=true
+  export CROSS_COMPILE_ANY=true
   export BGQ_FLOOR ?= /bgsys/driver/ppcfloor
   export X10_STATIC_LIB=1
   ifdef USE_GCC
-    override CXX = /bgsys/drivers/ppcfloor/gnu-linux/bin/powerpc64-bgq-linux-g++
+    export X10RT_PLATFORM=bgq_gcc
+    override MPICXX=/bgsys/drivers/ppcfloor/comm/bin/gcc/mpicxx
+    override CXX=/bgsys/drivers/ppcfloor/gnu-linux/bin/powerpc64-bgq-linux-g++
     override CC =/bgsys/drivers/ppcfloor/gnu-linux/bin/powerpc64-bgq-linux-gcc
     override AR =/bgsys/drivers/ppcfloor/gnu-linux/bin/powerpc64-bgq-linux-ar
     ifndef X10_STATIC_LIB
@@ -161,11 +157,27 @@ ifdef ENABLE_CROSS_COMPILE_BGQ
     ifdef OPTIMIZE
       override CXXFLAGS += -O2 -finline-functions
     endif
-    override CXXFLAGS += -g
+    # uniformly force -mminimal-toc since it appears the linker doesn't detect toc overflow
+    override CXXFLAGS += -mminimal-toc
+    override XRX_PROPS_CXXFLAGS += -mminimal-toc
   endif
   ifdef USE_XLC
-      echo "FAILURE: haven't defined XLC rules for BGQ yet!"
-      exit -1
+    export X10RT_PLATFORM=bgq_xlc
+    # have to override CXX, but let user specify CUSTOM_XLC if they
+    # need something other than just xlC_r to be used as CXX
+    ifdef CUSTOM_XLC
+      override CXX = $(CUSTOM_XLC)
+      override CC = $(CUSTOM_XLC)
+    else
+      override CXX = bgxlC_r
+      override CC = bgxlC_r     
+    endif
+    override MPICXX=/bgsys/drivers/ppcfloor/comm/bin/xl/mpixlcxx_r
+    ifdef OPTIMIZE
+      override CXXFLAGS += -O3 -qinline -qhot -qsimd=auto -qtune=qp -qarch=qp
+    endif
+    override CXXFLAGS += -qsuppress=1540-0809:1500-029:1540-1101:1540-1102
+    override CXXFLAGS += $(XLC_EXTRA_FLAGS)
   endif
 endif
 
@@ -180,7 +192,7 @@ ifndef CROSS_COMPILE_BLUEGENE
       override CXXFLAGS += -O2 -finline-functions
     endif
     ifndef CXX_NO_WARNINGS
-      CXX_WARNING_FLAGS = -ansi -pedantic -Wall -Wextra -Wno-long-long -Wno-unused-parameter
+      CXX_WARNING_FLAGS = -ansi -pedantic -Wall -Wextra -Wno-long-long -Wno-unused-parameter -Wno-unused-variable -Wno-unused-value
     endif
   endif
   ifdef USE_XLC
@@ -191,7 +203,11 @@ ifndef CROSS_COMPILE_BLUEGENE
     else
       override CXX = xlC_r
     endif
-    override MPICXX = mpCC_r
+    ifeq ($(shell uname -s),AIX)
+      override MPICXX = mpCC_r
+    else
+      override MPICXX = mpCC
+    endif
     override SHLINK = $(CXX)
     ifdef OPTIMIZE
       override CXXFLAGS += -O3 -qinline -qarch=auto -qtune=auto -qhot
@@ -247,6 +263,7 @@ ifndef CROSS_COMPILE_BLUEGENE
         override CXXFLAGS += -pthread
         ifndef X10_STATIC_LIB
           override CXXFLAGS_SHARED += -shared -fPIC
+          override LDFLAGS_SHARED += -lrt
         endif
         export X10RT_TEST_LDFLAGS = -Wl,--rpath -Wl,"$(X10_HOME)"/x10.runtime/x10rt/lib
       endif
@@ -305,6 +322,10 @@ ifndef CROSS_COMPILE_BLUEGENE
         CXX = g++
         CC = gcc
       endif
+      ifdef CXX_NO_WARNINGS
+        # even without -Wall clang++ enables some warnings we want to disable for compiling generated code
+        CXX_WARNING_FLAGS = -Wno-unused-parameter -Wno-unused-variable -Wno-unused-value
+      endif
       export X10RT_PLATFORM=$(shell echo | gcc -E -dM - | grep -q x86_64 && echo darwin64 || echo darwin)
       ifndef X10_STATIC_LIB
         override CXXFLAGS_SHARED += -fPIC
@@ -357,5 +378,32 @@ endif
 
 endif
 
+ifdef ENABLE_CROSS_COMPILE_FX10
+  export X10RT_PLATFORM=fx10
+  export CROSS_COMPILE_FX10=true
+  export CROSS_COMPILE_ANY=true
+  export X10_STATIC_LIB=1
 
+  override CXX = FCCpx
+  override CC = fccpx
+  override CFLAGS = -Xg -w
+  override CXXFLAGS = -Xg -w -Wp,--special_module_id 
+  override CXX_NO_WARNING=true
+  override CXX_WARNING_FLAGS = 
+  override MPICXX= mpiFCCpx -Xg
+  ifndef X10_STATIC_LIB
+    override CXXFLAGS_SHARED += -shared -fPIC
+    export X10RT_TEST_LDFLAGS = -dynamic -Wl,--rpath -Wl,"$(X10_HOME)"/x10.runtime/x10rt/lib
+  endif
+  ifdef OPTIMIZE
+    override CFLAGS += -Kfast
+    override CXXFLAGS += -Kfast
+  endif
+  override X10CPPFLAGS += -FLATTEN_EXPRESSIONS
+  override CXXFLAGS += -g
+  ifdef TARGET_JAVA_HOME
+    jarch = s64fx
+    override JNI_LIBS = -L"$(TARGET_JAVA_HOME)"/jre/lib/$(jarch)/server
+  endif
+endif
 

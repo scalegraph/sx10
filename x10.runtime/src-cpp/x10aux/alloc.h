@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef X10AUX_ALLOC_H
@@ -81,6 +81,10 @@ namespace x10aux {
     // actually congruent (i.e. for all places to have the same addresses)
     void *alloc_internal_congruent(size_t size);
 
+    // given an address and the id of the src and destination places, compute the
+    // congruent address in the target place
+    void *compute_congruent_addr(void* addr, int src, int dst);
+    
     void *alloc_internal_huge(size_t size);
 
 #ifdef X10_USE_BDWGC
@@ -111,60 +115,56 @@ namespace x10aux {
         ret = ::malloc(size);
 #endif        
 
-        _M_("\t-> " << (void*)ret);
         if (ret == NULL && size > 0) {
             reportOOM(size);
         }
         return ret;
     }
 
-    template<class T>inline T* system_alloc(size_t size = sizeof(T)) {
-        _M_("system_alloc: Allocating " << size << " bytes of type " << TYPENAME(T));
-
+	template<class T> inline T* system_alloc(size_t size = sizeof(T)) {
         BDWGC_LOCK;
         T* ret = (T*)::malloc(size);
         BDWGC_UNLOCK;
         if (ret == NULL && size > 0) {
             reportOOM(size);
         }
-
         return ret;
     }
+    template<class T> inline T* system_alloc_z(size_t size = sizeof(T)) {
+        return (T*)memset(system_alloc<T>(size), 0, size);
+    }
 
-    template<class T> T* system_realloc(T* src, size_t dsz) {
-        _M_("system_alloc: Reallocing chunk " << (void*)src << " of type " << TYPENAME(T));
-
+	template<class T> inline T* system_realloc(T* src, size_t dsz) {
         BDWGC_LOCK;
         T* ret = (T*)::realloc(src, dsz);
         BDWGC_UNLOCK;
         if (ret == NULL && dsz > 0) {
             reportOOM(dsz);
         }
-
         return ret;
     }
 
-    template<class T> inline void system_dealloc(const T* obj_) {
-        _M_("system_alloc: Freeing chunk " << (void*)obj_ << " of type " << TYPENAME(T));
+	inline void system_dealloc(const void* obj_) {
         BDWGC_LOCK;
-        ::free((void*)obj_);
+        ::free(const_cast<void*>(obj_));
         BDWGC_UNLOCK;
     }
 
     template<class T> inline T* alloc(size_t size = sizeof(T), bool containsPtrs = true) {
-        _M_("Allocating " << size << " bytes of type " << TYPENAME(T));
         return (T*)alloc_internal(size, containsPtrs);
     }
 
-    template<class T> T* realloc(T* src, size_t dsz) {
-        _M_("Reallocing chunk " << (void*)src << " of type " << TYPENAME(T));
+    template<class T> inline T* alloc_z(size_t size = sizeof(T), bool containsPtrs = true) {
+        return (T*)memset(alloc_internal(size, containsPtrs), 0, size);
+    }
+    
+    template<class T> inline T* realloc(T* src, size_t dsz) {
         return (T*)realloc_internal(src, dsz);
     }
 
 
-    template<class T> void dealloc(const T* obj_) {
-        _M_("Freeing chunk " << (void*)obj_ << " of type " << TYPENAME(T));
-        dealloc_internal(obj_);
+    inline void dealloc(const void* obj_) {
+        dealloc_internal(const_cast<void*>(obj_));
     }
 
     // Return an upper bound on the current size of the heap in bytes.

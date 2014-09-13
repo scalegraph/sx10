@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.core;
@@ -25,13 +25,12 @@ import x10.serialization.X10JavaSerializer;
  * an Double value to type Any, parameter type T or superinterfaces such
  * as Comparable<Double>.
  */
+@SuppressWarnings("serial")
 final public class Double extends java.lang.Number implements StructI, java.lang.Comparable<Double>,
 // for X10PrettyPrinterVisitor.exposeSpecialDispatcherThroughSpecialInterface
 //    x10.lang.Arithmetic<Double>, x10.util.Ordered<Double>
     x10.core.Arithmetic.x10$lang$Double, x10.util.Ordered<Double>
 {
-    private static final long serialVersionUID = 1L;
-    
     public static final RuntimeType<?> $RTT = Types.DOUBLE;
     public RuntimeType<?> $getRTT() {return $RTT;}
     public Type<?> $getParam(int i) {return null;}
@@ -91,7 +90,7 @@ final public class Double extends java.lang.Number implements StructI, java.lang
     }
 
     @Override
-    public java.lang.String toString() {
+    public String toString() {
         return java.lang.Double.toString($value);
     }
     
@@ -105,26 +104,26 @@ final public class Double extends java.lang.Number implements StructI, java.lang
     // implements Arithmetic<Double>
     public Double $plus$G() { return this; }
     public Double $minus$G() { return Double.$box(-$value); }
-    public Double $plus(java.lang.Object b, Type t) { return Double.$box($value + ((Double)b).$value); }
-    public Double $minus(java.lang.Object b, Type t) { return Double.$box($value - ((Double)b).$value); }
-    public Double $times(java.lang.Object b, Type t) { return Double.$box($value * ((Double)b).$value); }
-    public Double $over(java.lang.Object b, Type t) { return Double.$box($value / ((Double)b).$value); }
+    public Double $plus(Object b, Type t) { return Double.$box($value + ((Double)b).$value); }
+    public Double $minus(Object b, Type t) { return Double.$box($value - ((Double)b).$value); }
+    public Double $times(Object b, Type t) { return Double.$box($value * ((Double)b).$value); }
+    public Double $over(Object b, Type t) { return Double.$box($value / ((Double)b).$value); }
     // for X10PrettyPrinterVisitor.exposeSpecialDispatcherThroughSpecialInterface
-    public double $plus$D(java.lang.Object b, Type t) { return $value + ((Double)b).$value; }
-    public double $minus$D(java.lang.Object b, Type t) { return $value - ((Double)b).$value; }
-    public double $times$D(java.lang.Object b, Type t) { return $value * ((Double)b).$value; }
-    public double $over$D(java.lang.Object b, Type t) { return $value / ((Double)b).$value; }
+    public double $plus$D(Object b, Type t) { return $value + ((Double)b).$value; }
+    public double $minus$D(Object b, Type t) { return $value - ((Double)b).$value; }
+    public double $times$D(Object b, Type t) { return $value * ((Double)b).$value; }
+    public double $over$D(Object b, Type t) { return $value / ((Double)b).$value; }
     
     // implements Ordered<Double>
-    public java.lang.Object $lt(java.lang.Object b, Type t) { return x10.core.Boolean.$box($value < ((Double)b).$value); }
-    public java.lang.Object $gt(java.lang.Object b, Type t) { return x10.core.Boolean.$box($value > ((Double)b).$value); }
-    public java.lang.Object $le(java.lang.Object b, Type t) { return x10.core.Boolean.$box($value <= ((Double)b).$value); }
-    public java.lang.Object $ge(java.lang.Object b, Type t) { return x10.core.Boolean.$box($value >= ((Double)b).$value); }
+    public Object $lt(Object b, Type t) { return Boolean.$box($value < ((Double)b).$value); }
+    public Object $gt(Object b, Type t) { return Boolean.$box($value > ((Double)b).$value); }
+    public Object $le(Object b, Type t) { return Boolean.$box($value <= ((Double)b).$value); }
+    public Object $ge(Object b, Type t) { return Boolean.$box($value >= ((Double)b).$value); }
     // for X10PrettyPrinterVisitor.generateSpecialDispatcher
-    public boolean $lt$Z(java.lang.Object b, Type t) { return $value < ((Double)b).$value; }
-    public boolean $gt$Z(java.lang.Object b, Type t) { return $value > ((Double)b).$value; }
-    public boolean $le$Z(java.lang.Object b, Type t) { return $value <= ((Double)b).$value; }
-    public boolean $ge$Z(java.lang.Object b, Type t) { return $value >= ((Double)b).$value; }
+    public boolean $lt$Z(Object b, Type t) { return $value < ((Double)b).$value; }
+    public boolean $gt$Z(Object b, Type t) { return $value > ((Double)b).$value; }
+    public boolean $le$Z(Object b, Type t) { return $value <= ((Double)b).$value; }
+    public boolean $ge$Z(Object b, Type t) { return $value >= ((Double)b).$value; }
 
     // extends abstract class java.lang.Number
     @Override
@@ -155,7 +154,6 @@ final public class Double extends java.lang.Number implements StructI, java.lang
     public static X10JavaSerializable $_deserialize_body(Double $_obj, X10JavaDeserializer $deserializer) throws IOException {
         double value  = $deserializer.readDouble();
         $_obj = new Double(value);
-        $deserializer.record_reference($_obj);
         return $_obj;
     }
 }

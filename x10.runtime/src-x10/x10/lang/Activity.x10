@@ -6,26 +6,33 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.lang;
 
-import x10.io.SerialData;
+import x10.io.Deserializer;
+import x10.io.Serializer;
 import x10.util.Map;
 import x10.util.HashMap;
 
 /**
  * Runtime representation of an async. Only to be used in the runtime implementation.
  */
-class Activity {
+public class Activity {
+
+    // This flag is hacked to be false in the APGAS C++ library
+    // TODO: refactor XRX so body is more than a ()=>void so that run
+    //       can simply ask the body if it should be deallocated on completion.
+    private static DEALLOC_BODY:Boolean = canDealloc();
+    private static def canDealloc():Boolean = true;  // sigh. Block constant propagation.
 
     static class ClockPhases extends HashMap[Clock,Int] {
         // compute spawnee clock phases from spawner clock phases in async clocked(clocks)
         // and register spawnee on these on clocks
         static def make(clocks:Rail[Clock]) {
             val clockPhases = new ClockPhases();
-            for(var i:Int = 0; i < clocks.size; i++) 
+            for(var i:Long = 0; i < clocks.size; i++) 
                 clockPhases.put(clocks(i), clocks(i).register());
             return clockPhases;
         }
@@ -48,15 +55,12 @@ class Activity {
         }
 
         // HashMap implements CustomSerialization, so we must as well
-        public def serialize():SerialData {
-	    // minor optimization instead of doing:
-            //    new SerialData(null, super.serialize())
-            // just return super.serialize() directly
-            return super.serialize();
+        public def serialize(s:Serializer) {
+            super.serialize(s);
         }
         def this() { super(); }
-        def this(a:SerialData) { 
-            super(a);  // see optimization in serialize();
+        def this(ds:Deserializer) { 
+            super(ds); 
         }
     }
 
@@ -78,25 +82,44 @@ class Activity {
      */
     var clockPhases:ClockPhases;
 
+    /** Set to true unless this activity represents the body of an 'at' statement.
+     */
+    val shouldNotifyTermination:Boolean;
+
+    /** Set to true unless this activity was spawned by a place that then immediately died
+     */
+    val confirmed:Boolean;
+
     /**
      * Depth of enclosong atomic blocks
      */
-    private var atomicDepth:int = 0;
+    private var atomicDepth:Int = 0n;
 
     /**
      * Create activity.
      */
-    def this(body:()=>void, finishState:FinishState) {
+    def this(body:()=>void, srcPlace:Place, finishState:FinishState) {
+        this(body, srcPlace, finishState, true);
+    }
+    def this(body:()=>void, srcPlace:Place, finishState:FinishState, nac:Boolean) {
+        this(body, srcPlace, finishState, nac, true);
+    }
+    def this(body:()=>void, srcPlace:Place, finishState:FinishState, nac:Boolean, nt:Boolean) {
         this.finishState = finishState;
-        finishState.notifyActivityCreation();
+        this.shouldNotifyTermination = nt;
+        if (nac) {
+            this.confirmed = finishState.notifyActivityCreation(srcPlace);
+        } else {
+            this.confirmed = true;
+        }
         this.body = body;
     }
 
     /**
      * Create clocked activity.
      */
-    def this(body:()=>void, finishState:FinishState, clockPhases:ClockPhases) {
-        this(body, finishState);
+    def this(body:()=>void, srcPlace:Place, finishState:FinishState, clockPhases:ClockPhases) {
+        this(body, srcPlace, finishState);
         this.clockPhases = clockPhases;
     }
 
@@ -112,7 +135,7 @@ class Activity {
     /**
      * Return the innermost finish state
      */
-    def finishState():FinishState = finishState;
+    public def finishState():FinishState = finishState;
 
     /**
      * Enter finish block
@@ -142,16 +165,18 @@ class Activity {
      * Run activity.
      */
     def run():void {
-        try {
-            body();
-        } catch (t:Error) {
-            finishState.pushException(new WrappedThrowable(t));
-        } catch (t:Exception) {
-            finishState.pushException(t);
+        if (confirmed) {
+            try {
+                body();
+            } catch (t:Error) {
+                finishState.pushException(new WrappedThrowable(t));
+            } catch (t:Exception) {
+                finishState.pushException(t);
+            }
+            if (null != clockPhases) clockPhases.drop();
+            if (shouldNotifyTermination) finishState.notifyActivityTermination();
         }
-        if (null != clockPhases) clockPhases.drop();
-        finishState.notifyActivityTermination();
-        Runtime.dealloc(body);
+        if (DEALLOC_BODY) Unsafe.dealloc(body);
     }
 }
 

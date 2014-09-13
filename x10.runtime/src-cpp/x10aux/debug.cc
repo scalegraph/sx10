@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #include <x10aux/debug.h>
@@ -15,7 +15,7 @@
 #if defined(DEBUG_SUPPORT)
 // Hook to trigger loading of FD2 component of debugger.
 
-#if defined (__linux__) && !defined(__bgp__) && !defined(__bgq__)
+#if defined (__linux__) && !defined(__bgq__)
 class FDFDLoader {
 public:
     FDFDLoader();
@@ -40,7 +40,7 @@ FDFDLoader::FDFDLoader() {
     }
 }
 
-#endif // __linux__ && !__bgp__ && !__bgq__
+#endif // __linux__ && !__bgq__
 
 #endif // DEBUG_SUPPORT
 

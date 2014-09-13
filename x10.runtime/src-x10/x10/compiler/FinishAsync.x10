@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.compiler;
@@ -14,4 +14,4 @@ package x10.compiler;
 import x10.lang.annotations.StatementAnnotation;
 // pattern 0 is the default implementation
 // pattern 1 : all async are in the same place as finish
-public interface FinishAsync(arity:int,place:int,isLast:boolean,pattern:Int) extends StatementAnnotation { }
+public interface FinishAsync(arity:Int, place:Int, isLast:Boolean, pattern:Int) extends StatementAnnotation { }

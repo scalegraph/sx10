@@ -1,3 +1,13 @@
+/*
+ *  This file is part of the X10 project (http://x10-lang.org).
+ *
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2006-2014.
+ */
 package com.ibm.apgas;
 
 import x10.lang.Place;
@@ -34,7 +44,7 @@ public class Pool extends x10.runtime.impl.java.Runtime {
     // called by native runtime inside main x10 thread.
     // Should not be called by usercode.  
     // Only made public to conform to superclass API.  Really should be protected. 
-    public void runtimeCallback(final x10.array.Array<java.lang.String> args) {
+    public void runtimeCallback(final x10.core.Rail<java.lang.String> args) {
         mainTask.body();
     }
     
@@ -83,7 +93,7 @@ public class Pool extends x10.runtime.impl.java.Runtime {
      * How many places are there in the current execution?
      */
     public static int numPlaces() { 
-        return x10.lang.Place.numPlaces$O();
+        return (int)x10.lang.Place.numPlaces$O();
     }
     
     /**

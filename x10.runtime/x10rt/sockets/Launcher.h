@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  *
  *  This file was written by Ben Herta for IBM: bherta@us.ibm.com
  */
@@ -22,6 +22,8 @@
 #include <stdint.h>
 #include <time.h>
 
+#include <x10rt_internal.h>
+
 #ifndef __sock_launcher_h__
 #define __sock_launcher_h__
 
@@ -33,6 +35,7 @@
 #define X10_NPLACES "X10_NPLACES" // the number of places in this process
 #define X10_HOSTFILE "X10_HOSTFILE" // full path name of a file containing a list of hostnames
 #define X10_HOSTLIST "X10_HOSTLIST" // an alternative to HOSTFILE above.  This is a comma-separated list of hostnames
+#define X10_RESILIENT_MODE "X10_RESILIENT_MODE" // if non-zero, disable the aggressive propagation of place failure
 #define X10_LAUNCHER_PLACE "X10_LAUNCHER_PLACE" // a number for the "place" of this process.  Set by the launcher.
 #define X10_LAUNCHER_SSH "X10_LAUNCHER_SSH" // the ssh command.  This doesn't normally need to be set.
 #define X10_LAUNCHER_PARENT "X10_LAUNCHER_PARENT" // the hostname:port of the parent launcher.  This is set by the launcher.
@@ -54,7 +57,7 @@
 // Enable/disable debug information
 //#define DEBUG 1
 
-enum CTRL_MSG_TYPE {HELLO, GOODBYE, PORT_REQUEST, PORT_RESPONSE};
+enum CTRL_MSG_TYPE {HELLO, GOODBYE, PORT_REQUEST, PORT_RESPONSE}; // matching set in SocketTransport.java
 struct ctrl_msg
 {
 	CTRL_MSG_TYPE type;
@@ -63,11 +66,6 @@ struct ctrl_msg
 	int datalen;
 	// followed by the data
 };
-
-static inline bool checkBoolEnvVar(char* value)
-{
-    return (value && !(strcasecmp("false", value) == 0) && !(strcasecmp("0", value) == 0) && !(strcasecmp("f", value) == 0));
-}
 
 /* ************************************************************************ */
 /*                ProcManager class definition                              */

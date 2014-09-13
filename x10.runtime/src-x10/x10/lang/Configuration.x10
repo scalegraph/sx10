@@ -6,14 +6,12 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.lang;
 
 import x10.compiler.Native;
-
-import x10.util.NoSuchElementException;
 
 /**
  */
@@ -25,17 +23,17 @@ final class Configuration {
     @Native("c++", "DEFAULT_STATIC_THREADS")
     private static DEFAULT_STATIC_THREADS: Boolean = false;
 
+    @Native("java", "java.lang.Runtime.getRuntime().availableProcessors()")
+    private static AVAILABLE_PROCESSORS:Int = 1n;
+
     @Native("java", "x10.runtime.impl.java.Runtime.loadenv()")
-    @Native("c++", "x10aux::loadenv()")
+    @Native("c++", "::x10::lang::RuntimeNatives::loadenv()")
     static native def loadEnv():x10.util.HashMap[String,String];
 
     static def envOrElse(s:String, b:Boolean):Boolean {
-        try {
-            val v = Runtime.env.getOrThrow(s);
-            return !(v.equalsIgnoreCase("false") || v.equalsIgnoreCase("f") || v.equals("0"));
-        } catch (NoSuchElementException) {
-        }
-        return b;
+        val v = Runtime.env.getOrElse(s, null);
+        if (v == null) return b;
+        return !(v.equalsIgnoreCase("false") || v.equalsIgnoreCase("f") || v.equals("0"));
     }
 
     static def strict_finish():Boolean = envOrElse("X10_STRICT_FINISH", false);
@@ -47,28 +45,41 @@ final class Configuration {
     static def busy_waiting():Boolean = envOrElse("X10_BUSY_WAITING", false);
 
     static def nthreads():Int {
-        var v:Int = 0;
+        var v:Int = 0n;
         try {
-            v = Int.parse(Runtime.env.getOrThrow("X10_NTHREADS"));
-        } catch (NoSuchElementException) {
+            v = Int.parse(Runtime.env.getOrElse("X10_NTHREADS", "1"));
         } catch (NumberFormatException) {
         }
-        if (v <= 0) v = 1;
+        if (v <= 0) v = AVAILABLE_PROCESSORS;
         if (v > PLATFORM_MAX_THREADS) v = PLATFORM_MAX_THREADS;
         return v;
     }
 
     static def max_threads():Int {
-        var v:Int = 0;
+        var v:Int = 0n;
         try {
-           v = Int.parse(Runtime.env.getOrThrow("X10_MAX_THREADS"));
-       } catch (NoSuchElementException) {
+           v = Int.parse(Runtime.env.getOrElse("X10_MAX_THREADS", "0"));
        } catch (NumberFormatException) {
        }
        if (v <= 0) v = nthreads();
-       if (!static_threads() && v < 1000) v = 1000;
+       if (!static_threads() && v < 1000) v = 1000n;
        if (v > PLATFORM_MAX_THREADS) v = PLATFORM_MAX_THREADS;
        return v;
+    }
+    
+    // Note that "X10_RESILIENT_MODE" is also checked in x10rt/sockets/Launcher.cc
+    static val RESILIENT_MODE_NONE = 0n;
+    static val RESILIENT_MODE_PLACE_ZERO = 1n;
+    static val RESILIENT_MODE_DISTRIBUTED = 2n;
+    static val RESILIENT_MODE_ZOO_KEEPER = 3n;
+    static val RESILIENT_MODE_SAMPLE = 9n;
+    static def resilient_mode():Int { // called from Runtime.x10
+        var v:Int = RESILIENT_MODE_NONE;
+        try {
+            v = Int.parse(Runtime.env.getOrElse("X10_RESILIENT_MODE", "0"));
+        } catch (NumberFormatException) {
+        }
+        return v;
     }
 }
 

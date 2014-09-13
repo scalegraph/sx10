@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.io;
@@ -28,20 +28,19 @@ public abstract class Reader {
     /**
      * Close the input stream
      */
-    public abstract def close(): void; //throws IOException
+    public abstract def close():void;
 
     /**
      * Read the next Byte from the input; throws IOException if none.
      */
-    public abstract def read(): Byte; //throws IOException
+    public abstract def read():Byte;
 
     /**
-     * Fill len bytes of the argument array starting at off.
-     * Throws IOException if not enough elements.
+     * Fill len bytes of the argument rail starting at off.
      * This is significantly faster than read(Marshal.BYTE,r,off,len)
      * since this reads multiple bytes at once if possible.
      */
-    public abstract def read(r:Rail[Byte], off:Int, len:Int): Int; //throws IOException
+    public abstract def read(r:Rail[Byte], off:Long, len:Long):void;
 
     /**
      * How many bytes can be read from this stream without blocking?
@@ -50,12 +49,12 @@ public abstract class Reader {
      * the read is made, in particular this method may return 0 even
      * if a non-zero number of bytes are actually available.
      */
-    public abstract def available():Int; //throws IOException
+    public abstract def available():Int;
 
-    public abstract def skip(Int): void; //throws IOException
+    public abstract def skip(v:Long):void;
 
-    public abstract def mark(Int): void; //throws IOException
-    public abstract def reset(): void; //throws IOException
+    public abstract def mark(m:Int):void;
+    public abstract def reset():void;
     public abstract def markSupported(): Boolean;
     
     /**
@@ -129,25 +128,26 @@ public abstract class Reader {
      */
     public final def read[T](m:Marshal[T]):T = m.read(this);
 
-    /**
-     * Fill the argument array by reading the next a.size elements. 
+     /* Fill the argument rail by reading the next a.size elements. 
      * Returns: The number of elements read.
      */
-    public final def read[T](m:Marshal[T], a:Array[T](1)):Int = read[T](m, a, 0, a.size);
+    public final def read[T](m:Marshal[T], a:Rail[T]):void//:Int = read[T](m, a, 0, a.size);
+	{	read[T](m, a, 0, a.size);
+	}
 
     /**
-     * Fill len elements of the argument array starting at off.
-     * Throws IOException if not enough elements.
+     * Fill len elements of the argument rail starting at off.
+     * Returns: The number of elements read.
      */
-    public final def read[T](m: Marshal[T], a:Array[T](1), off:Int, len:Int):Int {
-        var i: Int = off;
+    public final def read[T](m: Marshal[T], a:Rail[T], off:Long, len:Long):void{//Long {
+        
         try {
-	        for ( ; i < off+len; i++) {
+	        for (var i: Long = off; i < off+len; i++) {
 	            a(i) = read[T](m);
 	        }
         } catch (e:IOException) {
         }
-        return i - off;
+        //return i - off;
     }
     
     public def lines(): ReaderIterator[String] = new ReaderIterator[String](new Marshal.LineMarshal(), this);

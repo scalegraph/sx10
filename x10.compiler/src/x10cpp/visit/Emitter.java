@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10cpp.visit;
@@ -18,6 +18,7 @@ import static x10cpp.visit.SharedVarsMethods.DESERIALIZATION_BUFFER;
 import static x10cpp.visit.SharedVarsMethods.DESERIALIZER_METHOD;
 import static x10cpp.visit.SharedVarsMethods.DESERIALIZE_BODY_METHOD;
 import static x10cpp.visit.SharedVarsMethods.DESERIALIZE_METHOD;
+import static x10cpp.visit.SharedVarsMethods.MAKE;
 import static x10cpp.visit.SharedVarsMethods.SAVED_THIS;
 import static x10cpp.visit.SharedVarsMethods.SERIALIZATION_BUFFER;
 import static x10cpp.visit.SharedVarsMethods.SERIALIZATION_ID_FIELD;
@@ -30,6 +31,7 @@ import static x10cpp.visit.SharedVarsMethods.make_ref;
 import static x10cpp.visit.SharedVarsMethods.make_captured_lval;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -89,6 +91,7 @@ import x10.types.X10ClassType;
 import x10.types.X10ConstructorDef;
 import x10.types.X10FieldDef;
 import x10.types.X10FieldInstance;
+import x10.types.X10FieldInstance_c;
 
 import x10.types.X10LocalDef;
 import x10.types.X10MethodDef;
@@ -130,11 +133,14 @@ public class Emitter {
         "bitand", "bitor", "compl",
         // X10 types
         "x10_boolean", "x10_byte", "x10_char", "x10_short", "x10_int",
-        "x10_long", "x10_float", "x10_double",
+        "x10_long", "x10_float", "x10_double", "x10_complex", 
+        "x10_ubyte", "x10_ushort", "x10_uint", "x10_ulong",
         // X10 implementation names
         "FMGL", "TPMGL", "TYPENAME", "getRTT", "rtt", "RTT_H_DECLS", "RTT_CC_DECLS1",
         // macros defined by the C++ implementation
         "i386",
+        // hack around cygwin defining log2 as a macro in math.h
+        "log2",
         // Additionally, anything starting with a '_' is reserved, and may clash
     };
     private static boolean isCPPKeyword(String name) {
@@ -234,7 +240,7 @@ public class Emitter {
 		printType(type,w,null);
 	}	
 	void printType(Type type, CodeWriter w, Context ctx) {
-		w.write(translateType(type, true, ctx));
+		w.write(translateType(type, true, true, ctx));
 	}
 
 	/**
@@ -265,8 +271,13 @@ public class Emitter {
 	    return full;
 	}
 
-	private static HashMap<String,String> exploreConstraints(Context context, ConstrainedType type) {
-		HashMap<String,String> r = new HashMap<String,String>();
+	/** Examines the type's constraints to determine any variable -> value mappings that exist. */
+	public static Map<String,Object> exploreConstraints(Context context, Type type_) {
+		if (!(type_ instanceof ConstrainedType)) {
+			return Collections.<String,Object>emptyMap();
+		}
+		HashMap<String,Object> r = new HashMap<String,Object>();
+		ConstrainedType type = (ConstrainedType)type_;
 		CConstraint cc = type.getRealXClause();
 		 // FIXME: [DC] context.constraintProjection ought not to eliminate information but it seems to?
 		CConstraint projected = cc; //context.constraintProjection(cc);
@@ -285,7 +296,7 @@ public class Emitter {
 			// resolve to another variable, keep going
 			XVar closed_xvar = projected.bindingForVar(xvar);
 			if (closed_xvar!=null && closed_xvar instanceof XLit) {
-				r.put(property_name, closed_xvar.toString());
+				r.put(property_name, ((XLit)closed_xvar).val());
 			}
 		}
 		return r;
@@ -313,17 +324,20 @@ public class Emitter {
 	 * @return a string representation of the type
 	 */
 	public static String translateType(Type type, boolean asRef) {
-		return translateType(type, asRef, null);
+		return translateType(type, asRef, true, null);
 	}
-	public static String translateType(Type type_, boolean asRef, Context ctx) {
+	public static String translateType(Type type, boolean asRef, boolean qualify) {
+	    return translateType(type, asRef, qualify, null);
+	}
+	public static String translateType(Type type_, boolean asRef, boolean qualify, Context ctx) {
 		assert (type_ != null);
 		TypeSystem xts = type_.typeSystem();
 		Type type = xts.expandMacros(type_);
 		if (type.isVoid()) {
 			return "void";
 		}
-		HashMap<String,String> propertyKnowledge = null;
-		if (ctx!=null && type instanceof ConstrainedType) propertyKnowledge = exploreConstraints(ctx, (ConstrainedType)type);
+		Map<String,Object> propertyKnowledge = null;
+		if (ctx!=null && type instanceof ConstrainedType) propertyKnowledge = exploreConstraints(ctx, type);
 		// TODO: handle closures
 //		if (((X10TypeSystem) type.typeSystem()).isClosure(type))
 //			return translateType(((X10Type) type).toClosure().base(), asRef);
@@ -333,7 +347,7 @@ public class Emitter {
 		if (type instanceof FunctionType) {
 		    FunctionType ft = (FunctionType) type;
 		    List<Type> args = ft.argumentTypes();
-		    name = translate_mangled_FQN(baseName(ft, true));
+		    name = (qualify ? "::":"") + translate_mangled_FQN(baseName(ft, true));
 		    String typeArgs = "";
 		    boolean firstArg = true;
 		    for (Type argType : args) {
@@ -380,13 +394,17 @@ public class Emitter {
 					if (propertyKnowledge!=null) for (String key : propertyKnowledge.keySet()) {
 							env.put(key, propertyKnowledge.get(key));
 					}
-					return nativeSubst("NativeRep", env, pat);
+					String nr_name = nativeSubst("NativeRep", env, pat);
+					if (qualify && nr_name.contains("::")) {
+					    nr_name = "::"+nr_name;
+					}
+					return nr_name;
 				}
 				else {
 					name = fullName(ct).toString();
 				}
 			}
-		    name = translate_mangled_FQN(name);
+		    name = (qualify ? "::":"") + translate_mangled_FQN(name);
 			if (typeArguments.size() != 0) {
 				String args = "";
 				int s = typeArguments.size();
@@ -401,7 +419,7 @@ public class Emitter {
 			name = ((ParameterType)type).name().toString();
 			return mangled_parameter_type_name(name); // parameter types shouldn't be refs
 		} else if (type.isNull()) {
-			return asRef ? "x10::lang::NullType*" : "x10::lang::NullType";
+			return asRef ? "::x10::lang::NullType*" : "::x10::lang::NullType";
 		} else {
 			assert false : type; // unhandled type.
 		}
@@ -461,7 +479,7 @@ public class Emitter {
 	void printTemplateInstantiation(MethodInstance mi, CodeWriter w) {
 		if (mi.typeParameters().size() == 0)
 			return;
-		w.write("<");
+		w.write("< ");
 		for (Iterator<Type> i = mi.typeParameters().iterator(); i.hasNext(); ) {
 		    final Type at = i.next();
 		    w.write(translateType(at, true));
@@ -612,7 +630,7 @@ public class Emitter {
 		printType(ret, h);
 		h.allowBreak(2, 2, " ", 1);
 		if (qualify) {
-		    h.write(translateType(container)+ "::");
+		    h.write(translateType(container, false, false)+ "::");
 		}
 		h.write(mangled_method_name(name));
 		printFormalDecls(n, h, tr, flags, container);
@@ -701,34 +719,35 @@ public class Emitter {
 	    numParents += ct.interfaces().size();
 	    String kind;
 	    if (ct.isX10Struct()) {
-	        kind = "x10aux::RuntimeType::struct_kind";
+	        kind = "::x10aux::RuntimeType::struct_kind";
 	    } else if (ct.flags().isInterface()) {
-	        kind = "x10aux::RuntimeType::interface_kind";
+	        kind = "::x10aux::RuntimeType::interface_kind";
 	    } else {
-	        kind = "x10aux::RuntimeType::class_kind";
+	        kind = "::x10aux::RuntimeType::class_kind";
 	    }
 
 	    ClassifiedStream cs;
 	    if (cd.typeParameters().isEmpty()) {
 	        cs = sw.body();
 	        boolean first = true;
-	        cs.writeln("x10aux::RuntimeType "+translateType(ct)+"::rtt;");
-	        cs.write("void "+translateType(ct)+"::_initRTT() {"); cs.newline(4); cs.begin(0);
+	        String tn = translateType(ct, false, false);
+	        cs.writeln("::x10aux::RuntimeType "+tn+"::rtt;");
+	        cs.write("void "+tn+"::_initRTT() {"); cs.newline(4); cs.begin(0);
 	        cs.writeln("if (rtt.initStageOne(&rtt)) return;");
 	        if (numParents > 0) { 
-	            cs.write("const x10aux::RuntimeType* parents["+numParents+"] = { ");
+	            cs.write("const ::x10aux::RuntimeType* parents["+numParents+"] = { ");
 	            if (ct.superClass() != null) {
-	                cs.write("x10aux::getRTT" + chevrons(translateType(ct.superClass())) + "()");
+	                cs.write("::x10aux::getRTT" + chevrons(translateType(ct.superClass())) + "()");
 	                first = false;
 	            }
 	            for (Type iface : ct.interfaces()) {
 	                if (!first) cs.write(", ");
-	                cs.write("x10aux::getRTT"+chevrons(translateType(iface))+"()");
+	                cs.write("::x10aux::getRTT"+chevrons(translateType(iface))+"()");
 	                first = false;
 	            }
 	            cs.writeln("};");
 	        } else {
-	            cs.writeln("const x10aux::RuntimeType** parents = NULL; ");
+	            cs.writeln("const ::x10aux::RuntimeType** parents = NULL; ");
 	        }
 	        cs.write("rtt.initStageTwo(\""+x10name+"\","+kind+", "+numParents+ ", parents, 0, NULL, NULL);");
 	        if (ct.isX10Struct() && isPointerless(ct)) {
@@ -741,45 +760,45 @@ public class Emitter {
 	        boolean first = true;
 	        int numTypeParams = cd.typeParameters().size();
 	        printTemplateSignature(cd.typeParameters(), cs);
-	        cs.writeln("x10aux::RuntimeType "+translateType(ct)+"::rtt;");
+	        cs.writeln("::x10aux::RuntimeType "+translateType(ct, false, false)+"::rtt;");
 
 	        printTemplateSignature(cd.typeParameters(), cs);
-	        cs.write("void "+translateType(ct)+"::_initRTT() {"); cs.newline(4); cs.begin(0);
-                cs.writeln("const x10aux::RuntimeType *canonical = x10aux::getRTT"+chevrons(translateType(MessagePassingCodeGenerator.getStaticMemberContainer(cd), false))+"();");
+	        cs.write("void "+translateType(ct, false, false)+"::_initRTT() {"); cs.newline(4); cs.begin(0);
+                cs.writeln("const ::x10aux::RuntimeType *canonical = ::x10aux::getRTT"+chevrons(translateType(MessagePassingCodeGenerator.getStaticMemberContainer(cd), false))+"();");
                 cs.writeln("if (rtt.initStageOne(canonical)) return;");
 	        
 	        if (numParents > 0) {
-	            cs.write("const x10aux::RuntimeType* parents["+numParents+"] = { ");
+	            cs.write("const ::x10aux::RuntimeType* parents["+numParents+"] = { ");
 	            if (ct.superClass() != null) {
-	                cs.write("x10aux::getRTT" + chevrons(translateType(ct.superClass())) + "()");
+	                cs.write("::x10aux::getRTT" + chevrons(translateType(ct.superClass())) + "()");
 	                first = false;
 	            }
 	            for (Type iface : ct.interfaces()) {
 	                if (!first) cs.write(", ");
-	                cs.write("x10aux::getRTT"+chevrons(translateType(iface))+"()");
+	                cs.write("::x10aux::getRTT"+chevrons(translateType(iface))+"()");
 	                first = false;
 	            }
 	            cs.writeln("};");
 	        } else {
-	            cs.writeln("const x10aux::RuntimeType** parents = NULL; ");            
+	            cs.writeln("const ::x10aux::RuntimeType** parents = NULL; ");            
 	        }
-	        cs.write("const x10aux::RuntimeType* params["+numTypeParams+"] = { ");
+	        cs.write("const ::x10aux::RuntimeType* params["+numTypeParams+"] = { ");
 	        first = true;
 	        for (Type param : cd.typeParameters()) {
 	            if (!first) cs.write(", ");
-	            cs.write("x10aux::getRTT"+chevrons(translateType(param))+"()");
+	            cs.write("::x10aux::getRTT"+chevrons(translateType(param))+"()");
 	            first = false;
 	        }
 	        cs.writeln("};");
 
-	        cs.write("x10aux::RuntimeType::Variance variances["+numTypeParams+"] = { ");
+	        cs.write("::x10aux::RuntimeType::Variance variances["+numTypeParams+"] = { ");
 	        first = true;
 	        for (ParameterType.Variance v : ct.x10Def().variances()) {
 	            if (!first) cs.write(", ");
 	            switch(v) {
-	            case COVARIANT: cs.write("x10aux::RuntimeType::covariant"); break;
-	            case CONTRAVARIANT: cs.write("x10aux::RuntimeType::contravariant"); break;
-	            case INVARIANT: cs.write("x10aux::RuntimeType::invariant"); break;
+	            case COVARIANT: cs.write("::x10aux::RuntimeType::covariant"); break;
+	            case CONTRAVARIANT: cs.write("::x10aux::RuntimeType::contravariant"); break;
+	            case INVARIANT: cs.write("::x10aux::RuntimeType::invariant"); break;
 	            default: assert false : "Unexpected Variance";
 	            }
 	            first = false;
@@ -837,7 +856,7 @@ public class Emitter {
 		if (!n.flags().flags().isInterface() && !n.classDef().isStruct()) {
 			TypeNode sc = n.superClass();
 			if (sc == null) {
-				h.write(" : public x10::lang::X10Class");
+				h.write(" : public ::x10::lang::X10Class");
 			} else {
 				String parent = translateType(n.superClass().type());
 				h.write(" : public "+parent);
@@ -862,7 +881,7 @@ public class Emitter {
 		//printTemplateSignature(toTypeList(def.typeParameters()), h);
 
 		h.begin(0);
-		String typeName = translateType(container.def().asType());
+		String typeName = translateType(container.def().asType(), false, false);
         // not a virtual method, this function is called only when the static type is precise
         h.write(rType + " ");
 		if (define) {
@@ -984,135 +1003,193 @@ public class Emitter {
         X10CPPContext_c context = (X10CPPContext_c) tr.context();
         Type parent = type.superClass();
         boolean customSerialization = type.isSubtype(ts.CustomSerialization(), context);
+        boolean unserializable = type.isSubtype(ts.Unserializable(), context);
+
         ClassifiedStream w = sw.body();
         ClassifiedStream h = sw.header();
         h.forceNewline();
 
         h.write("// Serialization"); h.newline();
         String klass = translateType(type);
+        String klassUnq = translateType(type,false,false);
 
-        String template = context.inTemplate() ? "template " : "";
-
-        if (!type.flags().isAbstract()) {
-            // _serialization_id
-            h.write("public: static const x10aux::serialization_id_t "+SERIALIZATION_ID_FIELD+";"); h.newline();
-            h.forceNewline();
-            printTemplateSignature(ct.x10Def().typeParameters(), w);
-            w.write("const x10aux::serialization_id_t "+klass+"::"+SERIALIZATION_ID_FIELD+" = ");
-            w.newline(4);
-            w.write("x10aux::DeserializationDispatcher::addDeserializer(");
-            w.write(klass+"::"+DESERIALIZER_METHOD+", x10aux::CLOSURE_KIND_NOT_ASYNC);");
-            w.newline(); w.forceNewline();
-        }
-
-        // _serialize_id()
-        if (!type.flags().isAbstract()) {
-            h.write("public: ");
-            if (!type.flags().isFinal())
-                h.write("virtual ");
-            h.write("x10aux::serialization_id_t "+SERIALIZE_ID_METHOD+"() {");
+        if (unserializable) {
+            h.write("virtual ");
+            h.write("void "+SERIALIZE_BODY_METHOD+"("+SERIALIZATION_BUFFER+"& buf) {");
             h.newline(4); h.begin(0);
-            h.write(" return "+SERIALIZATION_ID_FIELD+";"); h.end(); h.newline();
-            h.write("}"); h.newline();
-            h.forceNewline();
-        }
-
-        if (customSerialization && !((X10ClassDef)ct.def()).hasDeserializationConstructor(context)) {
-            h.writeln("// autogenerated custom deserialization");
-            h.writeln("void "+CONSTRUCTOR+"("+translateType(ts.SerialData(), true)+" sd) {");
-            h.newline(4); h.begin(0);
-            h.write(translateType(parent)+"::"+CONSTRUCTOR+"(sd);");
+            h.write("::x10aux::throwNotSerializableException(\"Can't serialize "+type.fullName().toString()+"\");");
             h.end(); h.newline();
             h.write("}"); h.newline();
             h.forceNewline();
-        }
-        
-        // _serialize_body()
-        h.write("public: ");
-        h.write("virtual ");
-        h.write("void "+SERIALIZE_BODY_METHOD+"("+SERIALIZATION_BUFFER+"& buf);");
-        h.newline(0); h.forceNewline();
 
-        printTemplateSignature(ct.x10Def().typeParameters(), w);
-        w.write("void "+klass+"::"+SERIALIZE_BODY_METHOD+
+            if (!type.flags().isFinal())
+                h.write("virtual ");
+            h.write("::x10aux::serialization_id_t "+SERIALIZE_ID_METHOD+"() {");
+            h.newline(4); h.begin(0);
+            h.write("::x10aux::throwNotSerializableException(\"Can't serialize "+type.fullName().toString()+"\");");
+            h.end(); h.newline();
+            h.write("}"); h.newline();
+            h.forceNewline();
+        } else {
+            if (!type.flags().isAbstract()) {
+                // _serialization_id
+                h.write("public: static const ::x10aux::serialization_id_t "+SERIALIZATION_ID_FIELD+";"); h.newline();
+                h.forceNewline();
+                printTemplateSignature(ct.x10Def().typeParameters(), w);
+                w.write("const ::x10aux::serialization_id_t "+klassUnq+"::"+SERIALIZATION_ID_FIELD+" = ");
+                w.newline(4);
+                w.write("::x10aux::DeserializationDispatcher::addDeserializer(");
+                w.write(klass+"::"+DESERIALIZER_METHOD+");");
+                w.newline(); w.forceNewline();
+            }
+
+            // _serialize_id()
+            if (!type.flags().isAbstract()) {
+                h.write("public: ");
+                if (!type.flags().isFinal())
+                    h.write("virtual ");
+                h.write("::x10aux::serialization_id_t "+SERIALIZE_ID_METHOD+"() {");
+                h.newline(4); h.begin(0);
+                h.write(" return "+SERIALIZATION_ID_FIELD+";"); h.end(); h.newline();
+                h.write("}"); h.newline();
+                h.forceNewline();
+            }
+
+            if (customSerialization && !((X10ClassDef)ct.def()).hasDeserializationConstructor(context)) {
+                h.writeln("// autogenerated custom deserialization");
+                h.writeln("void "+CONSTRUCTOR+"("+translateType(ts.Deserializer(), true)+" ds) {");
+                h.newline(4); h.begin(0);
+                h.write(translateType(parent)+"::"+CONSTRUCTOR+"(ds);");
+                h.end(); h.newline();
+                h.write("}"); h.newline();
+                h.forceNewline();
+            }
+
+
+            // _serialize_body()
+            h.write("public: ");
+            h.write("virtual ");
+            h.write("void "+SERIALIZE_BODY_METHOD+"("+SERIALIZATION_BUFFER+"& buf);");
+            h.newline(0); h.forceNewline();
+
+            printTemplateSignature(ct.x10Def().typeParameters(), w);
+            w.write("void "+klassUnq+"::"+SERIALIZE_BODY_METHOD+
                     "("+SERIALIZATION_BUFFER+"& buf) {");
-        w.newline(4); w.begin(0);
-        if (customSerialization) {
-            w.writeln("/* NOTE: Implements x10.io.CustomSerialization */");
-            w.writeln("buf.write(this->serialize());");
-        } else {
-            if (parent != null && parent.isClass()) {
-                w.write(translateType(parent)+"::"+SERIALIZE_BODY_METHOD+"(buf);");
-                w.newline();
-            }
-            for (int i = 0; i < type.fields().size(); i++) {
-                if (i != 0)
+            w.newline(4); w.begin(0);
+            if (customSerialization) {
+                w.writeln("/* NOTE: Implements x10.io.CustomSerialization */");
+                w.writeln("::x10::io::Serializer* x10_buf = ::x10::io::Serializer::"+MAKE+"(&buf);");
+                w.writeln("this->serialize(x10_buf);");
+                w.writeln("buf.write(::x10aux::deserialization_buffer::CUSTOM_SERIALIZATION_END);");
+            } else {
+                if (parent != null && parent.isClass()) {
+                    w.write(translateType(parent)+"::"+SERIALIZE_BODY_METHOD+"(buf);");
                     w.newline();
-                FieldInstance f = (FieldInstance) type.fields().get(i);
-                if (f instanceof X10FieldInstance && !query.ifdef(((X10FieldInstance) f).x10Def())) continue;
-                if (f.flags().isStatic() || query.isSyntheticField(f.name().toString()))
-                    continue;
-                if (f.flags().isTransient()) // don't serialize transient fields
-                    continue;
-                String fieldName = mangled_field_name(f.name().toString());
-                w.write("buf.write(this->"+fieldName+");"); w.newline();
+                }
+                for (int i = 0; i < type.fields().size(); i++) {
+                    if (i != 0)
+                        w.newline();
+                    FieldInstance f = (FieldInstance) type.fields().get(i);
+                    if (f instanceof X10FieldInstance && !query.ifdef(((X10FieldInstance) f).x10Def())) continue;
+                    if (f.flags().isStatic() || query.isSyntheticField(f.name().toString()))
+                        continue;
+                    if (f.flags().isTransient()) // don't serialize transient fields
+                        continue;
+                    String fieldName = mangled_field_name(f.name().toString());
+                    w.write("buf.write(this->"+fieldName+");"); w.newline();
+                }
             }
-        }
-        w.end(); w.newline();
-        w.write("}");
-        w.newline(); w.forceNewline();
+            w.end(); w.newline();
+            w.write("}");
+            w.newline(); w.forceNewline();
 
-        if (!type.flags().isAbstract()) {
-            // _deserializer()
-            h.write("public: static ");
-            h.write(make_ref("x10::lang::Reference")+" "+DESERIALIZER_METHOD+"("+DESERIALIZATION_BUFFER+"& buf);");
-            h.newline(); h.forceNewline();
-            printTemplateSignature(ct.x10Def().typeParameters(), sw);
-            sw.write(make_ref("x10::lang::Reference")+" "+klass+"::"+DESERIALIZER_METHOD+"("+DESERIALIZATION_BUFFER+"& buf) {");
-            sw.newline(4); sw.begin(0);
-            sw.writeln(make_ref(klass)+" this_ = "+
-                       "new (memset(x10aux::alloc"+chevrons(klass)+"(), 0, sizeof("+klass+"))) "+klass+"();");
-            sw.writeln("buf.record_reference(this_);");
-            sw.writeln("this_->"+DESERIALIZE_BODY_METHOD+"(buf);");
-            sw.write("return this_;");
-            sw.end(); sw.newline();
-            sw.writeln("}"); sw.forceNewline();
-        }
-
-        // _deserialize_body()
-        h.write("public: ");
-        h.write("void "+DESERIALIZE_BODY_METHOD+"("+DESERIALIZATION_BUFFER+"& buf);"); h.newline(0);
-        printTemplateSignature(ct.x10Def().typeParameters(), w);
-        w.write("void "+klass+"::"+DESERIALIZE_BODY_METHOD+"("+DESERIALIZATION_BUFFER+"& buf) {");
-        w.newline(4); w.begin(0);
-        if (customSerialization) {
-            w.writeln("/* NOTE: Implements x10.io.CustomSerialization */");
-            w.writeln(translateType(ts.SerialData(), true)+ "val_ = buf.read"+chevrons(translateType(ts.SerialData(), true))+"();");
-            w.writeln(CONSTRUCTOR+"(val_);");
-        } else {
-            if (parent != null && parent.isClass()) {
-                w.write(translateType(parent)+"::"+DESERIALIZE_BODY_METHOD+"(buf);");
-                w.newline();
+            if (!type.flags().isAbstract()) {
+                // _deserializer()
+                h.write("public: static ");
+                h.write(make_ref("::x10::lang::Reference")+" "+DESERIALIZER_METHOD+"("+DESERIALIZATION_BUFFER+"& buf);");
+                h.newline(); h.forceNewline();
+                printTemplateSignature(ct.x10Def().typeParameters(), sw);
+                sw.write(make_ref("::x10::lang::Reference")+" "+klass+"::"+DESERIALIZER_METHOD+"("+DESERIALIZATION_BUFFER+"& buf) {");
+                sw.newline(4); sw.begin(0);
+                sw.writeln(make_ref(klass)+" this_ = new (::x10aux::alloc_z"+chevrons(klass)+"()) "+klass+"();");
+                sw.writeln("buf.record_reference(this_);");
+                sw.writeln("this_->"+DESERIALIZE_BODY_METHOD+"(buf);");
+                sw.write("return this_;");
+                sw.end(); sw.newline();
+                sw.writeln("}"); sw.forceNewline();
             }
-            for (int i = 0; i < type.fields().size(); i++) {
-                if (i != 0)
+
+            // _deserialize_body()
+            h.write("public: ");
+            h.write("void "+DESERIALIZE_BODY_METHOD+"("+DESERIALIZATION_BUFFER+"& buf);"); h.newline(0);
+            printTemplateSignature(ct.x10Def().typeParameters(), w);
+            w.write("void "+klassUnq+"::"+DESERIALIZE_BODY_METHOD+"("+DESERIALIZATION_BUFFER+"& buf) {");
+            w.newline(4); w.begin(0);
+            if (customSerialization) {
+                w.writeln("/* NOTE: Implements x10.io.CustomSerialization */");
+                w.writeln("::x10::io::Deserializer* x10_buf = ::x10::io::Deserializer::"+MAKE+"(&buf);");
+                w.writeln(CONSTRUCTOR+"(x10_buf);");
+                w.writeln("::x10aux::serialization_id_t tmp = buf.read< ::x10aux::serialization_id_t>();");
+                w.writeln("if (tmp != ::x10aux::deserialization_buffer::CUSTOM_SERIALIZATION_END) { ::x10aux::raiseSerializationProtocolError(); }");
+            } else {
+                if (parent != null && parent.isClass()) {
+                    w.write(translateType(parent)+"::"+DESERIALIZE_BODY_METHOD+"(buf);");
                     w.newline();
-                FieldInstance f = (FieldInstance) type.fields().get(i);
-                if (f instanceof X10FieldInstance && !query.ifdef(((X10FieldInstance) f).x10Def())) continue;
-                if (f.flags().isStatic() || query.isSyntheticField(f.name().toString()))
-                    continue;
-                if (f.flags().isTransient()) // don't serialize transient fields of classes
-                    continue;
-                String fieldName = mangled_field_name(f.name().toString());
-                w.write(fieldName+" = buf.read"+chevrons(translateType(f.type(),true))+"();");
+                }
+                List<FieldInstance> specialTransients = null;
+                for (int i = 0; i < type.fields().size(); i++) {
+                    if (i != 0)
+                        w.newline();
+                    FieldInstance f = (FieldInstance) type.fields().get(i);
+                    if (f instanceof X10FieldInstance && !query.ifdef(((X10FieldInstance) f).x10Def())) continue;
+                    if (f.flags().isStatic() || query.isSyntheticField(f.name().toString()))
+                        continue;
+                    if (f.flags().isTransient()) {
+                        if (!((X10FieldInstance_c)f).annotationsMatching(ts.TransientInitExpr()).isEmpty()) {
+                            if (specialTransients == null) {
+                                specialTransients = new ArrayList<FieldInstance>();
+                            }
+                            specialTransients.add(f);
+                        }
+                       continue;
+                    }
+                    String fieldName = mangled_field_name(f.name().toString());
+                    w.write(fieldName+" = buf.read"+chevrons(translateType(f.type(),true))+"();");
+                }
+                if (specialTransients != null) {
+                    w.newline();
+                    w.writeln("/* fields with @TransientInitExpr annotations */");
+                    for (FieldInstance f:specialTransients) {
+                        Expr initExpr = getInitExpr(((X10FieldInstance_c)f).annotationsMatching(ts.TransientInitExpr()).get(0));
+                        if (initExpr != null) {
+                            String fieldName = mangled_field_name(f.name().toString());
+                            w.write(fieldName+" = ");
+                            tr.printAst(initExpr, sw);
+                            w.writeln(";");
+                        }
+                    }
+                }               
             }
+
+            w.end(); w.newline();
+            w.write("}");
+            w.newline();
+            w.forceNewline();
         }
-        w.end(); w.newline();
-        w.write("}");
-        w.newline();
-        w.forceNewline();
     }
 
+    private Expr getInitExpr(Type at) {
+        at = Types.baseType(at);
+        if (at instanceof X10ClassType) {
+            X10ClassType act = (X10ClassType) at;
+            if (0 < act.propertyInitializers().size()) {
+                return act.propertyInitializer(0);
+            }
+        }
+        return null;
+    }
+
+    
     void generateStructSerializationMethods(ClassType type, StreamWrapper sw) {
         X10ClassType ct = (X10ClassType) type.toClass();
         TypeSystem ts = (TypeSystem) type.typeSystem();

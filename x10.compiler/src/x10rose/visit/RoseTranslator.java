@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10rose.visit;
@@ -146,6 +146,8 @@ public class RoseTranslator extends Translator {
 		ErrorQueue eq = job.compiler().errorQueue();
 		Compiler compiler = job.compiler();
 		Options options = job.extensionInfo().getOptions();
+
+        JNI.cactionTest();
 		
 		Source src = sfn.source();
 		String in_file_name = sfn.source().path();

@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2013.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef X10RT_NET_H
@@ -22,6 +22,15 @@
  * functionality on top of a network library.  \see \ref structure
  */
 
+/** Partially initialize the X10RT API logical layer.
+ *
+ * \see #x10rt_lgl_preinit
+ *
+ * \param connInfoBuffer As in x10rt_lgl_preinit.
+ *
+ * \param connInfoBufferSize As in x10rt_lgl_preinit.
+ */
+X10RT_C x10rt_error x10rt_net_preinit(char* connInfoBuffer, int connInfoBufferSize);
 
 /** Initialize the X10RT API logical layer.  
  *
@@ -84,6 +93,15 @@ X10RT_C void x10rt_net_internal_barrier (void);
 /** \see #x10rt_lgl_nhosts */
 X10RT_C x10rt_place x10rt_net_nhosts (void);
 
+/** \see #x10rt_ndead */
+X10RT_C x10rt_place x10rt_net_ndead (void);
+
+/** \see #x10rt_is_place_dead */
+X10RT_C bool x10rt_net_is_place_dead (x10rt_place p);
+
+/** \see #x10rt_get_dead */
+X10RT_C x10rt_error x10rt_net_get_dead (x10rt_place *dead_places, x10rt_place len);
+
 /** \see #x10rt_lgl_here */
 X10RT_C x10rt_place x10rt_net_here (void);
 
@@ -110,12 +128,20 @@ X10RT_C void x10rt_net_send_put (x10rt_msg_params *p, void *buf, x10rt_copy_sz l
  */
 X10RT_C x10rt_error x10rt_net_probe (void);
 
+/**
+ * Check to see if a call to blocking_probe has been implemented, or if it's just a wrapper for probe
+ * Returns true if blocking_probe is real, or false if it will always return immediately
+ */
+X10RT_C bool x10rt_net_blocking_probe_support (void);
 
 /** Handle any oustanding message from the network by calling the registered callbacks, blocking if nothing is available.
  * \see #x10rt_lgl_probe
  */
 X10RT_C x10rt_error x10rt_net_blocking_probe (void);
 
+/** Unblock anything stuck in blocking_probe  \see #x10rt_unblock_probe
+ */
+X10RT_C x10rt_error x10rt_net_unblock_probe (void);
 
 /** \see #x10rt_lgl_remote_op
  * \param place As in #x10rt_lgl_remote_op
@@ -143,10 +169,13 @@ X10RT_C void x10rt_net_register_mem (void *ptr, size_t len);
  */
 X10RT_C void x10rt_net_finalize (void); 
 
-/** Return whether the x10rt_net implementation supports a particular feature.
+/** Return what level of collectives the network transport supports
  */
-X10RT_C int x10rt_net_supports (x10rt_opt o);
+X10RT_C x10rt_coll_type x10rt_net_coll_support ();
 
+/** Return whether the x10rt_net implementation supports remote operations.
+ */
+X10RT_C bool x10rt_net_remoteop_support ();
 
 /** \see #x10rt_lgl_team_new
  * \param placec As in #x10rt_lgl_team_new

@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 package x10c.visit;
 
@@ -232,8 +232,16 @@ public class VarsBoxer extends ContextVisitor {
     private Expr getLiteral(Position pos, Type type, long val) throws SemanticException {
         type = Types.baseType(type);
         Expr lit = null;
-        if (xts.isIntOrLess(type)) {
-            lit = xnf.IntLit(pos, IntLit.INT, val);
+        if (ts.isByte(type)) {
+            lit = nf.IntLit(pos, IntLit.BYTE, val);
+        } else if (ts.isUByte(type)) {
+            lit = nf.IntLit(pos, IntLit.UBYTE, val);
+        } else if (ts.isShort(type)) {
+            lit = nf.IntLit(pos, IntLit.SHORT, val);
+        } else if (ts.isUShort(type)) {
+            lit = nf.IntLit(pos, IntLit.USHORT, val);
+        } else if (ts.isInt(type)) {
+            lit = nf.IntLit(pos, IntLit.INT, val);
         } else if (xts.isLong(type)) {
             lit = xnf.IntLit(pos, IntLit.LONG, val);
         } else if (xts.isUInt(type)) {

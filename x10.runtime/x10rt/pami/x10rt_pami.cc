@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2010-2011.
+ *  (C) Copyright IBM Corporation 2010-2014.
  *
  *  This file was written by Ben Herta for IBM: bherta@us.ibm.com
  */
@@ -17,9 +17,9 @@
 #include <string.h>
 #include <unistd.h> // sleep()
 #include <errno.h> // for the strerror function
-#include <sched.h> // for sched_yield()
 #include <pthread.h> // for lock on the team mapping table
 #include <x10rt_net.h>
+#include <x10rt_internal.h>
 #include <pami.h>
 #if !defined(__bgq__)
 #include <pami_ext_hfi.h>
@@ -64,8 +64,9 @@ typedef pami_result_t (* async_progress_disable_function) (pami_context_t contex
 
 // the values for pami_dt are mapped to the indexes of x10rt_red_type
 pami_type_t DATATYPE_CONVERSION_TABLE[] = {PAMI_TYPE_UNSIGNED_CHAR, PAMI_TYPE_SIGNED_CHAR, PAMI_TYPE_SIGNED_SHORT, PAMI_TYPE_UNSIGNED_SHORT, PAMI_TYPE_SIGNED_INT,
-		PAMI_TYPE_UNSIGNED_INT, PAMI_TYPE_SIGNED_LONG_LONG, PAMI_TYPE_UNSIGNED_LONG_LONG, PAMI_TYPE_DOUBLE, PAMI_TYPE_FLOAT, PAMI_TYPE_LOC_DOUBLE_INT};
-size_t DATATYPE_MULTIPLIER_TABLE[] = {1,1,2,2,4,4,8,8,8,4,12}; // the number of bytes used for each entry in the table above.
+                                           PAMI_TYPE_UNSIGNED_INT, PAMI_TYPE_SIGNED_LONG_LONG, PAMI_TYPE_UNSIGNED_LONG_LONG, PAMI_TYPE_DOUBLE, PAMI_TYPE_FLOAT,
+                                           PAMI_TYPE_LOC_DOUBLE_INT, PAMI_TYPE_DOUBLE_COMPLEX};
+size_t DATATYPE_MULTIPLIER_TABLE[] = {1,1,2,2,4,4,8,8,8,4,12,16}; // the number of bytes used for each entry in the table above.
 // values for pami_op are mapped to indexes of x10rt_red_op_type
 pami_data_function OPERATION_CONVERSION_TABLE[] = {PAMI_DATA_SUM, PAMI_DATA_PROD, PAMI_DATA_NOOP, PAMI_DATA_BAND, PAMI_DATA_BOR, PAMI_DATA_BXOR, PAMI_DATA_MAX, PAMI_DATA_MIN};
 // values of x10rt_op_type are mapped to pami_atomic_t.
@@ -159,6 +160,8 @@ struct x10rt_pami_state
 #endif
 	pami_extension_t async_extension; // for async progress
 	bool blockingSend; // flag based on X10RT_PAMI_BLOCKING_SEND
+	pami_task_t *stepOrder; // this array is allocated and used only when the internal all-to-all collective has been specified
+	char errorMessageBuffer[1200]; // buffer to hold the most recent error message
 } state;
 
 static void local_msg_dispatch (pami_context_t context, void* cookie, const void* header_addr, size_t header_size,
@@ -178,7 +181,7 @@ static void team_create_dispatch (pami_context_t context, void* cookie, const vo
  *  return code behavior on BG/Q
  */
 pami_result_t x10rt_PAMI_Context_advance(pami_context_t context, size_t maximum) {
-#if defined(__bgq__) 
+#if defined(__bgq__)
   // Temporary workaround observed behavior on BG/Q.  
   // PAMI_Context_advance seems to always return PAMI_SUCCESS
   // So convert SUCCESS to EAGAIN and rely on higher-level looping to drain the network
@@ -195,25 +198,19 @@ pami_result_t x10rt_PAMI_Context_advance(pami_context_t context, size_t maximum)
  */
 void error(const char* msg, ...)
 {
-	char buffer[1200];
 	va_list ap;
 	va_start(ap, msg);
-	vsnprintf(buffer, sizeof(buffer), msg, ap);
+	vsnprintf(state.errorMessageBuffer, sizeof(state.errorMessageBuffer), msg, ap);
 	va_end(ap);
-	strcat(buffer, "  ");
-	int blen = strlen(buffer);
-	PAMI_Error_text(buffer+blen, 1199-blen);
-	fprintf(stderr, "X10 PAMI error: %s\n", buffer);
+	strcat(state.errorMessageBuffer, "  ");
+	int blen = strlen(state.errorMessageBuffer);
+	PAMI_Error_text(state.errorMessageBuffer+blen, 1199-blen);
+	fprintf(stderr, "X10 PAMI error: %s\n", state.errorMessageBuffer);
 	if (errno != 0)
 		fprintf(stderr, "X10 PAMI errno: %s\n", strerror(errno));
 
 	fflush(stderr);
-	exit(EXIT_FAILURE);
-}
-
-bool checkBoolEnvVar(char* value)
-{
-	return (value && !(strcasecmp("false", value) == 0) && !(strcasecmp("0", value) == 0) && !(strcasecmp("f", value) == 0));
+	exit(EXIT_FAILURE); // TODO - support the non-exit on error mode
 }
 
 // Query PAMI for the algorithm to use with a specific team and collective
@@ -222,9 +219,9 @@ void queryAvailableAlgorithms(x10rt_pami_team* team, pami_xfer_type_t collective
 	pami_result_t status = PAMI_ERROR;
 
 	// figure out how many different algorithms are available
-	size_t num_algorithms[2]; // [0]=always works, and [1]=sometimes works lists
+	size_t num_algorithms[2] = {0,0}; // [0]=always works, and [1]=sometimes works lists
 	status = PAMI_Geometry_algorithms_num(team->geometry, collective, num_algorithms);
-	if (status != PAMI_SUCCESS || num_algorithms[0]==0) error("Unable to query the algorithm counts");
+	if (status != PAMI_SUCCESS || (num_algorithms[0]==0 && num_algorithms[1]==0)) error("Unable to query the algorithm counts for collective %i. num_algorithms[0]=%u, [1]=%u, Status=%i", collective, num_algorithms[0], num_algorithms[1], status);
 
 	// query what the different algorithms are
 	pami_algorithm_t *always_works_alg = (pami_algorithm_t*)alloca(sizeof(pami_algorithm_t)*num_algorithms[0]);
@@ -233,7 +230,7 @@ void queryAvailableAlgorithms(x10rt_pami_team* team, pami_xfer_type_t collective
 	pami_metadata_t *must_query_md = (pami_metadata_t*)alloca(sizeof(pami_metadata_t)*num_algorithms[1]);
 	status = PAMI_Geometry_algorithms_query(team->geometry, collective, always_works_alg,
 			always_works_md, num_algorithms[0], must_query_alg, must_query_md, num_algorithms[1]);
-	if (status != PAMI_SUCCESS) error("Unable to query the supported algorithms");
+	if (status != PAMI_SUCCESS) error("Unable to query the supported algorithms for collective %i. num_algorithms[0]=%u, [1]=%u, Status=%i", collective, num_algorithms[0], num_algorithms[1], status);
 
 	if (indexToUse >= num_algorithms[0]+num_algorithms[1])
 		error("You requested index %i for collective algorithm %i, which is more than the number available", indexToUse, collective);
@@ -264,12 +261,27 @@ void determineCollectiveAlgorithms(x10rt_pami_team* team)
 	{
 		userChoice = getenv(X10RT_PAMI_ALLTOALL_CHUNKS);
 		team->algorithm[PAMI_XFER_ALLTOALL] = -1*(userChoice?atoi(userChoice):1); // default to 1 chunk
+		// initialize random order array
+		state.stepOrder = (pami_task_t *)malloc(state.numPlaces*sizeof(pami_task_t));
+		if (state.stepOrder == NULL) error("Unable to allocate memory for internal alltoall step order");
+		srand(state.myPlaceId);
+		for (int i=0; i<state.numPlaces; i++)
+			state.stepOrder[i] = i;
+		// shuffle values around the array randomly
+		for (int i=state.numPlaces-1; i>0; --i) {
+			int j=rand()%(i+1);
+			int tmp = state.stepOrder[j];
+			state.stepOrder[j] = state.stepOrder[i];
+			state.stepOrder[i] = tmp;
+		}
 		#ifdef DEBUG
 			fprintf(stderr, "Switching AllToAll to internal implementation, chunksize = %u bytes\n", -1*team->algorithm[PAMI_XFER_ALLTOALL]);
 		#endif
 	}
-	else
+	else {
 		queryAvailableAlgorithms(team, PAMI_XFER_ALLTOALL, userChoiceInt);
+		state.stepOrder = NULL;
+	}
 
 	userChoice = getenv(X10RT_PAMI_REDUCE_ALG);
 	queryAvailableAlgorithms(team, PAMI_XFER_REDUCE, userChoice?atoi(userChoice):0);
@@ -891,18 +903,13 @@ static void team_destroy_complete (pami_context_t context, void* cookie, pami_re
 }
 
 
-/** Initialize the X10RT API logical layer.
- *
- * \see #x10rt_lgl_init
- *
- * \param argc As in x10rt_lgl_init.
- *
- * \param argv As in x10rt_lgl_init.
- *
- * \param counter As in x10rt_lgl_init.
- */
-void x10rt_net_init (int *argc, char ***argv, x10rt_msg_type *counter)
+x10rt_error x10rt_net_preinit(char* connInfoBuffer, int connInfoBufferSize) {
+	return X10RT_ERR_UNSUPPORTED;
+}
+
+x10rt_error x10rt_net_init (int *argc, char ***argv, x10rt_msg_type *counter)
 {
+	// TODO - return proper error codes upon failure, in place of calling the error() method.
 	pami_result_t   status = PAMI_ERROR;
 	setenv("MP_MSG_API", "X10", 0);
 	const char *name = getenv("MP_MSG_API");
@@ -978,14 +985,14 @@ void x10rt_net_init (int *argc, char ***argv, x10rt_msg_type *counter)
 			error("Unable to initialize the PAMI context: %i\n", status);
 		registerHandlers(state.context[0], true);
 	}
+    #ifdef DEBUG
+        fprintf(stderr, "Hello from process %u of %u\n", state.myPlaceId, state.numPlaces);
+    #endif
 
-	#ifdef DEBUG
-		fprintf(stderr, "Hello from process %u of %u\n", state.myPlaceId, state.numPlaces);
-	#endif
-
+#if !defined(__bgq__)
 	state.hfi_update = NULL;
-#if defined(_POWER) && !defined(__bgq__)
-	// see if HFI should be used
+#if defined(_ARCH_PPC) || defined(__PPC__)
+    // see if HFI should be used
 	if (!checkBoolEnvVar(getenv(X10RT_PAMI_DISABLE_HFI)))
 	{
 		if (sizeof(x10rt_remote_op_params)!=sizeof(hfi_remote_update_info_t))
@@ -1004,7 +1011,8 @@ void x10rt_net_init (int *argc, char ***argv, x10rt_msg_type *counter)
 				fprintf(stderr, "HFI present but disabled at place %u because PAMI_Extension_open status=%u\n", state.myPlaceId, status);
 		}
 	}
-#endif
+#endif // power CPU
+#endif // not BlueGeneQ
 
 	// create the world geometry
 	if (pthread_mutex_init(&state.stateLock, NULL) != 0) error("Unable to initialize the team lock");
@@ -1022,8 +1030,14 @@ void x10rt_net_init (int *argc, char ***argv, x10rt_msg_type *counter)
 		state.blockingSend = true;
 	else
 		state.blockingSend = false;
+
+	return X10RT_ERR_OK;
 }
 
+const char *x10rt_net_error_msg (void)
+{
+	return state.errorMessageBuffer;
+}
 
 void x10rt_net_register_msg_receiver (x10rt_msg_type msg_type, x10rt_handler *callback)
 {
@@ -1087,6 +1101,18 @@ void x10rt_net_register_get_receiver (x10rt_msg_type msg_type, x10rt_finder *fin
 	#ifdef DEBUG
 		fprintf(stderr, "Place %u registered GET message handler %u\n", state.myPlaceId, msg_type);
 	#endif
+}
+
+x10rt_place x10rt_net_ndead (void) {
+	return 0; // place failure is not handled by this implementation.
+}
+
+bool x10rt_net_is_place_dead (x10rt_place p) {
+	return false; // place failure is not handled by this implementation.
+}
+
+x10rt_error x10rt_net_get_dead (x10rt_place *dead_places, x10rt_place len) {
+	return X10RT_ERR_UNSUPPORTED; // place failure is not handled by this implementation.
 }
 
 x10rt_place x10rt_net_nhosts (void)
@@ -1394,8 +1420,9 @@ void x10rt_net_send_get (x10rt_msg_params *p, void *buf, x10rt_copy_sz len)
 
 /** Handle any oustanding message from the network by calling the registered callbacks.  \see #x10rt_lgl_probe
  */
-void x10rt_net_probe()
+x10rt_error x10rt_net_probe()
 {
+	// TODO - return proper error codes upon failure, in place of calling the error() method.
 	pami_result_t status = PAMI_ERROR;
 	if (state.numParallelContexts)
 	{
@@ -1407,7 +1434,7 @@ void x10rt_net_probe()
 	else
 	{
 		status = PAMI_Context_trylock(state.context[0]);
-		if (status == PAMI_EAGAIN) return; // context is already in use
+		if (status == PAMI_EAGAIN) return X10RT_ERR_OK; // context is already in use
 		if (status != PAMI_SUCCESS) error ("Unable to lock the PAMI context");
 
 		do { status = x10rt_PAMI_Context_advance(state.context[0], 1);
@@ -1416,12 +1443,24 @@ void x10rt_net_probe()
 
 		if (PAMI_Context_unlock(state.context[0]) != PAMI_SUCCESS) error ("Unable to unlock the PAMI context");
 	}
+	return X10RT_ERR_OK;
 }
 
-void x10rt_net_blocking_probe (void)
+bool x10rt_net_blocking_probe_support(void)
+{
+	return false;
+}
+
+x10rt_error x10rt_net_blocking_probe (void)
 {
 	// TODO: make this blocking.  For now, just call probe.
-	x10rt_net_probe();
+	return x10rt_net_probe();
+}
+
+x10rt_error x10rt_net_unblock_probe (void)
+{
+	// TODO: once blocking_probe is implemented, this needs to do something.  Fine for now.
+	return X10RT_ERR_OK;
 }
 
 /** Shut down the network layer.  \see #x10rt_lgl_finalize
@@ -1477,14 +1516,21 @@ void x10rt_net_finalize()
 			free(state.teams[i].places);
 
 	free(state.teams);
+	if (state.stepOrder != NULL)
+		free(state.stepOrder);
 }
 
-int x10rt_net_supports (x10rt_opt o)
-{
-	return 1;
+x10rt_coll_type x10rt_net_coll_support () {
+	return X10RT_COLL_ALLNONBLOCKINGCOLLECTIVES;
 }
 
-void x10rt_net_internal_barrier (){} // DEPRECATED
+bool x10rt_net_remoteop_support () {
+#if defined(__bgq__) || !(defined(_ARCH_PPC) || defined(__PPC__))
+	return false; // No hardware support for remote memory operations on BG/Q; best to use emulated layer
+#else
+	return true;
+#endif
+}
 
 void x10rt_net_remote_op (x10rt_place place, x10rt_remote_ptr victim, x10rt_op_type type, unsigned long long value)
 {
@@ -1604,8 +1650,9 @@ void x10rt_net_remote_ops (x10rt_remote_op_params *ops, size_t numOps)
 			operation.remote = (void*)ops[i].dest_buf;
 			operation.value = &ops[i].value;
 			operation.operation = (pami_atomic_t)REMOTE_MEMORY_OP_CONVERSION_TABLE[ops[i].op];
-			status = PAMI_Rmw(context, &operation);
-		}
+			if ((status = PAMI_Rmw(context, &operation) )!= PAMI_SUCCESS)
+		        error("Unable to execute the remote operation");
+        }
 		if (!state.numParallelContexts)
 			PAMI_Context_unlock(state.context[0]);
 	}
@@ -1613,7 +1660,7 @@ void x10rt_net_remote_ops (x10rt_remote_op_params *ops, size_t numOps)
 		error("Unable to execute the remote operation");
 }
 
-x10rt_remote_ptr x10rt_net_register_mem (void *ptr, size_t len)
+void x10rt_net_register_mem (void *ptr, size_t len)
 {
 	pami_result_t status = PAMI_ERROR;
 	pami_memregion_t registration;
@@ -1634,7 +1681,6 @@ x10rt_remote_ptr x10rt_net_register_mem (void *ptr, size_t len)
 	#ifdef DEBUG
 		fprintf(stderr, "Place %u registered %lu bytes at %p for remote operations\n", state.myPlaceId, len, ptr);
 	#endif
-	return (x10rt_remote_ptr)ptr;
 }
 
 void x10rt_net_team_new (x10rt_place placec, x10rt_place *placev,
@@ -1922,7 +1968,8 @@ static void internal_alltoall_step (pami_context_t   context,
 	x10rt_pami_internal_alltoall *cbd = (x10rt_pami_internal_alltoall*)cookie;
 	// no need to lock the context in here, as it was already locked by the surrounding callback
 
-	int64_t remotePlace = (state.myPlaceId + cbd->currentPlaceOffset) % state.teams[cbd->teamid].size; // shift the place we start with
+	//int64_t remotePlace = (state.myPlaceId + cbd->currentPlaceOffset) % state.teams[cbd->teamid].size; // shift the place we start with
+	int64_t remotePlace = state.stepOrder[cbd->currentPlaceOffset];
 	cbd->parameters.rma.dest = remotePlace;
 	cbd->parameters.addr.local = (void*)((char*)(cbd->sbuf) + (remotePlace * cbd->dataSize) + cbd->currentChunkOffset);
 	cbd->parameters.addr.remote = (void*)((char*)(cbd->dbuf) + (state.myPlaceId * cbd->dataSize) + cbd->currentChunkOffset);
@@ -2093,7 +2140,7 @@ void x10rt_net_alltoall (x10rt_team team, x10rt_place role, const void *sbuf, vo
 		if (team != 0) error("Internal implementation of ALLTOALL only works with world\n");
 
 		#ifdef DEBUG
-			fprintf(stderr, "Place %u, role %u executing internal AllToAll with team %u. chunksize=%lu\n", state.myPlaceId, role, team, chunksize);
+			fprintf(stderr, "Place %u, role %u executing internal AllToAll with team %u. chunksize=%lu\n", state.myPlaceId, role, team, el*count);
 		#endif
 		x10rt_pami_internal_alltoall *tcb = (x10rt_pami_internal_alltoall *)malloc(sizeof(x10rt_pami_internal_alltoall));
 		if (tcb == NULL) error("Unable to allocate memory for the all-to-all cookie");
@@ -2206,6 +2253,10 @@ void x10rt_net_reduce (x10rt_team team, x10rt_place role,
 		tcb->operation.cmd.xfer_reduce.op = OPERATION_CONVERSION_TABLE[op];
 	tcb->operation.cmd.xfer_reduce.data_cookie = NULL;
 	tcb->operation.cmd.xfer_reduce.commutative = 1;
+	if (team == 0)
+		tcb->operation.cmd.xfer_reduce.root = root;
+	else
+		tcb->operation.cmd.xfer_reduce.root = state.teams[team].places[root];
 	#ifdef DEBUG
 		fprintf(stderr, "Place %u executing reduce, with type=%u and op=%u\n", state.myPlaceId, dtype, op);
 	#endif

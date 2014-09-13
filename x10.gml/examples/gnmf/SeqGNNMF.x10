@@ -1,30 +1,27 @@
 /*
- *  This file is part of the X10 Applications project.
+ *  This file is part of the X10 project (http://x10-lang.org).
  *
- *  (C) Copyright IBM Corporation 2011.
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2011-2014.
  */
+
 package gnmf;
 
-import x10.io.Console;
 import x10.util.Timer;
-//
-import x10.matrix.Debug;
-//
+
 import x10.matrix.Matrix;
 import x10.matrix.DenseMatrix;
-import x10.matrix.blas.DenseMatrixBLAS;
-//
 import x10.matrix.distblock.DistBlockMatrix;
 import x10.matrix.distblock.DupBlockMatrix;
 
-
 /**
-   <p>
  * Sequential implementation of GNNMF based on GML dense/sparse matrix.
- * This is used for verificaiton purpose.
-   <p>
+ * This is used for verification purpose.
  */
-
 public class SeqGNNMF {
 
 	// GNNMF settings
@@ -35,7 +32,7 @@ public class SeqGNNMF {
 	public val V:DenseMatrix;
 	public val W:DenseMatrix{self.M==V.M};
 	public val H:DenseMatrix(W.N, V.N);
-	//
+
 	
 	// Temp data and matrix 
 	val WV:DenseMatrix(W.N, V.N);   //Store W^t * V result (10x100000) like H
@@ -106,7 +103,7 @@ public class SeqGNNMF {
 
 	public def run() : void {
 		/* Timing */ val st = Timer.milliTime();
-		for (var i:Int =0; i<iterate; i++) {
+		for (var i:Long =0; i<iterate; i++) {
 			comp_WV_WWH();
 			comp_VH_WHH();
 		}
@@ -147,5 +144,4 @@ public class SeqGNNMF {
 		return verifyH(vH)&&verifyW(vW);
 	}
 
-	
 }

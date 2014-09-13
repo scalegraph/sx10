@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 import x10.io.Console;
@@ -75,7 +75,7 @@ class StructSpheres {
         // the array can go on the heap
         // but the elements ought to be /*inlined*/ in the array
         val spheres =
-            new Array[WorldObject](num_objects, (i:int) => {
+            new Rail[WorldObject](num_objects, (i:long) => {
                 val x = (ran.nextDouble()*world_size) as Real;
                 val y = (ran.nextDouble()*world_size) as Real;
                 val z = (ran.nextDouble()*world_size) as Real;
@@ -116,7 +116,7 @@ class StructSpheres {
         return ok;
     }
 
-    public static def main (Array[String]) {
+    public static def main (Rail[String]) {
         compute();
     }
 

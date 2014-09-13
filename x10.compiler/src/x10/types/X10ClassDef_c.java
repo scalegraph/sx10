@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.types;
@@ -463,7 +463,7 @@ public class X10ClassDef_c extends ClassDef_c implements X10ClassDef {
         for (ConstructorDef cd: constructors()) {
             if (cd.formalTypes().size() == 1) {
                 Type type = cd.formalTypes().get(0).get();
-                if (type.isSubtype(type.typeSystem().SerialData(), context)) {
+                if (type.isSubtype(type.typeSystem().Deserializer(), context)) {
                     return true;
                 }
             }

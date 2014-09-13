@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.core.concurrent;
@@ -21,9 +21,8 @@ import x10.serialization.X10JavaDeserializer;
 import x10.serialization.X10JavaSerializable;
 import x10.serialization.X10JavaSerializer;
 
+@SuppressWarnings("serial")
 public final class AtomicReference<T> extends java.util.concurrent.atomic.AtomicReference<T> implements Any, X10JavaSerializable {
-
-    private static final long serialVersionUID = 1L;
 
     // constructor just for allocation
     public AtomicReference(java.lang.System[] $dummy) {
@@ -57,7 +56,7 @@ public final class AtomicReference<T> extends java.util.concurrent.atomic.Atomic
     public static final RuntimeType<AtomicReference> $RTT = NamedType.<AtomicReference> make(
         "x10.util.concurrent.AtomicReference",
         AtomicReference.class,
-        RuntimeType.INVARIANTS(1)
+        1
     );
     public RuntimeType<AtomicReference> $getRTT() {return $RTT;}
     public Type<?> $getParam(int i) { return i == 0 ? T : null; }
@@ -76,9 +75,9 @@ public final class AtomicReference<T> extends java.util.concurrent.atomic.Atomic
 	}
 
 	public static X10JavaSerializable $_deserialize_body(AtomicReference ar, X10JavaDeserializer deserializer) throws IOException {
-        Type T = (Type) deserializer.readRef();
+        Type T = (Type) deserializer.readObject();
         ar.T = T;
-        Object value = deserializer.readRef();
+        Object value = deserializer.readObject();
         ar.set(value);
         return ar;
 	}

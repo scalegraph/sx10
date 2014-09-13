@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2013.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef __int64
@@ -25,6 +25,10 @@
 #include "x10_x10rt_TeamSupport.h"
 
 static methodDescription activityTerminationFunc;
+static methodDescription copyDoubleToComplex;
+
+static jfieldID DoubleIdx_valueId;
+static jfieldID DoubleIdx_idxId;
 
 
 /*****************************************************
@@ -224,6 +228,22 @@ static void postCopyCallback(void *arg) {
                                  callbackArg->count,
                                  (jfloat*)callbackArg->dstData);
         break;
+    case 11:
+        // double[] representing a Complex[]
+        {
+        jdoubleArray res = env->NewDoubleArray(2*callbackArg->count);
+        env->SetDoubleArrayRegion(res,
+                                  2*callbackArg->dstOffset,
+                                  2*callbackArg->count,
+                                  (jdouble*)callbackArg->dstData);
+        env->CallStaticVoidMethod(copyDoubleToComplex.targetClass,
+                                  copyDoubleToComplex.targetMethod,
+                                  res,
+                                  (jdoubleArray)callbackArg->globalDstArray,
+                                  callbackArg->dstOffset,
+                                  callbackArg->count);
+        }
+        break;
     default:
         jniHelper_abort("Unsupported typecode %d in postCopyCallback\n", callbackArg->typecode);
     }
@@ -360,6 +380,21 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeScatterImpl(JNIEnv *env,
         env->GetFloatArrayRegion((jfloatArray)src, src_off, count, (jfloat*)srcData);
         }
         break;
+    case 11:
+        // double[] representing Complex[]
+        el = 2*sizeof(jdouble);
+        dstData = malloc(rcount*2*sizeof(jdouble));
+        if (NULL == dstData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeScatterImpl\n");
+        }
+        if (role == root) {
+        srcData = malloc(count*2*sizeof(jdouble));
+        if (NULL == srcData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeScatterImpl\n");
+        }
+        env->GetDoubleArrayRegion((jdoubleArray)src, 2*src_off, 2*count, (jdouble*)srcData);
+        }
+        break;
     default:
         jniHelper_abort("Unsupported typecode %d in nativeScatterImpl\n", typecode);
     }
@@ -492,6 +527,21 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeBcastImpl(JNIEnv *env, j
         env->GetFloatArrayRegion((jfloatArray)src, src_off, count, (jfloat*)srcData);
         }
         break;
+    case 11:
+        // double[] (representing a Complex[])
+        el = 2* sizeof(jdouble);
+        dstData = malloc(count*2*sizeof(jdouble));
+        if (NULL == dstData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeBcastImpl\n");
+        }
+        if (role == root) {
+        srcData = malloc(count*2*sizeof(jdouble));
+        if (NULL == srcData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeBcastImpl\n");
+        }
+        env->GetDoubleArrayRegion((jdoubleArray)src, 2*src_off, 2*count, (jdouble*)srcData);
+        }
+        break;
     default:
         jniHelper_abort("Unsupported typecode %d in nativeBcastImpl\n", typecode);
     }
@@ -524,6 +574,7 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeAllToAllImpl(JNIEnv *env
                                                                       jobject dst, jint dst_off,
                                                                       jint count, jint typecode,
                                                                       jobject finishState) {
+
     jobject globalDst = env->NewGlobalRef(dst);
     jobject globalFinishState = env->NewGlobalRef(finishState);
     if (NULL == globalDst || NULL == globalFinishState) {
@@ -533,84 +584,99 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeAllToAllImpl(JNIEnv *env
     int el = 0;
     void *srcData = NULL;
     void *dstData = NULL;
+    int srcElemCount = env->GetArrayLength((jarray)src) - src_off;
+    int dstElemCount = env->GetArrayLength((jarray)dst) - dst_off;
     switch(typecode) {
     case 1:
         // byte []
         el = sizeof(jbyte);
-        dstData = malloc(count*sizeof(jbyte));
+        dstData = malloc(dstElemCount*sizeof(jbyte));
         if (NULL == dstData) {
             jniHelper_abort("OOM while attempting to allocate malloced storage in nativeAllToAllImpl\n");
         }
-        srcData = malloc(count*sizeof(jbyte));
+        srcData = malloc(srcElemCount*sizeof(jbyte));
         if (NULL == srcData) {
             jniHelper_abort("OOM while attempting to allocate malloced storage in nativeAllToAllImpl\n");
         }
-        env->GetByteArrayRegion((jbyteArray)src, src_off, count, (jbyte*)srcData);
+        env->GetByteArrayRegion((jbyteArray)src, src_off, srcElemCount, (jbyte*)srcData);
         break;
     case 2:
         // short []
         el = sizeof(jshort);
-        dstData = malloc(count*sizeof(jshort));
+        dstData = malloc(dstElemCount*sizeof(jshort));
         if (NULL == dstData) {
             jniHelper_abort("OOM while attempting to allocate malloced storage in nativeAllToAllImpl\n");
         }
-        srcData = malloc(count*sizeof(jshort));
+        srcData = malloc(srcElemCount*sizeof(jshort));
         if (NULL == srcData) {
             jniHelper_abort("OOM while attempting to allocate malloced storage in nativeAllToAllImpl\n");
         }
-        env->GetShortArrayRegion((jshortArray)src, src_off, count, (jshort*)srcData);
+        env->GetShortArrayRegion((jshortArray)src, src_off, srcElemCount, (jshort*)srcData);
         break;
     case 4:
         // int[]
         el = sizeof(jint);
-        dstData = malloc(count*sizeof(jint));
+        dstData = malloc(dstElemCount*sizeof(jint));
         if (NULL == dstData) {
             jniHelper_abort("OOM while attempting to allocate malloced storage in nativeAllToAllImpl\n");
         }
-        srcData = malloc(count*sizeof(jint));
+        srcData = malloc(srcElemCount*sizeof(jint));
         if (NULL == srcData) {
             jniHelper_abort("OOM while attempting to allocate malloced storage in nativeAllToAllImpl\n");
         }
-        env->GetIntArrayRegion((jintArray)src, src_off, count, (jint*)srcData);
+        env->GetIntArrayRegion((jintArray)src, src_off, srcElemCount, (jint*)srcData);
         break;
     case 6:
         // long[]
         el = sizeof(jlong);
-        dstData = malloc(count*sizeof(jlong));
+        dstData = malloc(dstElemCount*sizeof(jlong));
         if (NULL == dstData) {
             jniHelper_abort("OOM while attempting to allocate malloced storage in nativeAllToAllImpl\n");
         }
-        srcData = malloc(count*sizeof(jlong));
+        srcData = malloc(srcElemCount*sizeof(jlong));
         if (NULL == srcData) {
             jniHelper_abort("OOM while attempting to allocate malloced storage in nativeAllToAllImpl\n");
         }
-        env->GetLongArrayRegion((jlongArray)src, src_off, count, (jlong*)srcData);
+        env->GetLongArrayRegion((jlongArray)src, src_off, srcElemCount, (jlong*)srcData);
         break;
     case 8:
         // double[]
         el = sizeof(jdouble);
-        dstData = malloc(count*sizeof(jdouble));
+        dstData = malloc(dstElemCount*sizeof(jdouble));
         if (NULL == dstData) {
             jniHelper_abort("OOM while attempting to allocate malloced storage in nativeAllToAllImpl\n");
         }
-        srcData = malloc(count*sizeof(jdouble));
+        srcData = malloc(srcElemCount*sizeof(jdouble));
         if (NULL == srcData) {
             jniHelper_abort("OOM while attempting to allocate malloced storage in nativeAllToAllImpl\n");
         }
-        env->GetDoubleArrayRegion((jdoubleArray)src, src_off, count, (jdouble*)srcData);
+        env->GetDoubleArrayRegion((jdoubleArray)src, src_off, srcElemCount, (jdouble*)srcData);
         break;
     case 9:
         // float[]
         el = sizeof(jfloat);
-        dstData = malloc(count*sizeof(jfloat));
+        dstData = malloc(dstElemCount*sizeof(jfloat));
         if (NULL == dstData) {
             jniHelper_abort("OOM while attempting to allocate malloced storage in nativeAllToAllImpl\n");
         }
-        srcData = malloc(count*sizeof(jfloat));
+        srcData = malloc(srcElemCount*sizeof(jfloat));
         if (NULL == srcData) {
             jniHelper_abort("OOM while attempting to allocate malloced storage in nativeAllToAllImpl\n");
         }
-        env->GetFloatArrayRegion((jfloatArray)src, src_off, count, (jfloat*)srcData);
+        env->GetFloatArrayRegion((jfloatArray)src, src_off, srcElemCount, (jfloat*)srcData);
+        break;
+    case 11:
+        // double[] representing Complex[]
+        el = 2*sizeof(jdouble);
+        dstData = malloc(dstElemCount*2*sizeof(jdouble));
+        if (NULL == dstData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeAllToAllImpl\n");
+        }
+        srcData = malloc(srcElemCount*2*sizeof(jdouble));
+        if (NULL == srcData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeAllToAllImpl\n");
+        }
+        env->GetDoubleArrayRegion((jdoubleArray)src, 2*src_off, 2*srcElemCount, (jdouble*)srcData);
         break;
     default:
         jniHelper_abort("Unsupported typecode %d in nativeAllToAllImpl\n", typecode);
@@ -621,11 +687,116 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeAllToAllImpl(JNIEnv *env
     callbackArg->globalDstArray = globalDst;
     callbackArg->typecode = typecode;
     callbackArg->dstOffset = dst_off;
-    callbackArg->count = count;
+    callbackArg->count = dstElemCount;
     callbackArg->srcData = srcData;
     callbackArg->dstData = dstData;
 
     x10rt_alltoall(id, role, srcData, dstData, el, count, &postCopyCallback, callbackArg);
+}
+
+
+/*****************************************************
+ * nativeReduceImpl
+ *****************************************************/
+
+/*
+ * Class:     x10_x10rt_TeamSupport
+ * Method:    nativeReduceImpl
+ * Signature: (IIILjava/lang/Object;ILjava/lang/Object;IIIILx10/lang/FinishState;)V
+ */
+JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeReduceImpl(JNIEnv *env, jclass klazz,
+                                                                   jint id, jint role, jint root,
+                                                                   jobject src, jint src_off,
+                                                                   jobject dst, jint dst_off,
+                                                                   jint count, jint op, jint typecode,
+                                                                   jobject finishState) {
+    jobject globalDst = env->NewGlobalRef(dst);
+    jobject globalFinishState = env->NewGlobalRef(finishState);
+    if (NULL == globalDst || NULL == globalFinishState) {
+        jniHelper_abort("OOM while attempting to create GlobalRef in nativeReduceImpl\n");
+    }
+
+    void *srcData = NULL;
+    void *dstData = NULL;
+    switch(typecode) {
+    case 1:
+        // byte []
+        srcData = malloc(count*sizeof(jbyte));
+        dstData = malloc(count*sizeof(jbyte));
+        if (NULL == srcData || NULL == dstData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeReduceImpl\n");
+        }
+        env->GetByteArrayRegion((jbyteArray)src, src_off, count, (jbyte*)srcData);
+        break;
+    case 2:
+        // short []
+        srcData = malloc(count*sizeof(jshort));
+        dstData = malloc(count*sizeof(jshort));
+        if (NULL == srcData || NULL == dstData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeReduceImpl\n");
+        }
+        env->GetShortArrayRegion((jshortArray)src, src_off, count, (jshort*)srcData);
+        break;
+    case 4:
+        // int[]
+        srcData = malloc(count*sizeof(jint));
+        dstData = malloc(count*sizeof(jint));
+        if (NULL == srcData || NULL == dstData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeReduceImpl\n");
+        }
+        env->GetIntArrayRegion((jintArray)src, src_off, count, (jint*)srcData);
+        break;
+    case 6:
+        // long[]
+        srcData = malloc(count*sizeof(jlong));
+        dstData = malloc(count*sizeof(jlong));
+        if (NULL == srcData || NULL == dstData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeReduceImpl\n");
+        }
+        env->GetLongArrayRegion((jlongArray)src, src_off, count, (jlong*)srcData);
+        break;
+    case 8:
+        // double[]
+        srcData = malloc(count*sizeof(jdouble));
+        dstData = malloc(count*sizeof(jdouble));
+        if (NULL == srcData || NULL == dstData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeReduceImpl\n");
+        }
+        env->GetDoubleArrayRegion((jdoubleArray)src, src_off, count, (jdouble*)srcData);
+        break;
+    case 9:
+        // float[]
+        srcData = malloc(count*sizeof(jfloat));
+        dstData = malloc(count*sizeof(jfloat));
+        if (NULL == srcData || NULL == dstData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeReduceImpl\n");
+        }
+        env->GetFloatArrayRegion((jfloatArray)src, src_off, count, (jfloat*)srcData);
+        break;
+    case 11:
+        // double[] representing a Complex[]
+        srcData = malloc(count*2*sizeof(jdouble));
+        dstData = malloc(count*2*sizeof(jdouble));
+        if (NULL == srcData || NULL == dstData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeReduceImpl\n");
+        }
+        env->GetDoubleArrayRegion((jdoubleArray)src, 2*src_off, 2*count, (jdouble*)srcData);
+        break;
+    default:
+        jniHelper_abort("Unsupported typecode %d in nativeReduceImpl\n", typecode);
+    }        
+
+    postCopyStruct* callbackArg = (postCopyStruct*)malloc(sizeof(postCopyStruct));
+    callbackArg->globalFinishState = globalFinishState;
+    callbackArg->globalDstArray = globalDst;
+    callbackArg->typecode = typecode;
+    callbackArg->dstOffset = dst_off;
+    callbackArg->count = count;
+    callbackArg->srcData = srcData;
+    callbackArg->dstData = dstData;
+
+    x10rt_reduce(id, role, root, srcData, dstData, (x10rt_red_op_type)op, (x10rt_red_type)typecode,
+                 count, &postCopyCallback, callbackArg);
 }
 
 
@@ -650,8 +821,8 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeAllReduceImpl(JNIEnv *en
         jniHelper_abort("OOM while attempting to create GlobalRef in nativeAllReduceImpl\n");
     }
 
-    void *srcData;
-    void *dstData;
+    void *srcData = NULL;
+    void *dstData = NULL;
     switch(typecode) {
     case 1:
         // byte []
@@ -707,6 +878,15 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeAllReduceImpl(JNIEnv *en
         }
         env->GetFloatArrayRegion((jfloatArray)src, src_off, count, (jfloat*)srcData);
         break;
+    case 11:
+        // double[] representing a Complex[]
+        srcData = malloc(count*2*sizeof(jdouble));
+        dstData = malloc(count*2*sizeof(jdouble));
+        if (NULL == srcData || NULL == dstData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeAllReduceImpl\n");
+        }
+        env->GetDoubleArrayRegion((jdoubleArray)src, 2*src_off, 2*count, (jdouble*)srcData);
+        break;
     default:
         jniHelper_abort("Unsupported typecode %d in nativeAllReduceImpl\n", typecode);
     }        
@@ -725,9 +905,9 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeAllReduceImpl(JNIEnv *en
 }
 
 
-/*
- * Common struct and callback for min and max
- */
+/*****************************************************
+ * nativeIndexOfMinImpl and nativeIndexOfMaxImpl
+ *****************************************************/
 
 typedef struct DoubleIdx {
     jdouble value;
@@ -736,8 +916,7 @@ typedef struct DoubleIdx {
 
 typedef struct minmaxStruct {
     jobject globalFinishState;
-    jdoubleArray globalValueArray;
-    jintArray globalIdxArray;
+    jobject globalDstTuple;
     DoubleIdx *srcData;
     DoubleIdx *dstData;
 } minmaxStruct;
@@ -746,16 +925,11 @@ static void minmaxCallback(void *arg) {
     minmaxStruct *callbackArg = (minmaxStruct*)arg;
     JNIEnv *env = jniHelper_getEnv();
 
-    // double[]
-    env->SetDoubleArrayRegion((jdoubleArray)callbackArg->globalValueArray,
-			      0, 1,
-			      (jdouble*)&(callbackArg->dstData[0].value));
+    env->SetDoubleField(callbackArg->globalDstTuple, DoubleIdx_valueId,
+                        callbackArg->dstData[0].value);
+    env->SetIntField(callbackArg->globalDstTuple, DoubleIdx_idxId,
+                        callbackArg->dstData[0].idx);
     
-    // int[]
-    env->SetIntArrayRegion((jintArray)callbackArg->globalIdxArray,
-			   0, 1,
-			   (jint*)&(callbackArg->dstData[0].idx));
-
     // notify that the activity that was performing min max has finished.
     env->CallStaticVoidMethod(activityTerminationFunc.targetClass,
                               activityTerminationFunc.targetMethod,
@@ -763,87 +937,65 @@ static void minmaxCallback(void *arg) {
 
     // Free resources
     env->DeleteGlobalRef(callbackArg->globalFinishState);
-    env->DeleteGlobalRef(callbackArg->globalValueArray);
-    env->DeleteGlobalRef(callbackArg->globalIdxArray);
+    env->DeleteGlobalRef(callbackArg->globalDstTuple);
     free(callbackArg->srcData);
     free(callbackArg->dstData);
     free(callbackArg);
 }
 
 
-/*****************************************************
- * nativeIndexOfMaxImpl
- *****************************************************/
+static void indexOfImpl(JNIEnv *env, jint id, jint role,
+                        jobject srcTuple, jobject dstTuple,
+                        x10rt_red_op_type op,
+                        jobject finishState)
+{
+    jobject globalDstTuple = env->NewGlobalRef(dstTuple);
+    jobject globalFinishState = env->NewGlobalRef(finishState);
+    if (NULL == globalDstTuple || NULL == globalFinishState) {
+        jniHelper_abort("OOM while attempting to create GlobalRef in nativeIndexOfImpl\n");
+    }
+
+    DoubleIdx* srcData = (DoubleIdx*)malloc(sizeof(DoubleIdx));
+    DoubleIdx* dstData = (DoubleIdx*)malloc(sizeof(DoubleIdx));
+    if (NULL == srcData || NULL == dstData) {
+        jniHelper_abort("OOM while attempting to allocate malloced storage in nativeIndexOfImpl\n");
+    }
+    srcData->value = env->GetDoubleField(srcTuple, DoubleIdx_valueId);
+    srcData->idx = env->GetIntField(srcTuple, DoubleIdx_idxId);
+    
+    minmaxStruct* callbackArg = (minmaxStruct*)malloc(sizeof(minmaxStruct));
+    callbackArg->globalFinishState = globalFinishState;
+    callbackArg->globalDstTuple = globalDstTuple;
+    callbackArg->srcData = srcData;
+    callbackArg->dstData = dstData;
+
+    x10rt_allreduce(id, role, srcData, dstData, op, X10RT_RED_TYPE_DBL_S32, 1, &minmaxCallback, callbackArg);
+}
+
 
 /*
  * Class:     x10_x10rt_TeamSupport
  * Method:    nativeIndexOfMaxImpl
- * Signature: (II[D[ILx10/lang/FinishState;)V
+ * Signature: (IILx10/util/Team$DoubleIdx;Lx10/util/Team$DoubleIdx;Lx10/lang/FinishState;)V
  */
 JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeIndexOfMaxImpl(JNIEnv *env, jclass klazz,
                                                                        jint id, jint role,
-                                                                       jdoubleArray value, jintArray idx,
+                                                                       jobject srcTuple, jobject dstTuple,
                                                                        jobject finishState) {
-    jdoubleArray globalValueArray = (jdoubleArray)env->NewGlobalRef(value);
-    jintArray globalIdxArray = (jintArray)env->NewGlobalRef(idx);
-    jobject globalFinishState = env->NewGlobalRef(finishState);
-    if (NULL == globalValueArray || NULL == globalIdxArray || NULL == globalFinishState) {
-        jniHelper_abort("OOM while attempting to create GlobalRef in nativeIndexOfMaxImpl\n");
-    }
-
-    DoubleIdx* srcData = (DoubleIdx*)malloc(sizeof(DoubleIdx));
-    DoubleIdx* dstData = (DoubleIdx*)malloc(sizeof(DoubleIdx));
-    if (NULL == srcData || NULL == dstData) {
-        jniHelper_abort("OOM while attempting to allocate malloced storage in nativeIndexOfMaxImpl\n");
-    }
-    env->GetDoubleArrayRegion(value, 0, 1, (jdouble*)&(srcData->value));
-
-    minmaxStruct* callbackArg = (minmaxStruct*)malloc(sizeof(minmaxStruct));
-    callbackArg->globalFinishState = globalFinishState;
-    callbackArg->globalValueArray = globalValueArray;
-    callbackArg->globalIdxArray = globalIdxArray;
-    callbackArg->srcData = srcData;
-    callbackArg->dstData = dstData;
-
-    x10rt_allreduce(id, role, srcData, dstData, X10RT_RED_OP_MAX, X10RT_RED_TYPE_DBL_S32, 1, &minmaxCallback, callbackArg);
+    indexOfImpl(env, id, role, srcTuple, dstTuple, X10RT_RED_OP_MAX, finishState);
 }
 
-
-/*****************************************************
- * nativeIndexOfMinImpl
- *****************************************************/
 
 /*
  * Class:     x10_x10rt_TeamSupport
  * Method:    nativeIndexOfMinImpl
- * Signature: (II[D[ILx10/lang/FinishState;)V
+ * Signature: (IILx10/util/Team$DoubleIdx;Lx10/util/Team$DoubleIdx;Lx10/lang/FinishState;)V
  */
 JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeIndexOfMinImpl(JNIEnv *env, jclass klazz,
                                                                        jint id, jint role,
-                                                                       jdoubleArray value, jintArray idx,
+                                                                       jobject srcTuple, jobject dstTuple,
                                                                        jobject finishState) {
-    jdoubleArray globalValueArray = (jdoubleArray)env->NewGlobalRef(value);
-    jintArray globalIdxArray = (jintArray)env->NewGlobalRef(idx);
-    jobject globalFinishState = env->NewGlobalRef(finishState);
-    if (NULL == globalValueArray || NULL == globalIdxArray || NULL == globalFinishState) {
-        jniHelper_abort("OOM while attempting to create GlobalRef in nativeIndexOfMinImpl\n");
-    }
-
-    DoubleIdx* srcData = (DoubleIdx*)malloc(sizeof(DoubleIdx));
-    DoubleIdx* dstData = (DoubleIdx*)malloc(sizeof(DoubleIdx));
-    if (NULL == srcData || NULL == dstData) {
-        jniHelper_abort("OOM while attempting to allocate malloced storage in nativeIndexOfMinImpl\n");
-    }
-    env->GetDoubleArrayRegion(value, 0, 1, (jdouble*)&(srcData->value));
-
-    minmaxStruct* callbackArg = (minmaxStruct*)malloc(sizeof(minmaxStruct));
-    callbackArg->globalFinishState = globalFinishState;
-    callbackArg->globalValueArray = globalValueArray;
-    callbackArg->globalIdxArray = globalIdxArray;
-    callbackArg->srcData = srcData;
-    callbackArg->dstData = dstData;
-
-    x10rt_allreduce(id, role, srcData, dstData, X10RT_RED_OP_MIN, X10RT_RED_TYPE_DBL_S32, 1, &minmaxCallback, callbackArg);
+    indexOfImpl(env, id, role, srcTuple, dstTuple, X10RT_RED_OP_MIN, finishState);
 }
 
 
@@ -954,4 +1106,36 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_initialize(JNIEnv *env, jclass
     }
     activityTerminationFunc.targetClass  = globalClass;
     activityTerminationFunc.targetMethod = terminateId;
+
+
+    /* Get a hold of TeamSupport.copyDoubleToComplex and stash away its invoke information */
+    jclass teamClass = env->FindClass("Lx10/x10rt/TeamSupport;");
+    if (NULL == teamClass) {
+        jniHelper_abort("Unable to find class x10.x10rt.TeamSupport\n");
+    }
+    jmethodID copyId = env->GetStaticMethodID(teamClass, "copyDoubleToComplex", "([DLjava/lang/Object;II)V");
+    if (NULL == copyId) {
+        jniHelper_abort("Unable to resolve methodID for TeamSupport.copyDoubleToComplex\n");
+    }
+    jclass globalClass2 = (jclass)env->NewGlobalRef(teamClass);
+    if (NULL == globalClass2) {
+        jniHelper_abort("OOM while attempting to allocate global reference for Team class\n");
+    }
+    copyDoubleToComplex.targetClass  = globalClass2;
+    copyDoubleToComplex.targetMethod = copyId;
+
+    /* Get the value and idx fields of Team.DoubleIdx */
+    jclass doubleIdxClass = env->FindClass("Lx10/util/Team$DoubleIdx;");
+    if (NULL == doubleIdxClass) {
+        jniHelper_abort("Unable to find class x10.util.Team.DoubleIdx\n");
+    }
+    DoubleIdx_valueId = env->GetFieldID(doubleIdxClass, "value", "D");
+    if (NULL == DoubleIdx_valueId) {
+        jniHelper_abort("Unable to resolve fieldID for Team.DoubleIdx.value\n");
+    }        
+    DoubleIdx_idxId = env->GetFieldID(doubleIdxClass, "idx", "I");
+    if (NULL == DoubleIdx_idxId) {
+        jniHelper_abort("Unable to resolve fieldID for Team.DoubleIdx.idx\n");
+    }        
+    
 }

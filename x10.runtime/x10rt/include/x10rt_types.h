@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2013.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef X10RT_TYPES_H
@@ -63,6 +63,7 @@ typedef void x10rt_completion_handler2 (x10rt_team, void *arg);
 // use 32 bits to maintain 4 byte alignment for PAMI
 typedef uint32_t x10rt_msg_type;
 #else
+// TODO: Remove?  We no longer support bgp or lapi
 // only need 16 bits; optimize message size & maintain compatibility with binary pgas libraries (bgp, lapi)
 typedef uint16_t x10rt_msg_type;
 #endif
@@ -188,7 +189,8 @@ typedef enum
     /** Unsigned qword*/ X10RT_RED_TYPE_U64 = 7,
     /** Double precision IEEE float*/ X10RT_RED_TYPE_DBL = 8,
     /** Single precision IEEE float*/ X10RT_RED_TYPE_FLT = 9,
-    /** A pair of double and signed dword*/ X10RT_RED_TYPE_DBL_S32 = 10
+    /** A pair of double and signed dword*/ X10RT_RED_TYPE_DBL_S32 = 10,
+    /** std::complex<double> */ X10RT_RED_TYPE_COMPLEX_DBL = 11    
 } x10rt_red_type;
 
 /** The list of optional x10rt_net features.
@@ -198,6 +200,13 @@ typedef enum {
     X10RT_OPT_COLLECTIVES = 1,
     X10RT_OPT_COLLECTIVES_APPEND = 2
 } x10rt_opt;
+typedef enum {
+	X10RT_COLL_NOCOLLECTIVES = 0,
+	X10RT_COLL_BARRIERONLY = 1,
+    X10RT_COLL_ALLBLOCKINGCOLLECTIVES = 2,
+    X10RT_COLL_NONBLOCKINGBARRIER = 3,
+    X10RT_COLL_ALLNONBLOCKINGCOLLECTIVES = 4
+} x10rt_coll_type;
 
 /**
  * Structure to hold a remote update operation
@@ -253,10 +262,12 @@ typedef struct {
  * Error code for x10rt apis.
  */
 typedef enum {
-    X10RT_ERR_OK       = 0,   /* No error */
-    X10RT_ERR_MEM      = 1,   /* Out of memory error */
-    X10RT_ERR_INTL     = 254, /* Internal implementation error */
-    X10RT_ERR_OTHER    = 255  /* Other unclassified runtime error */
+    X10RT_ERR_OK			= 0,   /* No error */
+    X10RT_ERR_MEM			= 1,   /* Out of memory error */
+    X10RT_ERR_INVALID		= 2,   /* Invalid method call, at this time (e.g. probe() before init()) */
+    X10RT_ERR_UNSUPPORTED	= 3,   /* Not supported by this implementation of X10RT */
+    X10RT_ERR_INTL			= 254, /* Internal implementation error */
+    X10RT_ERR_OTHER			= 255  /* Other unclassified runtime error */
 } x10rt_error;
 
 #endif

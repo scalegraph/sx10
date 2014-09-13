@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.errors;
@@ -257,7 +257,7 @@ public class Errors {
 		    CConstraint 
 		    c = Types.xclause(type), 
 		    d = Types.xclause(targetType);
-		    XConstraint residue = c.residue(d);
+		    XConstraint residue = c == null ? d : c.residue(d);
 		    
 		    
 		    return new CannotAssign(expr, type, residue, pos);
@@ -817,22 +817,22 @@ public class Errors {
             CConstraint 
             c = Types.xclause(type), 
             d = Types.xclause(targetType);
-            XConstraint residue = c.residue(d);
+            XConstraint residue = c==null? d: c.residue(d);
             
             
             return new CannotReturnExpr(expr, type, residue, pos);
         }
     }
 	
-	public static class ArrayLiteralMustBeOfArrayType extends EqualByTypeAndPosException {
+	public static class RailLiteralMustBeOfArrayType extends EqualByTypeAndPosException {
 		private static final long serialVersionUID = 3059270665285777371L;
-		public ArrayLiteralMustBeOfArrayType(String typeName,   Position pos) {
-	        super("An array literal must start with 'new Array...'.", pos);
+		public RailLiteralMustBeOfArrayType(String typeName,   Position pos) {
+	        super("A rail literal must start with 'new Rail...'.", pos);
 	    }
 	}
-	public static class ArrayLiteralTypeMismatch extends EqualByTypeAndPosException {
+	public static class RailLiteralTypeMismatch extends EqualByTypeAndPosException {
 		private static final long serialVersionUID = -8344153029213631407L;
-		public ArrayLiteralTypeMismatch(Expr e, Type itype) {
+		public RailLiteralTypeMismatch(Expr e, Type itype) {
 	        super("The literal is not of the given type" +
 	        		"\n\t expr:" + e +
 	        		"\n\t type: " + e.type() +
@@ -2183,6 +2183,14 @@ public class Errors {
         private static final long serialVersionUID = 2851042936446059831L;
         public ArrayExplosionError(int n, Position pos) {
             super("Array argument must have constraint {rank==1,size=" + n + "}.", pos);
+        }
+    }
+    public static class ParametricClassCannotExtendCheckedThrowable extends EqualByTypeAndPosException {
+		private static final long serialVersionUID = -5078018337334696948L;
+
+		public ParametricClassCannotExtendCheckedThrowable(X10ClassDef cd, Position pos) {
+            super("A class with type parameters cannot extend x10.lang.CheckedThrowable."
+            		+ "\n\t Class: " + cd, pos);
         }
     }
 }

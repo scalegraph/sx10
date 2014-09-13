@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2013.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef X10RT_CUDA_H
@@ -165,8 +165,9 @@ X10RT_C void x10rt_cuda_device_free (x10rt_cuda_ctx *ctx, void *ptr);
  * \see x10rt_probe
  * 
  * \param ctx The CUDA device where work may be pending.
+ * \returns true if something is actively running in the GPU or is in the GPU work queue
  */
-X10RT_C void x10rt_cuda_probe (x10rt_cuda_ctx *ctx);
+X10RT_C bool x10rt_cuda_probe (x10rt_cuda_ctx *ctx);
 
 /** Clean up and destroy the given CUDA device.
  *

@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef X10AUX_REFERENCE_LOGGER_H
@@ -27,7 +27,11 @@ namespace x10aux {
     class ReferenceLogger {
     public:
         static ReferenceLogger* it;
+#ifndef __FCC_VERSION
     private:
+#else
+    public:
+#endif
         class Bucket {
         public:
             void *_reference;
@@ -44,7 +48,7 @@ namespace x10aux {
         	if (NULL == it) it = initMe();
         	it->log_(x);
         }
-        template<class T> friend const char *x10aux::typeName();
+        template<class T> friend const char *::x10aux::typeName();
     };
 
     template<> inline const char *typeName<ReferenceLogger>() { return "ReferenceLogger"; }

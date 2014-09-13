@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #include <x10aux/config.h>
@@ -17,11 +17,14 @@
 
 #include <x10/lang/Reference.h>
 #include <x10/lang/Comparable.h>
+#include <x10/lang/Arithmetic.h>
 
 #include <cstdarg>
 
 using namespace x10aux;
 using namespace x10::lang;
+
+#define TRACE_RTT_INIT 0
 
 const char *RuntimeType::name() const {
     if (NULL == fullTypeName) {
@@ -94,7 +97,9 @@ bool RuntimeType::concreteInstanceOf (const Reference* other) const {
     return other->_type()->equals(this);
 }
 
-
+void RuntimeType::initializeForMultiThreading() {
+    initRTTLock = new (system_alloc<reentrant_lock>())reentrant_lock();
+}
 
 bool RuntimeType::initStageOne(const RuntimeType *canonical_) {
 
@@ -104,27 +109,44 @@ bool RuntimeType::initStageOne(const RuntimeType *canonical_) {
     // a thread asks for an RTT, it gets a fully initialized RTT before it starts
     // operating on it and we don't get a race with multiple threads partially
     // initializing an RTT.
-    while (NULL == initRTTLock) {
-        reentrant_lock* tmpLock = new (system_alloc<reentrant_lock>())reentrant_lock();
-        x10aux::atomic_ops::store_load_barrier();
-        atomic_ops::compareAndSet_ptr((volatile void**)(&initRTTLock), NULL, tmpLock);
+    // 
+    // NOTE: Lock == NULL ===> single threaded C++ static initialization
+    if (NULL != initRTTLock) {
+        initRTTLock->lock();
     }
-    const_cast<reentrant_lock*>(initRTTLock)->lock();
 
+    if (TRACE_RTT_INIT) {
+        fprintf(stdout, "RTT: entering initStageOne for %p with canonical_ %p\n", (void*)this, (void*)canonical_);
+    }
+    
     if (canonical != NULL) {
         if (isInitialized) {
-            const_cast<reentrant_lock*>(initRTTLock)->unlock();
+            if (TRACE_RTT_INIT) {
+                fprintf(stdout, "RTT: exiting initStageOne for %p because stageOne completed by another thread\n", (void*)this);
+            }
+            if (NULL != initRTTLock) {
+                initRTTLock->unlock();
+            }
             return true; // another thread finished the job while this thread was blocked on initRTTLock.
         }
         // We should only get here if there is a cyclic intialization in progress.
         // We don't have a 100% foolproof way to be sure that is what is happening, so
         // just hope that is what is happening and return.
-        const_cast<reentrant_lock*>(initRTTLock)->unlock();
+        if (TRACE_RTT_INIT) {
+            fprintf(stdout, "RTT: exiting initStageOne for %p due to apparent cyclic initialization (%p)\n", (void*)this, (void*)canonical);
+        }
+        if (NULL != initRTTLock) {
+            initRTTLock->unlock();
+        }
         return true;
     }
     
     canonical = canonical_;
 
+    if (TRACE_RTT_INIT) {
+        fprintf(stdout, "RTT: exiting initStageOne for %p after setting canonical to %p\n", (void*)this, (void*)canonical);
+    }
+    
     // NOTE: Intentionally did not call unlock before returning.
     //       the unlock will happen at the end of initStageTwo
     //       Return false to indicate that the thread should continue with initStageTwo.
@@ -139,7 +161,10 @@ void RuntimeType::initStageTwo(const char* baseName_,
                                Variance* variances_) {
     // NOTE: Lock still held because it was not released before returning
     //       false from the end of initStageOne
-
+    if (TRACE_RTT_INIT) {
+        fprintf(stdout, "RTT: entering initStageTwo for %p\n", (void*)this);
+    }
+    
     baseName = baseName_;
     kind = kind_;
     parentsc = parentsc_;
@@ -170,8 +195,14 @@ void RuntimeType::initStageTwo(const char* baseName_,
     x10aux::atomic_ops::store_load_barrier();
     isInitialized = true; // must come after the store_load_barrier
 
+    if (TRACE_RTT_INIT) {
+        fprintf(stdout, "RTT: initStageTwo complete for %p %s\n", (void*)this, baseName);
+    }
+        
     // Unlock paired with lock operation at entry to initStageOne.
-    const_cast<reentrant_lock *>(initRTTLock)->unlock();
+    if (NULL != initRTTLock) {
+        initRTTLock->unlock();
+    }
 }
     
 void RuntimeType::initBooleanType() {
@@ -222,6 +253,12 @@ void RuntimeType::initDoubleType() {
     DoubleType.initStageTwo("x10.lang.Double", struct_kind, 2, parents, 0, NULL, NULL);
     DoubleType.containsPtrs = false;
 }
+void RuntimeType::initComplexType() {
+    if (ComplexType.initStageOne(&ComplexType)) return;
+    const x10aux::RuntimeType* parents[2] = { x10aux::getRTT<x10::lang::Any>(), x10aux::getRTT<x10::lang::Arithmetic<x10_complex> >()};
+    ComplexType.initStageTwo("x10.lang.Complex", struct_kind, 2, parents, 0, NULL, NULL);
+    ComplexType.containsPtrs = false;
+}
 void RuntimeType::initUByteType() {
     if (UByteType.initStageOne(&UByteType)) return;
     const x10aux::RuntimeType* parents[2] = { x10aux::getRTT<x10::lang::Any>(), x10aux::getRTT<x10::lang::Comparable<x10_ubyte> >()};
@@ -255,6 +292,7 @@ RuntimeType RuntimeType::IntType;
 RuntimeType RuntimeType::FloatType;
 RuntimeType RuntimeType::LongType;
 RuntimeType RuntimeType::DoubleType;
+RuntimeType RuntimeType::ComplexType;
 RuntimeType RuntimeType::UByteType;
 RuntimeType RuntimeType::UShortType;
 RuntimeType RuntimeType::UIntType;
@@ -295,6 +333,6 @@ const char *RuntimeVoidFunType::name() const {
 }
 
 
-volatile x10aux::reentrant_lock* RuntimeType::initRTTLock;
+x10aux::reentrant_lock* RuntimeType::initRTTLock;
 
 // vim:tabstop=4:shiftwidth=4:expandtab

@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef X10_LANG_ANY_H
@@ -24,17 +24,17 @@ namespace x10 {
         public:
             RTT_H_DECLS_INTERFACE
 
-            template <class I> struct itable {
-                itable(x10_boolean (I::*equals)(x10::lang::Any*),
-                       x10_int (I::*hashCode)(),
-                       x10::lang::String* (I::*toString)(),
-                       x10::lang::String* (I::*typeName)()) : equals(equals), hashCode(hashCode),
+            template <class Iface> struct itable {
+                itable(x10_boolean (Iface::*equals)(::x10::lang::Any*),
+                       x10_int (Iface::*hashCode)(),
+                       ::x10::lang::String* (Iface::*toString)(),
+                       ::x10::lang::String* (Iface::*typeName)()) : equals(equals), hashCode(hashCode),
                                                               toString(toString), typeName(typeName) {}
 
-                x10_boolean (I::*equals)(x10::lang::Any*);
-                x10_int (I::*hashCode)();
-                x10::lang::String* (I::*toString)();
-                x10::lang::String* (I::*typeName)();
+                x10_boolean (Iface::*equals)(::x10::lang::Any*);
+                x10_int (Iface::*hashCode)();
+                ::x10::lang::String* (Iface::*toString)();
+                ::x10::lang::String* (Iface::*typeName)();
             };
         };
     }

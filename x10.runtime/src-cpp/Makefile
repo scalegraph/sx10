@@ -141,6 +141,7 @@ ALL_XRCPP_OBJECTS = \
 	x10aux/itables.o \
 	x10aux/lock.o \
 	x10aux/network.o \
+	x10aux/network_dispatcher.o \
 	x10aux/place_local.o \
 	x10aux/reference_logger.o \
 	x10aux/RTT.o \
@@ -162,6 +163,7 @@ ALL_XRCPP_OBJECTS = \
 	x10/lang/CheckedThrowable.o \
 	x10/lang/Closure.o \
 	x10/lang/Comparable.o \
+	x10/lang/Complex.o \
 	x10/lang/Double.o \
 	x10/lang/Fun.o \
 	x10/lang/GlobalRef.o \
@@ -169,6 +171,7 @@ ALL_XRCPP_OBJECTS = \
 	x10/lang/Int.o \
 	x10/lang/Float.o \
 	x10/lang/Long.o \
+	x10/lang/Rail.o \
 	x10/lang/Reference.o \
 	x10/lang/RuntimeNatives.o \
 	x10/lang/Short.o \
@@ -182,10 +185,7 @@ ALL_XRCPP_OBJECTS = \
 	x10/lang/ULong.o \
 	x10/lang/UShort.o \
 	x10/lang/X10Class.o \
-	x10/util/IndexedMemoryChunk.o \
 	x10/util/Ordered.o \
-	x10/util/RemoteIndexedMemoryChunk.o \
-	x10/util/Vec.o \
 	x10/util/concurrent/AtomicBooleanNatives.o \
 	x10/util/concurrent/AtomicIntegerNatives.o \
 	x10/util/concurrent/AtomicLongNatives.o \
@@ -259,12 +259,6 @@ install: $(XRX_ARCHIVE) install_props
 %:%.o
 %:%.c
 %:%.cc
-
-ifdef USE_XLC
-# temporary workaround for xlC v11 bug (fixed by xlC development, but fix won't GA until 4Q2012)
-gen/x10/util/Team.o: gen/x10/util/Team.cc gen/x10/util/Team.h $(GEN_DIR)/all-cpp-generated 
-	$(CXX) $(CXXFLAGS)  $(CXX_WARNING_FLAGS) $(CXXFLAGS_SHARED) -qnoinline -c $< -o $@
-endif
 
 # depend on all-cpp-generated because we need to make sure the x10 code 
 # has been compiled to cc,h since the manually written code may include generated headers

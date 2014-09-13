@@ -6,21 +6,20 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.lang;
 
 import x10.compiler.NativeRep;
-import x10.io.CustomSerialization;
-import x10.io.SerialData;
+import x10.io.Unserializable;
 
 /**
  * Native thread. Only to be used in the runtime implementation.
  */
 @NativeRep("java", "x10.core.Thread", null, "x10.core.Thread.$RTT")
 @NativeRep("c++", "x10::lang::Thread*", "x10::lang::Thread", null)
-class Thread implements CustomSerialization {
+class Thread implements Unserializable {
 
     public native def this(String);
 
@@ -44,25 +43,9 @@ class Thread implements CustomSerialization {
 
     public native def name(name:String):void;
 
-    public native def home():Place;
-
     public native operator this():void;
 
-    /**
-     * Serialization of Thread objects is forbidden.
-     * @throws UnsupportedOperationException
-     */
-    public def serialize():SerialData {
-    	throw new UnsupportedOperationException("Cannot serialize "+typeName());
-    }
-
-    /**
-     * Serialization of Thread objects is forbidden.
-     * @throws UnsupportedOperationException
-     */
-    public def this(SerialData) {
-    	throw new UnsupportedOperationException("Cannot deserialize "+typeName());
-    }
+    public native def removeWorkerContext():void;
 }
 
 // vim:shiftwidth=4:tabstop=4:expandtab

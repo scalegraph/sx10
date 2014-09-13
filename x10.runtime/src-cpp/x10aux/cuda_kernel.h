@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef X10AUX_CUDA_KERNEL_H
@@ -59,7 +59,7 @@ namespace x10aux {
 template<class T, class S> void x10aux::CMemPopulator::populateArr (S init) {
     x10aux::nullCheck(init);
     size_t sz = sizeof(T) * init->FMGL(size);
-    memcpy(&ptr[offset], &init->FMGL(raw).raw()[0], sz);
+    memcpy(&ptr[offset], &init->raw[0], sz);
     offset += sz;
 }
 /*

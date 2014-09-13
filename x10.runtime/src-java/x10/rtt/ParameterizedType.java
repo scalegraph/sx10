@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.rtt;
@@ -21,8 +21,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 
 public final class ParameterizedType<T> implements Type<T>, X10JavaSerializable {
-
-    private static final long serialVersionUID = 1L;
 
     public RuntimeType<T> rawType;
     public Type<?>[] actualTypeArguments;
@@ -280,7 +278,10 @@ public final class ParameterizedType<T> implements Type<T>, X10JavaSerializable 
 
     public void $_serialize(X10JavaSerializer serializer) throws IOException {
         serializer.write(rawType);
-        serializer.write(actualTypeArguments);
+        serializer.write(actualTypeArguments.length);
+        for (Type<?> at : actualTypeArguments) {
+            serializer.write(at);
+        }
     }
 
     public static X10JavaSerializable $_deserializer(X10JavaDeserializer deserializer) throws IOException {
@@ -290,11 +291,13 @@ public final class ParameterizedType<T> implements Type<T>, X10JavaSerializable 
     }
 
     public static X10JavaSerializable $_deserialize_body(ParameterizedType pt, X10JavaDeserializer deserializer) throws IOException {
-        RuntimeType rawType = (RuntimeType) deserializer.readRef();
+        RuntimeType rawType = (RuntimeType) deserializer.readObject();
         pt.rawType = rawType;
         int length = deserializer.readInt();
-        Type[] actualTypeArguments = new Type[length];
-        deserializer.readArray(actualTypeArguments);
+        Type<?>[] actualTypeArguments = new Type<?>[length];
+        for (int i = 0; i < length; i++) {
+            actualTypeArguments[i] = (Type<?>) deserializer.readObject();
+        }
         pt.actualTypeArguments = actualTypeArguments;
         return pt;
     }

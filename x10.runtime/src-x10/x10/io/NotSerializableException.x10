@@ -6,12 +6,16 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2012.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.io;
 
-
+/**
+ * This exception will be throw when the program attempts
+ * to serialize a non-serializable class
+ * (eg one that implements Unserializable).
+ */
 public class NotSerializableException extends IOException {
 
     public def this() { super(); }

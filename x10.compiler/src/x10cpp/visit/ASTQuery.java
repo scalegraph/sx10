@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10cpp.visit;
@@ -172,7 +172,7 @@ public class ASTQuery {
 		if (knownArrayCopyMethods.size() == 0) {
 			try {
 				Type x_l_Runtime = (Type) ts.Runtime();
-				Type array = ts.Array();
+				Type array = ts.RegionArray();
 				Type Int = ts.Int();
 				Type[] A_I_A_I_I = { array, Int, array, Int, Int };
 				knownArrayCopyMethods.add(ts.findMethod(x_l_Runtime, ts.MethodMatcher(x_l_Runtime, Name.make("arrayCopy"), Arrays.asList(A_I_A_I_I), context)));

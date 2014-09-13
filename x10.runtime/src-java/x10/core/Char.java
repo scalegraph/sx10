@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.core;
@@ -27,8 +27,6 @@ import x10.serialization.X10JavaSerializer;
  */
 final public class Char extends Struct implements java.lang.Comparable<Char>, x10.util.Ordered<Char>
 {
-    private static final long serialVersionUID = 1L;
-    
     public static final RuntimeType<?> $RTT = Types.CHAR;
     public RuntimeType<?> $getRTT() {return $RTT;}
     public Type<?> $getParam(int i) {return null;}
@@ -103,7 +101,7 @@ final public class Char extends Struct implements java.lang.Comparable<Char>, x1
     }
 
     @Override
-    public java.lang.String toString() {
+    public String toString() {
         return java.lang.Character.toString($value);
     }
     
@@ -125,19 +123,18 @@ final public class Char extends Struct implements java.lang.Comparable<Char>, x1
     public static X10JavaSerializable $_deserialize_body(Char $_obj, X10JavaDeserializer $deserializer) throws IOException {
         char value  = $deserializer.readChar();
         $_obj = new Char(value);
-        $deserializer.record_reference($_obj);
         return $_obj;
     }
     
     // implements Ordered<Char>
-    public java.lang.Object $lt(java.lang.Object b, Type t) { return x10.core.Boolean.$box($value < ((Char)b).$value); }
-    public java.lang.Object $gt(java.lang.Object b, Type t) { return x10.core.Boolean.$box($value > ((Char)b).$value); }
-    public java.lang.Object $le(java.lang.Object b, Type t) { return x10.core.Boolean.$box($value <= ((Char)b).$value); }
-    public java.lang.Object $ge(java.lang.Object b, Type t) { return x10.core.Boolean.$box($value >= ((Char)b).$value); }
+    public Object $lt(Object b, Type t) { return Boolean.$box($value < ((Char)b).$value); }
+    public Object $gt(Object b, Type t) { return Boolean.$box($value > ((Char)b).$value); }
+    public Object $le(Object b, Type t) { return Boolean.$box($value <= ((Char)b).$value); }
+    public Object $ge(Object b, Type t) { return Boolean.$box($value >= ((Char)b).$value); }
     // for X10PrettyPrinterVisitor.generateSpecialDispatcher
-    public boolean $lt$Z(java.lang.Object b, Type t) { return $value < ((Char)b).$value; }
-    public boolean $gt$Z(java.lang.Object b, Type t) { return $value > ((Char)b).$value; }
-    public boolean $le$Z(java.lang.Object b, Type t) { return $value <= ((Char)b).$value; }
-    public boolean $ge$Z(java.lang.Object b, Type t) { return $value >= ((Char)b).$value; }
+    public boolean $lt$Z(Object b, Type t) { return $value < ((Char)b).$value; }
+    public boolean $gt$Z(Object b, Type t) { return $value > ((Char)b).$value; }
+    public boolean $le$Z(Object b, Type t) { return $value <= ((Char)b).$value; }
+    public boolean $ge$Z(Object b, Type t) { return $value >= ((Char)b).$value; }
 
 }

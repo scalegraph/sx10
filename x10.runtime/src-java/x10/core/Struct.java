@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.core;
@@ -17,8 +17,6 @@ import x10.rtt.Types;
 
 // Base class for all X10 structs
 public abstract class Struct implements StructI {
-
-    private static final long serialVersionUID = 1L;
 
     // not used
 //    // constructor just for allocation
@@ -42,7 +40,7 @@ public abstract class Struct implements StructI {
 //    public Type<?> $getParam(int i) {return null;}
 
     @Override
-    public java.lang.String toString() {
+    public String toString() {
         return Types.typeName(this) + "@" + Integer.toHexString(System.identityHashCode(this));
     }
 

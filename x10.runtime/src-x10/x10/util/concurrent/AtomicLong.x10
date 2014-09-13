@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.util.concurrent;
@@ -44,11 +44,11 @@ public final class AtomicLong {
     }
     
     @Native("java", "#this.compareAndSet(#expect,#update)")
-    @Native("c++", "x10::util::concurrent::AtomicLongNatives::compareAndSet(#this,#expect,#update)")
+    @Native("c++", "::x10::util::concurrent::AtomicLongNatives::compareAndSet(#this,#expect,#update)")
     public native def compareAndSet(expect:Long, update:Long):Boolean;
 
     @Native("java", "#this.weakCompareAndSet(#expect,#update)")
-    @Native("c++", "x10::util::concurrent::AtomicLongNatives::weakCompareAndSet(#this,#expect,#update)")
+    @Native("c++", "::x10::util::concurrent::AtomicLongNatives::weakCompareAndSet(#this,#expect,#update)")
     public native def weakCompareAndSet(expect:Long, update:Long):Boolean;
     
     @Native("java", "#this.getAndIncrement()")
@@ -58,7 +58,7 @@ public final class AtomicLong {
     public def getAndDecrement():Long = getAndAdd(-1);
     
     @Native("java", "#this.getAndAdd(#delta)")
-    @Native("c++", "x10::util::concurrent::AtomicLongNatives::getAndAdd(#this,#delta)")
+    @Native("c++", "::x10::util::concurrent::AtomicLongNatives::getAndAdd(#this,#delta)")
     public native def getAndAdd(delta:Long):Long;
     
     @Native("java", "#this.incrementAndGet()")
@@ -68,21 +68,21 @@ public final class AtomicLong {
     public def decrementAndGet():Long = addAndGet(-1);
     
     @Native("java", "#this.addAndGet(#delta)")
-    @Native("c++", "x10::util::concurrent::AtomicLongNatives::addAndGet(#this, #delta)")
+    @Native("c++", "::x10::util::concurrent::AtomicLongNatives::addAndGet(#this, #delta)")
     public native def addAndGet(delta:Long):Long;
     
     @Native("java", "#this.toString()")
     public def toString():String = get().toString();
 
     @Native("java", "#this.intValue()")
-    public def intValue():int = get() as Int;
+    public def intValue():Int = get() as Int;
 
     @Native("java", "#this.longValue()")
     public def longValue():Long = get();
     
     @Native("java", "#this.floatValue()")
-    public def floatValue():float = get() as Float;
+    public def floatValue():Float = get() as Float;
     
     @Native("java", "#this.doubleValue()")
-    public def doubleValue():double = get() as Double;
+    public def doubleValue():Double = get() as Double;
 }

@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.core.concurrent;
@@ -21,9 +21,8 @@ import x10.serialization.X10JavaDeserializer;
 import x10.serialization.X10JavaSerializable;
 import x10.serialization.X10JavaSerializer;
 
+@SuppressWarnings("serial")
 public final class AtomicLong extends java.util.concurrent.atomic.AtomicLong implements Any, X10JavaSerializable {
-
-    private static final long serialVersionUID = 1L;
 
     // constructor just for allocation
     public AtomicLong(java.lang.System[] $dummy) {

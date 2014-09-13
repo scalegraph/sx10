@@ -6,11 +6,12 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 package x10.emitter;
 
 import polyglot.ast.Node;
+import polyglot.ast.NullLit;
 import polyglot.types.Type;
 import polyglot.util.CodeWriter;
 import polyglot.visit.Translator;
@@ -126,6 +127,13 @@ public class CastExpander extends Expander {
 	@Override
 	public void expand(Translator tr) {
 		if (typeExpander == null) {
+			if (node instanceof NullLit && !((NullLit) node).type().isNull()) {
+		        w.write("((");
+	            new TypeExpander(er, ((NullLit) node).type(), 0).expand();
+		        w.write(")(");
+				expandChild(tr);
+				w.write("))");
+			} else
 			expandChild(tr);
 		} else {
 		    Type type = typeExpander.type();

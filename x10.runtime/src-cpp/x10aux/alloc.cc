@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #include <x10aux/config.h>
@@ -39,13 +39,7 @@
 using namespace x10aux;
 
 void x10aux::reportOOM(size_t size) {
-    _M_("Out of memory allocating " << size << " bytes");
-#ifndef NO_EXCEPTIONS
     throwException<x10::lang::OutOfMemoryError>();
-#else
-    fprintf(stderr,"Out of memory\n");
-    abort();
-#endif
 }
 
 char *x10aux::alloc_printf(const char *fmt, ...) {
@@ -552,12 +546,7 @@ void *x10aux::alloc_internal_congruent(size_t size) {
 
     if (congruent_cursor - congruent_base + size > congruent_sz) {
         // run out of space
-        #ifndef NO_EXCEPTIONS
         throwException<x10::lang::OutOfMemoryError>();
-        #else
-        fprintf(stderr, "Out of congruent memory, see "ENV_CONGRUENT_SIZE"\n");
-        abort();
-        #endif
     }
 
     void *r = congruent_cursor;
@@ -567,3 +556,16 @@ void *x10aux::alloc_internal_congruent(size_t size) {
 
     return r;
 }
+
+void *x10aux::compute_congruent_addr(void* addr, int src, int dst) {
+
+    if (x10aux::congruent_huge) {
+        int modSrc = src % (1 << x10aux::congruent_period);
+        int modDst = dst % (1 << x10aux::congruent_period);
+        addr = (void*)((x10_ulong)addr - (x10_ulong)(x10aux::congruent_offset * modSrc) + (x10_ulong)(x10aux::congruent_offset *  modDst));
+    }
+    return addr;
+}
+
+
+

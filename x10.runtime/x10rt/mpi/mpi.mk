@@ -6,7 +6,7 @@
 #  You may obtain a copy of the License at
 #      http://www.opensource.org/licenses/eclipse-1.0.php
 #
-#  (C) Copyright IBM Corporation 2006-2010.
+#  (C) Copyright IBM Corporation 2006-2014.
 #
 
 TESTS += $(patsubst test/%,test/%.mpi,$(BASE_TESTS))
@@ -16,16 +16,24 @@ LIBS += $(LIB_FILE_MPI)
 
 PROPERTIES += etc/x10rt_mpi.properties
 
+ifndef ENABLE_CROSS_COMPILE_FX10
+ifndef ENABLE_CROSS_COMPILE_BGQ
+  EXECUTABLES += mpi/X10MPIJava
+endif
+endif
+
 MOV_LDFLAGS_MPI = $(MOV_LDFLAGS)
 MOV_LDLIBS_MPI = $(MOV_LDLIBS)
 SO_LDFLAGS_MPI = $(SO_LDFLAGS)
 SO_LDLIBS_MPI = $(SO_LDLIBS)
 APP_LDFLAGS_MPI = $(APP_LDFLAGS)
 APP_LDLIBS_MPI = $(APP_LDLIBS) -lx10rt_mpi
+APP_LDLIBS_MPI_NO_X10RT = $(APP_LDLIBS)
 
 ifdef X10_STATIC_LIB
   APP_LDFLAGS_MPI += $(MOV_LDFLAGS_MPI)
   APP_LDLIBS_MPI += $(MOV_LDLIBS_MPI)
+  APP_LDLIBS_MPI_NO_X10RT += $(MOV_LDLIBS_MPI)
 else
   SO_LDFLAGS_MPI += $(MOV_LDFLAGS_MPI)
   SO_LDLIBS_MPI += $(MOV_LDLIBS_MPI)
@@ -43,6 +51,9 @@ ifdef X10_STATIC_LIB
 else
 	$(MPICXX) $(CXXFLAGS) $(CXXFLAGS_SHARED) $^ $(SO_LDFLAGS_MPI) $(SO_LDLIBS_MPI) -o $@
 endif
+
+mpi/X10MPIJava: mpi/Java.cc
+	$(MPICXX) $(CXXFLAGS) $(APP_LDFLAGS_MPI) $(APP_LDLIBS_MPI_NO_X10RT) mpi/Java.cc -o mpi/X10MPIJava -ljvm $(JNI_LIBS)
 
 etc/x10rt_mpi.properties:
 	@echo "X10LIB_PLATFORM=$(X10RT_PLATFORM)" > $@

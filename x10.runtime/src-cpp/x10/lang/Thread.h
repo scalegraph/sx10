@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef X10_LANG_THREAD_H
@@ -49,14 +49,14 @@ namespace x10 {
         * augmented with the park/unpark API of java.util.concurrent.
         * locks.LockSupport.
         */
-        class Thread : public x10::lang::X10Class {
+        class Thread : public ::x10::lang::X10Class {
         public:
             RTT_H_DECLS_CLASS;
 
             // [constructors] Allocates a new Thread object.
-            static Thread* _make(x10::lang::String* name);
+            static Thread* _make(::x10::lang::String* name);
 
-            Thread* _constructor(x10::lang::String* name) {
+            Thread* _constructor(::x10::lang::String* name) {
                 thread_init(name);
                 return this;
             }
@@ -67,16 +67,10 @@ namespace x10 {
                 return NULL;
             }
 
-            static const x10aux::serialization_id_t _serialization_id;
+            virtual ::x10aux::serialization_id_t _get_serialization_id();
 
-            virtual x10aux::serialization_id_t _get_serialization_id() { return _serialization_id; };
-
-            virtual void _serialize_body(x10aux::serialization_buffer &buf);
-
-            static x10::lang::Reference* _deserializer(x10aux::deserialization_buffer &buf);
-
-            virtual void _deserialize_body(x10aux::deserialization_buffer& buf);
-
+            virtual void _serialize_body(::x10aux::serialization_buffer &buf);
+            
             // destructor
             ~Thread();
 
@@ -176,16 +170,16 @@ namespace x10 {
             void unpark();
 
             // Returns the current worker.
-            x10::lang::Runtime__Worker* worker(void);
+            ::x10::lang::Runtime__Worker* worker(void);
 
             // API matching for Java runtime.  Not actually needed for C++ runtime.
-            x10::lang::Place home(void);
+            ::x10::lang::Place home(void);
             
             // Set the current worker.
-            void worker(x10::lang::Runtime__Worker* worker);
+            void worker(::x10::lang::Runtime__Worker* worker);
 
             // Returns this thread's name.
-            x10::lang::String* name(void);
+            ::x10::lang::String* name(void);
 
             /**
              * Returns the identifier of this thread. The thread ID is
@@ -194,13 +188,16 @@ namespace x10 {
              */
             long getId();
 
+			// Thread context is not used in Native X10, only in Managed X10
+            void removeWorkerContext();
+
             /**
              * Returns the system thread id.
              */
             static x10_long getTid();
 
             // Changes the name of this thread to be equal to the argument name.
-            void name(x10::lang::String* name);
+            void name(::x10::lang::String* name);
 
             /**
              * This method does nothing and returns.
@@ -217,7 +214,7 @@ namespace x10 {
             
         protected:
             // Helper method to initialize a Thread object.
-            void thread_init(x10::lang::String* name);
+            void thread_init(::x10::lang::String* name);
             // Thread start routine.
             static void *thread_start_routine(void *arg);
             // Clean-up routine for sleep method call.
@@ -226,24 +223,28 @@ namespace x10 {
             static void intr_hndlr(int signo);
             // Thread permit initialization.
             static void thread_permit_init(permit_t *perm);
+            // Thread cond_mutex initialization.
+            static void thread_cmp_init(cond_mutex_t *cmp);
             // Thread permit finalization.
             static void thread_permit_destroy(permit_t *perm);
+            // Thread cond_mutex finalization.
+            static void thread_cmp_destroy(cond_mutex_t *cmp);
             // Thread permit cleanup handler.
             static void thread_permit_cleanup(void *arg);
-            // Thread mapper cleanup handler.
+            // Thread cond_mutex cleanup handler.
             static void thread_mapper_cleanup(void *arg);
             // Thread binding to processor capabilities
             void thread_bind_cpu();
 
         private:
             // the current worker
-            x10::lang::Runtime__Worker* __current_worker;
+            ::x10::lang::Runtime__Worker* __current_worker;
             // internal thread id counter (monotonically increasing only)
             static long __thread_cnt;
             // thread id
             long __thread_id;
             // thread name
-            x10::lang::String* __thread_name;
+            ::x10::lang::String* __thread_name;
             // thread's pthread id
             // ??using __thread clashes with already existing identifier??
             pthread_t __xthread;
@@ -257,6 +258,7 @@ namespace x10 {
             pthread_mutex_t __thread_start_lock;
             // thread specific permit object
             permit_t __thread_permit;
+            cond_mutex_t __thread_cmp;
         };
     }
 }

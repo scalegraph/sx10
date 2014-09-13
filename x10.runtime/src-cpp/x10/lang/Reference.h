@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef X10_LANG_REFERENCE_H
@@ -46,9 +46,9 @@ namespace x10 {
              * Implementation-level object model functions assumed to be defined for all types
              *********************************************************************************/
 
-            virtual x10aux::itable_entry* _getITables() = 0;
+            virtual ::x10aux::itable_entry* _getITables() = 0;
 
-            virtual const x10aux::RuntimeType *_type() const = 0;
+            virtual const ::x10aux::RuntimeType *_type() const = 0;
 
             // Will be overriden by classes that implement x10.lang.Runtime.Mortal to return true.
             virtual x10_boolean _isMortal() { return false; }
@@ -71,8 +71,11 @@ namespace x10 {
             /*********************************************************************************
              * Serialization/Deserialization functions assumed to be defined for all types
              *********************************************************************************/
-            virtual x10aux::serialization_id_t _get_serialization_id() = 0;
-            virtual void _serialize_body(x10aux::serialization_buffer &) = 0;
+            virtual ::x10aux::serialization_id_t _get_serialization_id() = 0;
+            virtual void _serialize_body(::x10aux::serialization_buffer &) = 0;
+            virtual ::x10aux::serialization_id_t _get_network_id() {
+                return 0;
+            }
         };
 
         /**
@@ -88,7 +91,7 @@ namespace x10 {
     }
 }
 
-#define X10_NULL reinterpret_cast<x10::lang::NullType*>(NULL)
+#define X10_NULL reinterpret_cast< ::x10::lang::NullType*>(NULL)
 
 #endif
 // vim:tabstop=4:shiftwidth=4:expandtab:textwidth=100

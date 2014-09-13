@@ -6,12 +6,14 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.lang;
+
 import x10.io.CustomSerialization;
-import x10.io.SerialData;
+import x10.io.Deserializer;
+import x10.io.Serializer;
 import x10.compiler.NonEscaping;
 
 /**
@@ -33,14 +35,16 @@ public class Accumulator[T] extends Acc implements CustomSerialization {
         this.root = new GlobalRef[Acc](this);
         this.curr = red.zero();
     }
-    public def this(data:SerialData) {
+    public def this(ds:Deserializer) {
         //owner = null;
-        val arr:Array[Any](1) = data.data as Array[Any](1);
-        this.red = arr(0) as Reducible[T];
-        this.root = arr(1) as GlobalRef[Acc];
+        this.red = ds.readAny() as Reducible[T];
+        this.root = ds.readAny() as GlobalRef[Acc];
         this.curr = red.zero();
     }
-    public def serialize():SerialData = new SerialData([red as Any, root as Any], null);
+    public def serialize(s:Serializer) {
+        s.writeAny(red);
+        s.writeAny(root);
+    }
 
     /*
     private def isSync():Boolean {

@@ -1,42 +1,31 @@
 /*
- *  This file is part of the X10 Applications project.
+ *  This file is part of the X10 project (http://x10-lang.org).
  *
- *  (C) Copyright IBM Corporation 2011.
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2011-2014.
  */
 
-package gnmf;
-
-import x10.io.Console;
 import x10.util.Timer;
-//
+
 import x10.matrix.Debug;
-//
 import x10.matrix.Matrix;
-import x10.matrix.DenseMatrix;
-import x10.matrix.VerifyTools;
-//
 import x10.matrix.block.Grid;
 import x10.matrix.dist.DistDenseMatrix;
 import x10.matrix.dist.DistSparseMatrix;
-//
 import x10.matrix.dist.DupDenseMatrix;
-import x10.matrix.dist.DupMultToDup;
-//
-import x10.matrix.dist.DistMultDistToDup;
-import x10.matrix.dist.DistMultDupToDist;
 
 /**
  * GNNMF implementation based on GML distributed dense/sparse matrix.
  */
 public class GNNMF {
-
 	//------GNNMF matrix size------
-	val Vm:Int;
-	val Vn:Int;// = 100000;
-	//val Wm:Int{self==Vm};
-	val Wn:Int = 10;
-	//val Hm:Int{self==Wm} = Wn;
-	//val Hn:Int{self==Vn} = Vn;	
+	val Vm:Long;
+	val Vn:Long;// = 100000;
+	val Wn:Long = 10;	
 	// ------GNNMF parameters------
 	public val iteration:Int;
 	val nzDensity:Double;
@@ -63,7 +52,7 @@ public class GNNMF {
 	var tt:Long = 0;
 	var t1:Long = 0;
 
-	public def this(d:Int, nv:Int, nz:Double, i:Int) {
+	public def this(d:Long, nv:Long, nz:Double, i:Int) {
 		Vm = d; Vn =nv;
 		nzDensity=nz;
 		iteration = i;
@@ -162,9 +151,8 @@ public class GNNMF {
 	}
 
 	public def run() : void {
-
 		/* Timing */ val st = Timer.milliTime();
-		for (var i:Int =0; i<iteration; i++) {
+		for (var i:Long =0; i<iteration; i++) {
 			comp_WV_WWH();
 			/* Timing */ t1 += Timer.milliTime() - st;
 			comp_VH_WHH();
@@ -173,14 +161,13 @@ public class GNNMF {
 	}
 
 	public def verifyRun() : void {
-		
 		Debug.flushln("Prepare verification process\n");
 		//V.print("Input V:");
 		//H.print("Input H:");
 		//W.print("Input W:");
 		val seq = new SeqGNNMF(V, H, W, iteration);
-		//------------------------------------------
-		for (var i:Int =0; i<iteration; i++) {
+
+		for (var i:Long =0; i<iteration; i++) {
 			Debug.flushln("Iteration "+i+" start parallel computing H");
 			comp_WV_WWH();
 			seq.comp_WV_WWH();
@@ -190,31 +177,25 @@ public class GNNMF {
 			comp_VH_WHH();
 			seq.comp_VH_WHH();
 			if (!seq.verifyW(W)) break;
-
 		}
-		//------------------------------------------
 	}
 	
 	public def printTiming() : void {
-		//
 		var tcalc:Long = 0;
-		//
 		tcalc += WV.getCalcTime();  // (W^t * V) and (WV / WWH)
 		tcalc += WW.getCalcTime();  // (W^t * W ) time
 		tcalc += WWH.getCalcTime(); // (WW * H) 
 		tcalc += H.getCalcTime();   // (H . WV)
-		//
+
 		tcalc += HH.getCalcTime();  // (H * H^t)
 		tcalc += WHH.getCalcTime(); // (W * HH)
 		tcalc += VH.getCalcTime();  // (V * H^t) and (VH / WHH)
 		tcalc += W.getCalcTime();   // (W . VH)
-		//
-		//---------
+
 		var tcomm:Long = 0;
 		tcomm += WV.getCommTime();  // (W^t * V) all reduce sum time
 		tcomm += WW.getCommTime();  // (W^t * W) all reduce sum time
 		tcomm += H.getCommTime();   // H initial bcast
-		//
 
 		Console.OUT.printf("Total time:    %dms, Calc: %dms, Comm:  %dms\n",
 						   tt, tcalc, tcomm);
@@ -230,7 +211,5 @@ public class GNNMF {
 		Console.OUT.printf("One time H bcast: %d\n", H.getCommTime());		
 		
 		Console.OUT.flush();
-		
-
 	}
 }

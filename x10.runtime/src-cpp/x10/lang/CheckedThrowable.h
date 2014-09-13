@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef X10_LANG_CHECKED_THROWABLE_H
@@ -17,12 +17,14 @@
 #include <x10/lang/X10Class.h>
 
 namespace x10 { namespace io { class Printer; } }
-namespace x10 { namespace array { template <class T> class Array; } }
 
 namespace x10 {
     namespace lang {
 
         class String;
+        class Exception;
+        
+        template <class T> class Rail;
 
         class CheckedThrowable : public X10Class {
         public:
@@ -42,7 +44,7 @@ namespace x10 {
 
             // Computing the human-readable form of the backtrace is expensive.
             // Once we do it, keep it around for future use.
-            x10::array::Array<x10::lang::String*>* FMGL(cachedStackTrace);
+            ::x10::lang::Rail< ::x10::lang::String*>* FMGL(cachedStackTrace);
             
             static CheckedThrowable* _make();
             static CheckedThrowable* _make(String* message);
@@ -64,22 +66,23 @@ namespace x10 {
             CheckedThrowable* _constructor(String* message, CheckedThrowable* cause);
 
             virtual String* getMessage() { return FMGL(message); }
-            virtual CheckedThrowable* getCause() { return FMGL(cause); }
+            virtual CheckedThrowable* getCheckedCause() { return FMGL(cause); }
+            virtual Exception* getCause();
             virtual String* toString();
             virtual CheckedThrowable* fillInStackTrace();
-            virtual x10::array::Array<String*>* getStackTrace();
+            virtual ::x10::lang::Rail<String*>* getStackTrace();
             virtual void printStackTrace();
-            virtual void printStackTrace(x10::io::Printer*);
+            virtual void printStackTrace(::x10::io::Printer*);
             
-            static const x10aux::serialization_id_t _serialization_id;
+            static const ::x10aux::serialization_id_t _serialization_id;
 
-            virtual x10aux::serialization_id_t _get_serialization_id() { return _serialization_id; };
+            virtual ::x10aux::serialization_id_t _get_serialization_id() { return _serialization_id; };
 
-            virtual void _serialize_body(x10aux::serialization_buffer &buf);
+            virtual void _serialize_body(::x10aux::serialization_buffer &buf);
 
-            static Reference* _deserializer(x10aux::deserialization_buffer &buf);
+            static Reference* _deserializer(::x10aux::deserialization_buffer &buf);
 
-            void _deserialize_body(x10aux::deserialization_buffer &buf);
+            void _deserialize_body(::x10aux::deserialization_buffer &buf);
         };
     }
 }

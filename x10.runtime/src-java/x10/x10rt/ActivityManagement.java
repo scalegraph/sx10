@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.x10rt;
@@ -18,7 +18,7 @@ public class ActivityManagement {
     public static FinishState activityCreationBookkeeping() {
         FinishState fs = x10.lang.Runtime.activity().finishState();
         fs.notifySubActivitySpawn(x10.lang.Runtime.home());
-        fs.notifyActivityCreation();
+        fs.notifyActivityCreation$O(x10.lang.Runtime.home());
         return fs;
     }
 

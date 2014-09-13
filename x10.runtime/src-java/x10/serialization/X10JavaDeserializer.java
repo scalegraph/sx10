@@ -6,43 +6,90 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2012.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.serialization;
 
-import java.io.DataInput;
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.lang.reflect.Array;
-import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 
+import x10.core.Rail;
+import x10.io.SerializationException;
 import x10.rtt.Types;
 import x10.runtime.impl.java.Runtime;
+import x10.serialization.DeserializationDictionary.LocalDeserializationDictionary;
 
 public final class X10JavaDeserializer implements SerializationConstants {
         
     // When a Object is deserialized record its position
-    private List<Object> objectList;
-    DataInputStream in;
+    private final ArrayList<Object> objectList = new ArrayList<Object>();
     private int counter = 0;
     
-    private DeserializationDictionary dict; 
+    protected DataInputStream in;
+    protected LocalDeserializationDictionary dict; 
+    
+    private void init(DataInputStream in) {
+        this.in = in;
+        dict = new LocalDeserializationDictionary(SharedDictionaries.getDeserializationDictionary());
+    }
+    
+    private void init(X10JavaSerializer js) {
+        in = new DataInputStream(new ByteArrayInputStream(js.getDataBytes()));
+        dict = new LocalDeserializationDictionary(js.idDictionary, SharedDictionaries.getDeserializationDictionary());
+    }
     
     public X10JavaDeserializer(DataInputStream in) {
-        this.in = in;
-        objectList = new ArrayList<Object>();
-        dict = new DeserializationDictionary(this);
+        init(in);
     }
+        
+    /**
+     * Specialized constructor for use by deep copy. 
+     * As much as possible, attempt to streamline the movement of serialized data when staying in the same place.
+     * @param js
+     */
+    public X10JavaDeserializer(X10JavaSerializer js) throws IOException {
+        init(js);
+    }
+    
 
-    public DataInput getInpForHadoop() {
-        return in;
+    /*
+     * Constructor/init for usage as the backing @NativeClass for x10.io.Deserializer
+     */
+    public X10JavaDeserializer(System[] ignored) {
+        // for use by generated code; $init methods will set instance fields
+    }
+    public X10JavaDeserializer x10$serialization$X10JavaDeserializer$$init$S(Rail<x10.core.Byte> data,
+                                                                             x10.io.Deserializer.__0$1x10$lang$Byte$2 ignored) {
+        init(new DataInputStream(new ByteArrayInputStream(data.getByteArray())));
+        return this;
+    }    
+    public X10JavaDeserializer x10$serialization$X10JavaDeserializer$$init$S(x10.io.Serializer xjs) {
+        init(xjs.__NATIVE_FIELD__);
+        return this;
+    }
+    
+    public X10JavaDeserializer x10$serialization$X10JavaDeserializer$$init$S(x10.io.InputStreamReader is) {
+        init(new DataInputStream(is.stream().getJavaInputStream()));
+        return this;
+    }
+        
+    public Object readAny() {
+        try {
+            return readObject();
+        } catch (SerializationException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw e; // don't wrap
+        } catch (Throwable e) {
+            throw new SerializationException(e);
+        }
     }
     
     public int record_reference(Object obj) {
@@ -56,6 +103,10 @@ public final class X10JavaDeserializer implements SerializationConstants {
     }
 
     public void update_reference(int pos, Object obj) {
+        if (Runtime.TRACE_SER) {
+            String className = obj == null ? "null" : obj.getClass().getName();
+            Runtime.printTraceMessage("\t\tUpdated reference of type " + Runtime.ANSI_CYAN + Runtime.ANSI_BOLD + className + Runtime.ANSI_RESET + " at " + pos + " (absolute) in map");
+        }
         objectList.set(pos, obj);
     }
 
@@ -70,14 +121,42 @@ public final class X10JavaDeserializer implements SerializationConstants {
     public Class<?> getClassForID(short sid) {
         return dict.getClassForID(sid);
     }
+
+    /**
+     * Read the next serialization id that is not DYNAMIC_ID_ID
+     * and return it.  Process all DYNAMIC_ID_ID entries encountered
+     * when caller is expecting a serialization id.
+     * @return the next serializationId that is not DYNAMIC_ID_ID
+     */
+    public short readSerializationId() throws IOException {
+        short sid = in.readShort();
+        while (sid == DYNAMIC_ID_ID) {
+            // A dictionary entry; process it and keep looking for the actual sid
+            if (Runtime.TRACE_SER) {
+                Runtime.printTraceMessage("Adding a dynamic serialization id to the dictionary");
+            }
+            dict.deserializeIdAssignment(this);
+            sid = in.readShort();
+        }
+        if (Runtime.TRACE_SER) {
+            Runtime.printTraceMessage("Deserialized a serialization id "+sid);
+        }
+        if (sid == RESET_OBJECT_GRAPH_BOUNDARY_ID) {
+            if (Runtime.TRACE_SER) {
+                Runtime.printTraceMessage("RESETTING OBJECT GRAPH IDS");
+            }
+            objectList.clear();
+            counter = 0;
+            return readSerializationId();
+        }
+        return sid;
+    }    
+
     
     @SuppressWarnings("unchecked")
-    public <T> T readRef() throws IOException {
-        short serializationID = readShort();
-        return (T) readRef(serializationID);
-    }
+    public <T> T readObject() throws IOException {
+        short serializationID = readSerializationId();
 
-    public Object readRef(short serializationID) throws IOException {
         if (serializationID == NULL_ID) {
             if (Runtime.TRACE_SER) {
                 Runtime.printTraceMessage("Deserializing a null reference");
@@ -86,49 +165,15 @@ public final class X10JavaDeserializer implements SerializationConstants {
         }
         
         if (serializationID == REPEATED_OBJECT_ID) {
-            return getObjectAtPosition(readInt());
+            return (T)getObjectAtPosition(readInt());
         }
         
         if (serializationID <= MAX_HARDCODED_ID) {
-            return X10JavaDeserializer.deserializePrimitive(serializationID, this);
+            return (T)deserializeSpecialType(serializationID);
         }
 
         if (serializationID == JAVA_ARRAY_ID) {
-            short componentTypeID = readShort();
-            if (componentTypeID == INTEGER_ID) {
-                return readIntArray();
-            } else if (componentTypeID == DOUBLE_ID) {
-                return readDoubleArray();
-            } else if (componentTypeID == FLOAT_ID) {
-                return readFloatArray();
-            } else if (componentTypeID == BOOLEAN_ID) {
-                return readBooleanArray();
-            } else if (componentTypeID == BYTE_ID) {
-                return readByteArray();
-            } else if (componentTypeID == SHORT_ID) {
-                return readShortArray();
-            } else if (componentTypeID == LONG_ID) {
-                return readLongArray();
-            } else if (componentTypeID == CHARACTER_ID) {
-                return readCharArray();
-            } else if (componentTypeID == STRING_ID) {
-                return readStringArray();
-            } else {
-                Class<?> componentType = getClassForID(componentTypeID);
-                int length = readInt();
-                Object obj = Array.newInstance(componentType, length);
-                record_reference(obj);
-                if (componentType.isArray()) {
-                    for (int i = 0; i < length; ++i) {
-                        Array.set(obj, i, readArrayUsingReflection(componentType));
-                    }
-                } else {
-                    for (int i = 0; i < length; ++i) {
-                        Array.set(obj, i, readRefUsingReflection());
-                    }
-                }
-                return obj;
-            }
+            return (T)deserializeArray();
         }
         
         if (Runtime.TRACE_SER) {
@@ -139,41 +184,110 @@ public final class X10JavaDeserializer implements SerializationConstants {
             Method method = dict.getMethod(serializationID);
             if (method != null) {
                 // A class that implements X10JavaSerializable.  Call _deserialize
-                return method.invoke(null, this);
+                return (T)method.invoke(null, this);
             } else {
                 Class<?> clazz = dict.getClassForID(serializationID);
                 DeserializerThunk dt = DeserializerThunk.getDeserializerThunk(clazz);
                 return dt.deserializeObject(clazz, this);
             }
         } catch (InvocationTargetException e) {
-            // This should never happen
-            throw new RuntimeException("Error in deserializing non-null value with id " + serializationID, e);
-        } catch (SecurityException e) {
-            // This should never happen
-            throw new RuntimeException(e);
-        } catch (IllegalAccessException e) {
-            // This should never happen
-            throw new RuntimeException(e);
-        } catch (NoSuchFieldException e) {
-            // This should never happen
-            throw new RuntimeException(e);
-        } catch (NoSuchMethodException e) {
-            // This should never happen
-            throw new RuntimeException(e);
-        } catch (IllegalArgumentException e) {
-            // This should never happen
-            throw new RuntimeException(e);
-        } catch (InstantiationException e) {
-            // This should never happen
-            throw new RuntimeException(e);
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException) {
+                throw (RuntimeException)cause; // don't wrap
+            } else {
+                throw new SerializationException(cause != null ? cause : e);
+            }
+        } catch (SerializationException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw e; // don't wrap
+        } catch (Throwable e) {
+            throw new SerializationException(e);
         }
     }
 
-    @SuppressWarnings("unchecked")
-    public <T> void readArray(T[] array) throws IOException {
-        int length = array.length;
-        for (int i = 0; i < length; i++) {
-            array[i] = (T) readRef();
+    private Object deserializeArray() throws IOException {
+        if (Runtime.TRACE_SER) {
+            Runtime.printTraceMessage("Deserializing a Java Array");
+        }
+        short componentTypeID = readSerializationId();
+        int length = in.readInt();
+        if (componentTypeID == INTEGER_ID) {
+            int[] v = new int[length];
+            record_reference(v);
+            for (int i = 0; i < length; i++) {
+                v[i] = in.readInt();
+            }
+            return v;
+        } else if (componentTypeID == DOUBLE_ID) {
+            double[] v = new double[length];
+            record_reference(v);
+            for (int i = 0; i < length; i++) {
+                v[i] = in.readDouble();
+            }
+            return v;
+        } else if (componentTypeID == FLOAT_ID) {
+            float[] v = new float[length];
+            record_reference(v);
+            for (int i = 0; i < length; i++) {
+                v[i] = in.readFloat();
+            }
+            return v;
+        } else if (componentTypeID == BOOLEAN_ID) {
+            boolean[] v = new boolean[length];
+            record_reference(v);
+            for (int i = 0; i < length; i++) {
+                v[i] = in.readBoolean();
+            }
+            return v;
+        } else if (componentTypeID == BYTE_ID) {
+            byte[] v = new byte[length];
+            record_reference(v);
+            _readByteArray(length, v);
+            return v;
+        } else if (componentTypeID == SHORT_ID) {
+            short[] v = new short[length];
+            record_reference(v);
+            for (int i = 0; i < length; i++) {
+                v[i] = in.readShort();
+            }
+            return v;
+        } else if (componentTypeID == LONG_ID) {
+            long[] v = new long[length];
+            record_reference(v);
+            for (int i = 0; i < length; i++) {
+                v[i] = in.readLong();
+            }
+            return v;
+        } else if (componentTypeID == CHARACTER_ID) {
+            char[] v = new char[length];
+            record_reference(v);
+            for (int i = 0; i < length; i++) {
+                v[i] = in.readChar();
+            }
+            return v;
+        } else if (componentTypeID == STRING_ID) {
+            String[] v = new String[length];
+            record_reference(v);
+            for (int i = 0; i < length; i++) {
+                v[i] = readString();
+            }
+            return v;
+        } else {
+            Class<?> componentType = getClassForID(componentTypeID);
+            Object obj = Array.newInstance(componentType, length);
+            record_reference(obj);
+            for (int i = 0; i < length; ++i) {
+                Array.set(obj, i, readObject());
+            }
+            return obj;
+        }
+    }
+
+    private void _readByteArray(int length, byte[] v) throws IOException {
+        int read = 0;
+        while (read < length) {
+            read += in.read(v, read, length-read);
         }
     }
 
@@ -181,16 +295,6 @@ public final class X10JavaDeserializer implements SerializationConstants {
         int v = in.readInt();
         if (Runtime.TRACE_SER) {
             Runtime.printTraceMessage("Deserializing [****] an " + Runtime.ANSI_CYAN + "int" + Runtime.ANSI_RESET + ": " + v);
-        }
-        return v;
-    }
-
-    public int[] readIntArray() throws IOException {
-        int length = in.readInt();
-        int[] v = new int[length];
-        record_reference(v);
-        for (int i = 0; i < length; i++) {
-            v[i] = in.readInt();
         }
         return v;
     }
@@ -203,30 +307,10 @@ public final class X10JavaDeserializer implements SerializationConstants {
         return v;
     }
 
-    public boolean[] readBooleanArray() throws IOException {
-        int length = in.readInt();
-        boolean[] v = new boolean[length];
-        record_reference(v);
-        for (int i = 0; i < length; i++) {
-            v[i] = in.readBoolean();
-        }
-        return v;
-    }
-
     public char readChar() throws IOException {
         char v = in.readChar();
         if (Runtime.TRACE_SER) {
             Runtime.printTraceMessage("Deserializing [**] a " + Runtime.ANSI_CYAN + "char" + Runtime.ANSI_RESET + ": " + v);
-        }
-        return v;
-    }
-
-    public char[] readCharArray() throws IOException {
-        int length = in.readInt();
-        char[] v = new char[length];
-        record_reference(v);
-        for (int i = 0; i < length; i++) {
-            v[i] = in.readChar();
         }
         return v;
     }
@@ -239,35 +323,10 @@ public final class X10JavaDeserializer implements SerializationConstants {
         return v;
     }
 
-    public byte[] readByteArray() throws IOException {
-        int length = in.readInt();
-        byte[] v = new byte[length];
-        record_reference(v);
-        _readByteArray(length, v);
-        return v;
-    }
-
-    public void _readByteArray(int length, byte[] v) throws IOException {
-        int read = 0;
-        while (read < length) {
-            read += in.read(v, read, length-read);
-        }
-    }
-
     public short readShort() throws IOException {
         short v = in.readShort();
         if (Runtime.TRACE_SER) {
             Runtime.printTraceMessage("Deserializing [**] a " + Runtime.ANSI_CYAN + "short" + Runtime.ANSI_RESET + ": " + v);
-        }
-        return v;
-    }
-
-    public short[] readShortArray() throws IOException {
-        int length = in.readInt();
-        short[] v = new short[length];
-        record_reference(v);
-        for (int i = 0; i < length; i++) {
-            v[i] = in.readShort();
         }
         return v;
     }
@@ -280,30 +339,10 @@ public final class X10JavaDeserializer implements SerializationConstants {
         return v;
     }
 
-    public long[] readLongArray() throws IOException {
-        int length = in.readInt();
-        long[] v = new long[length];
-        record_reference(v);
-        for (int i = 0; i < length; i++) {
-            v[i] = in.readLong();
-        }
-        return v;
-    }
-
     public double readDouble() throws IOException {
         double v = in.readDouble();
         if (Runtime.TRACE_SER) {
             Runtime.printTraceMessage("Deserializing [********] a " + Runtime.ANSI_CYAN + "double" + Runtime.ANSI_RESET + ": " + v);
-        }
-        return v;
-    }
-
-    public double[] readDoubleArray() throws IOException {
-        int length = in.readInt();
-        double[] v = new double[length];
-        record_reference(v);
-        for (int i = 0; i < length; i++) {
-            v[i] = in.readDouble();
         }
         return v;
     }
@@ -316,18 +355,8 @@ public final class X10JavaDeserializer implements SerializationConstants {
         return v;
     }
 
-    public float[] readFloatArray() throws IOException {
-        int length = in.readInt();
-        float[] v = new float[length];
-        record_reference(v);
-        for (int i = 0; i < length; i++) {
-            v[i] = in.readFloat();
-        }
-        return v;
-    }
-
     public String readString() throws IOException {
-        short serializationID = readShort();
+        short serializationID = readSerializationId();
         if (serializationID == NULL_ID) {
             if (Runtime.TRACE_SER) {
                 Runtime.printTraceMessage("Deserializing a null reference");
@@ -346,211 +375,72 @@ public final class X10JavaDeserializer implements SerializationConstants {
         return str;
     }
 
-    public String readStringValue() throws IOException {
+    String readStringValue() throws IOException {
         int length = readInt();
         byte[] bytes = new byte[length];
         _readByteArray(length, bytes);
         return new String(bytes);
     }
 
-    public String[] readStringArray() throws IOException {
-        int length = in.readInt();
-        String[] v = new String[length];
-        record_reference(v);
-        for (int i = 0; i < length; i++) {
-            v[i] = readString();
-        }
-        return v;
-    }
-
-    public Object readRefUsingReflection() throws IOException {
-        short serializationID = readShort();
-        if (serializationID == NULL_ID) {
-            if (Runtime.TRACE_SER) {
-                Runtime.printTraceMessage("Deserializing a null reference");
-            }
-            return null;
-        }
-        if (serializationID == REPEATED_OBJECT_ID) {
-            return getObjectAtPosition(readInt());
-        }
-        if (serializationID <= MAX_HARDCODED_ID) {
-            return X10JavaDeserializer.deserializePrimitive(serializationID, this);
-        }
-
-        if (Runtime.TRACE_SER) {
-            Runtime.printTraceMessage("Deserializing non-null value with id " + serializationID);
-        }
-        Class<?> clazz = getClassForID(serializationID);
-            
-        try {
-            DeserializerThunk thunk = DeserializerThunk.getDeserializerThunk(clazz);
-            return thunk.deserializeObject(clazz, this);
-        } catch (SecurityException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchFieldException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchMethodException e) {
-            throw new RuntimeException(e);
-        } catch (IllegalArgumentException e) {
-            throw new RuntimeException(e);
-        } catch (IllegalAccessException e) {
-            throw new RuntimeException(e);
-        } catch (InvocationTargetException e) {
-            throw new RuntimeException(e);
-        } catch (InstantiationException e) {
-            throw new RuntimeException(e);
-        }
-    }
-    
     // This method is called from generated code when an X10 class has a Java superclass.
-    public <T> Object deserializeClassUsingReflection(Class<? extends Object> clazz, T obj, int i) throws IOException {
+    // It continues the deserialization of an objects fields starting from the argument class.
+    public <T> Object deserializeFieldsStartingFromClass(Class<? extends Object> clazz, T obj, int i) throws IOException {
         try {
             DeserializerThunk thunk = DeserializerThunk.getDeserializerThunk(clazz);
             return thunk.deserializeObject(clazz, obj, i, this);
-        } catch (SecurityException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchFieldException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchMethodException e) {
-            throw new RuntimeException(e);
-        } catch (IllegalArgumentException e) {
-            throw new RuntimeException(e);
-        } catch (IllegalAccessException e) {
-            throw new RuntimeException(e);
-        } catch (InvocationTargetException e) {
-            throw new RuntimeException(e);
-        } catch (InstantiationException e) {
-            throw new RuntimeException(e);
+        } catch (SerializationException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw e; // don't wrap
+        } catch (Throwable e) {
+            throw new SerializationException(e);
         }
     }
     
-    <T> void readPrimitiveUsingReflection(Field field, T obj) throws IOException, IllegalAccessException {
-        Class<?> type = field.getType();
-        if ("int".equals(type.getName())) {
-            field.setInt(obj, readInt());
-        } else if ("double".equals(type.getName())) {
-            field.setDouble(obj, readDouble());
-        } else if ("float".equals(type.getName())) {
-            field.setFloat(obj, readFloat());
-        } else if ("boolean".equals(type.getName())) {
-            field.setBoolean(obj, readBoolean());
-        } else if ("byte".equals(type.getName())) {
-            field.setByte(obj, readByte());
-        } else if ("short".equals(type.getName())) {
-            field.setShort(obj, readShort());
-        } else if ("long".equals(type.getName())) {
-            field.setLong(obj, readLong());
-        } else if ("char".equals(type.getName())) {
-            field.setChar(obj, readChar());
-        }
-    }
-
-    public Object readArrayUsingReflection(Class<?> componentType) throws IOException {
-        short serializationID = readShort();
-        if (serializationID == NULL_ID) {
-            if (Runtime.TRACE_SER) {
-                Runtime.printTraceMessage("Deserializing a null array");
-            }
-            return null;
-        }
-        if (serializationID == REPEATED_OBJECT_ID) {
-            return getObjectAtPosition(readInt());
-        }
-        if (componentType.isPrimitive()) {
-            if ("int".equals(componentType.getName())) {
-                return readIntArray();
-            } else if ("double".equals(componentType.getName())) {
-                return readDoubleArray();
-            } else if ("float".equals(componentType.getName())) {
-                return readFloatArray();
-            } else if ("boolean".equals(componentType.getName())) {
-                return readBooleanArray();
-            } else if ("byte".equals(componentType.getName())) {
-                return readByteArray();
-            } else if ("short".equals(componentType.getName())) {
-                return readShortArray();
-            } else if ("long".equals(componentType.getName())) {
-                return readLongArray();
-            } else if ("char".equals(componentType.getName())) {
-                return readCharArray();
-            }
-        } else if ("java.lang.String".equals(componentType.getName())) {
-            return readStringArray();
-        } else {
-            int length = readInt();
-            Object o = Array.newInstance(componentType, length);
-            record_reference(o);
-            if (componentType.isArray()) {
-                for (int i = 0; i < length; i++) {
-                    Array.set(o, i, readArrayUsingReflection(componentType));
-                }
-            } else {
-                for (int i = 0; i < length; i++) {
-                    Array.set(o, i, readRefUsingReflection());
-                }
-            }
-            return o;
-        }
-        return null;
-    }
-
-    String readStringUsingReflection() throws IOException {
-        return readString();
-    }
-
     // Read an object using java serialization. 
-    // This is used by IMC to optimize the serialization of primitive arrays
+    // This is used to optimize the serialization of primitive arrays
     public Object readUsingObjectInputStream() throws IOException {
         ObjectInputStream ois = new ObjectInputStream(this.in);
         try {
             return ois.readObject();
         } catch (ClassNotFoundException e) {
-            throw new RuntimeException(e);
+            throw new SerializationException(e);
         }
     }
     
-    public static Object deserializePrimitive(short serializationID, X10JavaDeserializer deserializer) throws IOException {
+    private Object deserializeSpecialType(short serializationID) throws IOException {
         if (Runtime.TRACE_SER) {
             Runtime.printTraceMessage("Deserializing primitive/special value with id " + serializationID);
         }
         Object obj = null;
         switch (serializationID) {
             case STRING_ID:
-                obj = deserializer.readStringValue();
-                deserializer.record_reference(obj); // TODO: consider avoid recording this as a reference; it can't be cyclic.
+                obj = readStringValue();
+                record_reference(obj); // Preserve reference identity of Strings
                 break;
             case FLOAT_ID:
-                obj = deserializer.readFloat();
-                deserializer.record_reference(obj); // TODO: consider avoid recording this as a reference; it can't be cyclic.
+                obj = readFloat();
                 break;
             case DOUBLE_ID:
-                obj = deserializer.readDouble();
-                deserializer.record_reference(obj); // TODO: consider avoid recording this as a reference; it can't be cyclic.
+                obj = readDouble();
                 break;
             case INTEGER_ID:
-                obj = deserializer.readInt();
-                deserializer.record_reference(obj); // TODO: consider avoid recording this as a reference; it can't be cyclic.
+                obj = readInt();
                 break;
             case BOOLEAN_ID:
-                obj = deserializer.readBoolean();
-                deserializer.record_reference(obj); // TODO: consider avoid recording this as a reference; it can't be cyclic.
+                obj = readBoolean();
                 break;
             case BYTE_ID:
-                obj = deserializer.readByte();
-                deserializer.record_reference(obj); // TODO: consider avoid recording this as a reference; it can't be cyclic.
+                obj = readByte();
                 break;
             case SHORT_ID:
-                obj = deserializer.readShort();
-                deserializer.record_reference(obj); // TODO: consider avoid recording this as a reference; it can't be cyclic.
-                break;
+                obj = readShort();
+                 break;
             case CHARACTER_ID:
-                obj = deserializer.readChar();
-                deserializer.record_reference(obj); // TODO: consider avoid recording this as a reference; it can't be cyclic.
+                obj = readChar();
                 break;
             case LONG_ID:
-                obj = deserializer.readLong();
-                deserializer.record_reference(obj); // TODO: consider avoid recording this as a reference; it can't be cyclic.
+                obj = readLong();
                 break;
             case RTT_ANY_ID:
                 obj = Types.ANY;
@@ -595,8 +485,15 @@ public final class X10JavaDeserializer implements SerializationConstants {
                 obj = Types.USHORT;
                 break;
             default:
-                throw new RuntimeException("Unhandled hard-wired serialization id in readPrimitive!");    
+                String msg = "Unhandled hard-wired serialization id in readPrimitive!";
+                System.err.println(msg);
+                throw new SerializationException(msg);    
         }
         return obj;
+    }
+    
+    public static void raiseSerializationProtocolError() {
+        Runtime.printTraceMessage("Protocol error in custom deserialization; raising exception");
+        throw new SerializationException("CustomSerialization protocol error");
     }
 }

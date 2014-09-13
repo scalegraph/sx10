@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #include <x10aux/reference_logger.h>
@@ -24,8 +24,7 @@ ReferenceLogger *x10aux::ReferenceLogger::it;
 
 ReferenceLogger::ReferenceLogger() {
     _lock = new (alloc<reentrant_lock>())reentrant_lock();
-    _buckets = x10aux::alloc<Bucket*>(NUM_BUCKETS*sizeof(Bucket*));
-    memset(_buckets, 0, NUM_BUCKETS*sizeof(Bucket*));
+    _buckets = x10aux::alloc_z<Bucket*>(NUM_BUCKETS*sizeof(Bucket*));
 }
 
 ReferenceLogger* ReferenceLogger::initMe() {

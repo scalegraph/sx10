@@ -6,14 +6,14 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2012.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.serialization;
 
-import java.lang.reflect.Method;
-
 import x10.runtime.impl.java.Runtime;
+import x10.serialization.DeserializationDictionary.MasterDeserializationDictionary;
+import x10.serialization.SerializationDictionary.MasterSerializationDictionary;
 
 /**
  * Commonly serialized types whose serialization ids are
@@ -23,23 +23,44 @@ import x10.runtime.impl.java.Runtime;
  * We start with an initial set of built-in types, that are extensible 
  * by the user on the command line by setting the property x10.ADDITIONAL_SHARED_TYPES.  
  * 
- * TODO: Future work:
- * The design is intended to support future dynamic optimization where the 
- * serialization subsystem can use profiling to identify commonly 
- * serialized types and use a multi-phase protocol to promote such
- * types into the shared dictionary.
+ * As the program executes, new shared ids are assigned dynamically to frequently
+ * serialized types.
  */
-class SharedDictionaries {
+class SharedDictionaries implements SerializationConstants {
     
     private static boolean initialized = false;
-    private static SerializationDictionary serializationDict;
-    private static DeserializationDictionary deserializationDict;    
+    private static final MasterSerializationDictionary serializationDict = new MasterSerializationDictionary();
+    private static final MasterDeserializationDictionary deserializationDict = new MasterDeserializationDictionary();
+    
+    private static short nextSharedId = FIRST_SHARED_ID;
    
     private static synchronized void doInitialization() {
         if (initialized) return;
         
-        serializationDict = new SerializationDictionary(SerializationConstants.FIRST_SHARED_ID);
-        deserializationDict = new DeserializationDictionary();
+        // To simplify lookup in X10JavaSerializer, injecting mappings 
+        // for all special serialization IDs here.
+        serializationDict.addEntry(java.lang.String.class, STRING_ID);
+        serializationDict.addEntry(java.lang.Float.class, FLOAT_ID);
+        serializationDict.addEntry(java.lang.Double.class, DOUBLE_ID);
+        serializationDict.addEntry(java.lang.Integer.class, INTEGER_ID);
+        serializationDict.addEntry(java.lang.Boolean.class, BOOLEAN_ID);
+        serializationDict.addEntry(java.lang.Byte.class, BYTE_ID);
+        serializationDict.addEntry(java.lang.Short.class, SHORT_ID);
+        serializationDict.addEntry(java.lang.Long.class, LONG_ID);
+        serializationDict.addEntry(java.lang.Character.class, CHARACTER_ID);
+        serializationDict.addEntry(x10.rtt.AnyType.class, RTT_ANY_ID);
+        serializationDict.addEntry(x10.rtt.BooleanType.class, RTT_BOOLEAN_ID);
+        serializationDict.addEntry(x10.rtt.ByteType.class, RTT_BYTE_ID);
+        serializationDict.addEntry(x10.rtt.CharType.class, RTT_CHAR_ID);
+        serializationDict.addEntry(x10.rtt.DoubleType.class, RTT_DOUBLE_ID);
+        serializationDict.addEntry(x10.rtt.FloatType.class, RTT_FLOAT_ID);
+        serializationDict.addEntry(x10.rtt.IntType.class, RTT_INT_ID);
+        serializationDict.addEntry(x10.rtt.LongType.class, RTT_LONG_ID);
+        serializationDict.addEntry(x10.rtt.ShortType.class, RTT_SHORT_ID);
+        serializationDict.addEntry(x10.rtt.UByteType.class, RTT_UBYTE_ID);
+        serializationDict.addEntry(x10.rtt.UIntType.class, RTT_UINT_ID);
+        serializationDict.addEntry(x10.rtt.ULongType.class, RTT_ULONG_ID);
+        serializationDict.addEntry(x10.rtt.UShortType.class, RTT_USHORT_ID);
         
         String[] builtInTypes = new String[] {
                 /* Core class library: x10.lang */
@@ -49,27 +70,26 @@ class SharedDictionaries {
                 /* "x10.lang.GlobalRef",  */           // TODO: @NativeRep to x10.core.GlobalRef
                 "x10.lang.PlaceLocalHandle",
                 "x10.lang.Place",
+                "x10.lang.Point",
+                /* "x10.lang.Rail", */                 // TODO: @NativeRep to x10.core.Rail
 
                 /* XRX: core implementation classes */
                 "x10.lang.FinishState",
                 "x10.lang.FinishState$Finish",
                 "x10.lang.Runtime$RemoteControl",
                 
-                /* Core class library: x10.array */
-                "x10.array.Array",
-                "x10.array.DistArray",
-                "x10.array.DistArray$LocalState",
-                "x10.array.Point",
-                "x10.array.RectRegion1D",
-                "x10.array.RemoteArray",
+                /* Core class library: x10.regionarray */
+                "x10.regionarray.Array",
+                "x10.regionarray.DistArray",
+                "x10.regionarray.DistArray$LocalState",
+                "x10.regionarray.RectRegion1D",
+                "x10.regionarray.RemoteArray",
                
                 /* Core class library: x10.io */
                 "x10.io.SerialData",
                 
                 /* Core class library: x10.util */
-                /* "x10.util.IndexedMemoryChunk", */       // TODO: @NativeRep to x10.core.IndexedMemoryChunk
                 "x10.util.Pair",
-                /* "x10.util.RemoteIndexedMemoryChunk", */ // TODO: @NativeRep to x10.core.RemoteIndexedMemoryChunk
                 
                 /* Managed X10 implementation classes */
                 // TODO: For mixed mode, we need to map these to the
@@ -80,11 +100,10 @@ class SharedDictionaries {
                 "x10.core.Double",
                 "x10.core.Float",
                 "x10.core.GlobalRef",
-                "x10.core.IndexedMemoryChunk",
                 "x10.core.Int",
                 "x10.core.Long",
                 "x10.core.PlaceLocalHandle",
-                "x10.core.RemoteIndexedMemoryChunk",
+                "x10.core.Rail",
                 "x10.core.Short",
                 "x10.core.UByte",
                 "x10.core.UInt",
@@ -140,25 +159,36 @@ class SharedDictionaries {
         };
         
         for (String type : builtInTypes) {
-            processType(type);
+            assignIdToType(type, nextSharedId++);
         }
         
         String userTypeProp = System.getProperty("x10.ADDITIONAL_SHARED_TYPES");
         if (userTypeProp != null) {
             String[] userTypes = userTypeProp.split(":");
             for (String type : userTypes) {
-                processType(type);
+                assignIdToType(type, nextSharedId++);
             }
         }
         
         initialized = true;
     }
 
-    private static void processType(String type) {
+    static SerializationDictionary getSerializationDictionary() {
+        if (!initialized) doInitialization();
+        return serializationDict;
+    }
+    
+    static DeserializationDictionary getDeserializationDictionary() {
+        if (!initialized) doInitialization();
+        return deserializationDict;
+    }
+
+    private static void assignIdToType(String type, short id) {
         try {
+            // Note: all shared types should be found in classpath and thus Class.forName should work. 
             Class <?> clazz = Class.forName(type);
-            short id = serializationDict.getSerializationId(clazz, null, true);
-            assert id < SerializationConstants.FIRST_DYNAMIC_ID : "Not enough shared seraialization ids reserved!";
+            assert id < SerializationConstants.FIRST_DYNAMIC_ID : "Not enough shared serialization ids reserved!";
+            serializationDict.addEntry(clazz, id);
             deserializationDict.addEntry(id, type);
             if (Runtime.TRACE_SER) {
                 Runtime.printTraceMessage("Assigned shared serialization id "+id+" to "+type);
@@ -168,22 +198,5 @@ class SharedDictionaries {
                 Runtime.printTraceMessage("Unable to load common type "+type+". It will not have a preassigned id");
             }
         }
-    }
-    
-    static short getSerializationId(Class<?> clazz, Object obj) {
-        if (!initialized) doInitialization();
-        return serializationDict.getSerializationId(clazz, obj, false);
-    }
-    
-    static Class<?> getClassForID(short sid) {
-        if (!initialized) doInitialization();
-        assert SerializationConstants.FIRST_SHARED_ID <= sid && sid < SerializationConstants.FIRST_DYNAMIC_ID;
-        return deserializationDict.getClassForID(sid);
-    }
-    
-    static Method getMethod(short sid) {
-        if (!initialized) doInitialization();
-        assert SerializationConstants.FIRST_SHARED_ID <= sid && sid < SerializationConstants.FIRST_DYNAMIC_ID;
-        return deserializationDict.getMethod(sid);
     }
 }

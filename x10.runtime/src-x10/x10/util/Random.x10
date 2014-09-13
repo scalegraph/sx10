@@ -6,53 +6,68 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.util;
 import x10.compiler.NonEscaping;
 
-/** Random number generator. */
+/** 
+ * Generate pseudo-random numbers.
+ *
+ * The underlying pseudo-random bit stream is generated 
+ * using the Mersenne Twister as described in the paper:
+ *   M. Matsumoto and T. Nishimura, "Mersenne Twister: A 623-dimensionally
+ *   equidistributed uniform pseudorandom number generator", ACM Trans. on
+ *   Modeling and Computer Simulation, 8(1), January, pp. 3--30 (1998)
+ */
 public class Random {
+    private static val N = 624;
+    private static val M = 397;
+
+    private var index:Long;
+    private val mt:Rail[Int]{self!=null,self.size==N};
+
     public def this() {
-        this(Timer.milliTime());
+        this(System.nanoTime());
+    }
+
+    public def this(seed:Long) {
+        mt = Unsafe.allocRailUninitialized[Int](N); // No need to zero; initialized by init
+        init(seed);
     }
     
-    public def this(seed: Long) {
-        setSeed(seed);
-    }
-    
-    @NonEscaping public final def setSeed(seed: Long): void {
+    public final def setSeed(seed:Long):void {
         init(seed);
     }
      
     /** Return a 32-bit random integer */
-    public def nextInt(): Int = random();
+    public def nextInt():Int = random();
 
     /** Return a 32-bit random integer in the range 0 to maxPlus1-1
      * when maxPlus1 > 0. Return 0 if maxPlus1 <= 0 instead of throwing 
      * an IllegalArgumentException, to simplify user code.
      */
-    public def nextInt(maxPlus1: int): int {
-        if (maxPlus1 <= 0)
-            return 0;
+    public def nextInt(maxPlus1:Int):Int {
+        if (maxPlus1 <= 0n)
+            return 0n;
         
-        var n: int = maxPlus1;
+        var n:Int = maxPlus1;
 
         if ((n & -n) == n) {
             // If a power of 2, just mask nextInt
-            return nextInt() & (n-1);
+            return nextInt() & (n-1n);
         }
 
-        var mask: int = 1;
-        while ((n & ~mask) != 0) {
-            mask <<= 1;
-            mask |= 1;
+        var mask:Int = 1n;
+        while ((n & ~mask) != 0n) {
+            mask <<= 1n;
+            mask |= 1n;
         }
 
         // Keep generating numbers of the right size until we get
         // one in range.  The expected number of iterations is 2.
-        var x: int;
+        var x:Int;
 
         do {
             x = nextInt() & mask;
@@ -61,43 +76,43 @@ public class Random {
         return x;
     }
 
-    public def nextBytes(buf: Rail[Byte]): void {
-        var i: int = 0;
+    public def nextBytes(buf:Rail[Byte]):void {
+        var i:Int = 0n;
         while (true) {
-            var x: int = nextInt();
-            for (var j: int = 0; j < 4; j++) {
+            var x:Int = nextInt();
+            for (var j:Int = 0n; j < 4n; j++) {
                 if (i >= buf.size)
                     return;
                 buf(i) = (x & 0xff) as Byte;
                 i++;
-                x >>= 8;
+                x >>= 8n;
             }
         }
     }
      
-    /** Return a 64-bit random (long) integer */
-    public def nextLong(): long = ((nextInt() as Long) << 32) | (nextInt() & 0xFFFFFFFFL);
+    /** Return a 64-bit random (Long) integer */
+    public def nextLong():Long = ((nextInt() as Long) << 32n) | (nextInt() & 0xFFFFFFFFL);
 
-    public def nextLong(maxPlus1: long): long {
-        if (maxPlus1 <= 0)
-            return 0L;
+    public def nextLong(maxPlus1:Long):Long {
+        if (maxPlus1 <= 0n)
+            return 0;
         
-        var n: long = maxPlus1;
+        var n:Long = maxPlus1;
 
         if ((n & -n) == n) {
             // If a power of 2, just mask nextInt
             return nextLong() & (n-1);
         }
 
-        var mask: long = 1L;
-        while ((n & ~mask) != 0L) {
-            mask <<= 1;
-            mask |= 1L;
+        var mask:Long = 1;
+        while ((n & ~mask) != 0) {
+            mask <<= 1n;
+            mask |= 1;
         }
 
         // Keep generating numbers of the right size until we get
         // one in range.  The expected number of iterations is 2.
-        var x: long;
+        var x:Long;
 
         do {
             x = nextLong() & mask;
@@ -107,16 +122,16 @@ public class Random {
     }
 
     /** Return a random boolean. */
-    public def nextBoolean(): boolean = nextInt() < 0;
+    public def nextBoolean():Boolean = nextInt() < 0n;
 
     /** Return a random float between 0.0f and 1.0f. */
-    public def nextFloat(): float = (nextInt() >>> (32-24)) / ((1<<24) as Float);
+    public def nextFloat():Float = (nextInt() >>> (32n-24n)) / ((1<<24n) as Float);
 
     /** Return a random double between 0.0 and 1.0. */
-    public def nextDouble(): double = (nextLong() >>> (64-53)) / ((1L<<53) as Double);
+    public def nextDouble():Double = (nextLong() >>> (64n-53n)) / ((1<<53n) as Double);
 
 /*
- * Mersenne twister.
+ * Mersenne twister implementation.
  *
  * Based on the public domain implementation by Michael Brundage at:
  *
@@ -131,59 +146,47 @@ public class Random {
  * Modeling and Computer Simulation, 8(1), January, pp. 3--30 (1998)
  */
 
-    private static N: int = 624;
-    private static M: int = 397;
+    @NonEscaping public final def init(seed:Long):void {
+	// If provided seed was 0, use 4357 instead.
+        mt(0) = seed == 0 ? 4357n : (seed as Int);
 
-    private var index: int;
-    private var MT: Rail[int];
-
-    @NonEscaping public final def init(seed: long): void {
-        val mt = new Rail[int](N);
-        MT=mt;
-        // Ensure the seed is nonzero.
-        if (seed == 0L) {
-            init(4357L);
-            return;
-        }
-
-        // Set the initial buffer using a PRNG from
+        // Set the initial mt buffer using a PRNG from
         // Knuth, vol 2, 2nd ed, p. 102
-        mt(0) = (seed as Long) as Int;
-        for (var i: int = 1; i < N; i++) {
-            mt(i) = (69069L * mt(i-1) + 1) as Int;
+        for (i in 1..(N-1)) {
+            mt(i) = 69069n * mt(i-1) + 1n;
         }
 
         // make sure we twist once.
         index = 0;
-        twist(mt);
+        twist();
     }
 
-    public def random(): int {
+    public def random():Int {
         if (index == N) {
             index = 0;
-            twist(MT);
+            twist();
         }
-        var y:Int = MT(index++);
-        y ^= (y >>> 11);
-        y ^= (y <<  7) & 0x9D2C5680;
-        y ^= (y << 15) & 0xEFC60000;
-        y ^= (y >>> 18);
+        var y:Int = mt(index++);
+        y ^= (y >>> 11n);
+        y ^= (y <<  7n) & 0x9D2C5680n;
+        y ^= (y << 15n) & 0xEFC60000n;
+        y ^= (y >>> 18n);
         return y;
     }
 
-    private static def twist(MT:Rail[int]): void {
-        var i: int = 0;
-        var s: int;
+    private def twist():void {
+        var i:Long = 0;
+        var s:Int;
         for (; i < N - M; i++) {
-            s = (MT(i) & 0x80000000) | (MT(i+1) & 0x7FFFFFFF);
-            MT(i) = MT(i+M) ^ (s >>> 1) ^ ((s & 1) * 0x9908B0DF);
+            s = (mt(i) & 0x80000000n) | (mt(i+1) & 0x7FFFFFFFn);
+            mt(i) = mt(i+M) ^ (s >>> 1n) ^ ((s & 1n) * 0x9908B0DFn);
         }
         for (; i < N-1; i++) {
-            s = (MT(i) & 0x80000000) | (MT(i+1) & 0x7FFFFFFF);
-            MT(i) = MT(i-(N-M)) ^ (s >>> 1) ^ ((s & 1) * 0x9908B0DF);
+            s = (mt(i) & 0x80000000n) | (mt(i+1) & 0x7FFFFFFFn);
+            mt(i) = mt(i-(N-M)) ^ (s >>> 1n) ^ ((s & 1n) * 0x9908B0DFn);
         }
     
-        s = (MT(N-1) & 0x80000000) | (MT(0) & 0x7FFFFFFF);
-        MT(N-1) = MT(M-1) ^ (s >>> 1) ^ ((s & 1) * 0x9908B0DF);
+        s = (mt(N-1) & 0x80000000n) | (mt(0) & 0x7FFFFFFFn);
+        mt(N-1) = mt(M-1) ^ (s >>> 1n) ^ ((s & 1n) * 0x9908B0DFn);
     }
 }

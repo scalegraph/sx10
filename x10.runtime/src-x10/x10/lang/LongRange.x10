@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.lang;
@@ -23,12 +23,7 @@ public struct LongRange(
                /**
                 * The maximum value included in the range
                 */
-               max:Long,
-               
-               /**
-                * Is the range zero-based?
-                */
-               zeroBased: boolean
+               max:Long
 ) implements Iterable[Long] {
 
     /**
@@ -37,10 +32,16 @@ public struct LongRange(
      * @param max the maximum value of the range
      */
     public def this(min:Long, max:Long) {
-        val x = min == 0l;
-        property(min, max, x);
+        property(min, max);
     }
     
+    /**
+     * Coerce a given IntRange to a LongRange.
+     * @param x the given IntRange
+     * @return the given IntRange converted to a LongRange.
+     */
+    public static operator (x:IntRange):LongRange = LongRange(x.min, x.max);
+
     public def toString():String = min+".."+max;
     
     public def equals(that:Any):Boolean {
@@ -51,7 +52,7 @@ public struct LongRange(
         return false;
     }
     
-    public def hashCode():int = (max-min).hashCode();
+    public def hashCode():Int = (max-min).hashCode();
     
     public def iterator():Iterator[Long] {
         return new LongRangeIt(min, max);

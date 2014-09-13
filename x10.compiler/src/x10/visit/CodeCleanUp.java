@@ -18,17 +18,20 @@ import java.util.Map;
 
 import polyglot.ast.Block;
 import polyglot.ast.Branch;
+import polyglot.ast.Empty;
 import polyglot.ast.Eval;
 import polyglot.ast.Expr;
 import polyglot.ast.For;
 import polyglot.ast.Id;
 import polyglot.ast.Labeled;
+import polyglot.ast.Local;
 import polyglot.ast.Node;
 import polyglot.ast.NodeFactory;
 import polyglot.ast.Return;
 import polyglot.ast.Stmt;
 import polyglot.ast.SwitchBlock;
 import polyglot.ast.Throw;
+import polyglot.ast.Try;
 import polyglot.frontend.Job;
 import polyglot.types.Name;
 import polyglot.types.TypeSystem;
@@ -106,6 +109,23 @@ public class CodeCleanUp extends ContextVisitor {
             return sinkEval((StmtExpr)((Eval)n).expr(), n.position());
         }
         
+        if (n instanceof Eval && ((Eval)n).expr() instanceof Local) {
+            return nf.Empty(n.position());
+        }
+        
+        if (n instanceof StmtExpr) {
+            StmtExpr ste = (StmtExpr)n;
+            if (ste.statements().isEmpty()) {
+                // Simplify StmtExpr({}, E) to just E
+                return ste.result();
+            }
+        }
+        
+        if (n instanceof Return && ((Return) n).expr() instanceof StmtExpr) {
+            Block b = sinkReturn((StmtExpr)((Return)n).expr(), n.position());
+            return clean(flattenBlock(b));
+        }
+        
         if (!(n instanceof Block) || n instanceof SwitchBlock) {
             return n;
         }
@@ -141,6 +161,26 @@ public class CodeCleanUp extends ContextVisitor {
         return b;
     }
 
+    //Return(StmtExpr(Block(S), e)) ==> Block(S, return e)
+    private Block sinkReturn(StmtExpr stexp, Position pos) {
+        Block b = nf.Block(pos, stexp.statements());
+        if (!((X10Ext)stexp.ext()).annotations().isEmpty()) {
+            b = (Block)((X10Ext)b.ext()).annotations(((X10Ext)stexp.ext()).annotations());
+        }
+        Expr res = stexp.result();
+        Stmt ret;
+        if (res instanceof StmtExpr) {
+            ret = clean(flattenBlock(sinkReturn((StmtExpr)res, pos)));
+        } else {
+            ret = nf.Return(pos, res);
+        }
+        
+        b = b.append(ret);
+        
+        return b;
+    }
+    
+    
     /**
      * Turns a Block into a list of Stmts.
      **/
@@ -153,8 +193,7 @@ public class CodeCleanUp extends ContextVisitor {
                 boolean innerIsStmtSeq = stmt instanceof StmtSeq;
                 Block inner = (Block) stmt;
                 if ((!bIsStmtSeq || innerIsStmtSeq) && ((X10Ext) inner.ext()).annotations().isEmpty()) {
-                    // Alpha-rename local decls in the block that we're
-                    // flattening.
+                    // Alpha-rename local decls in the block that we're flattening.
                     if (report) System.out.println("Cleaning up a block" + inner.position());
                     if (reportStats) blockCount++;
                     if (!innerIsStmtSeq) inner = (Block) inner.visit(alphaRenamer);
@@ -184,6 +223,12 @@ public class CodeCleanUp extends ContextVisitor {
         // for (Stmt stmt : stl) {
         for (Iterator<Stmt> i = b.statements().iterator(); i.hasNext();) {
             Stmt stmt = i.next();
+            
+            if (stmt instanceof Empty) {
+                // remove empty statements
+                changeMade = true;
+                continue;
+            }
             stmtList.add(stmt);
 
             if (stmt instanceof Branch || stmt instanceof Return || stmt instanceof Throw) {
@@ -212,10 +257,16 @@ public class CodeCleanUp extends ContextVisitor {
             Block block = (Block) stmt;
             List<Stmt> statements = block.statements();
             Stmt last = statements.get(statements.size()-1);
-            if (last != null && last instanceof Branch) {
+            if (last instanceof Branch) {
                 Branch branch = (Branch) last;
-                if (branch.kind() == Branch.BREAK && branch.labelNode() != null && branch.labelNode().id().equals(label))
-                    return true;
+                return branch.kind() == Branch.BREAK && branch.labelNode() != null && branch.labelNode().id().equals(label);
+            } else if (last instanceof Try) {
+                Block tb  = ((Try)last).tryBlock();
+                Stmt inner_last = tb.statements().get(tb.statements().size()-1);
+                if (inner_last instanceof Branch) {
+                    Branch branch = (Branch) inner_last;
+                    return branch.kind() == Branch.BREAK && branch.labelNode() != null && branch.labelNode().id().equals(label);
+                }
             }
         }
         return false;
@@ -224,7 +275,17 @@ public class CodeCleanUp extends ContextVisitor {
     private Block removeBreakLast(Labeled labeled) {
         List<Stmt> osts = ((Block) labeled.statement()).statements();
         List<Stmt> statements = new ArrayList<Stmt>(osts);
-        statements.remove(statements.size() - 1);
+        Stmt last = statements.get(statements.size()-1);
+        if (last instanceof Branch) {
+            statements.remove(statements.size()-1);
+        } else if (last instanceof Try) {
+            Try t = ((Try)last);
+            List<Stmt> old_tbstmts = t.tryBlock().statements();
+            List<Stmt> tbstmts = new ArrayList<Stmt>(old_tbstmts);
+            tbstmts.remove(tbstmts.size()-1);
+            last = t.tryBlock(xnf.Block(((Try)last).tryBlock().position(), tbstmts));
+            statements.set(statements.size()-1, last);
+        }
         return xnf.Block(labeled.position(), statements);
     }
 

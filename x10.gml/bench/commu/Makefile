@@ -6,7 +6,7 @@
 #  You may obtain a copy of the License at
 #      http://www.opensource.org/licenses/eclipse-1.0.php
 #
-#  (C) Copyright IBM Corporation 2006-2011.
+#  (C) Copyright IBM Corporation 2006-2014.
 #
 
 ###################################################
@@ -32,7 +32,7 @@ MAKE=make
 bench_dirs	=placehandle distarray distmatrix
 test_list 	=probsizes nodes  
 
-suite_dirs	= $(foreach bt, $(bench_dirs), $(bt)/test_suite )
+suite_dirs	= $(foreach bt, $(bench_dirs), $(bt) )
 
 ## default settings
 testcase=placehandle
@@ -57,7 +57,7 @@ bench_all	: $(suite_dirs)
 $(suite_dirs)	:
 		@echo "====================================================================================================="
 		@echo "================================== run benchmark test suite in $@  ====================================="
-		$(MAKE) -C $@ bench_all
+		$(MAKE) -C $@ runall
 
 #--------------
 

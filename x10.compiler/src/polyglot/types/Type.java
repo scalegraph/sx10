@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.types;
@@ -257,10 +257,10 @@ public interface Type extends Qualifier, Annotated, Named
     boolean isString();
     
     /**
-     * Return true if the type is IndexedMemoryChunk
+     * Return true if the type is Rail
      */
-    boolean isIndexedMemoryChunk();
-    
+    boolean isRail();
+
     /**
      * Return true if the type is Runtime
      */

@@ -1,37 +1,31 @@
 /*
- *  This file is part of the X10 Applications project.
+ *  This file is part of the X10 project (http://x10-lang.org).
  *
- *  (C) Copyright IBM Corporation 2011.
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2011-2014.
  */
 
 package gnmf;
 
-import x10.io.Console;
 import x10.util.Timer;
-//
+
 import x10.matrix.Debug;
-//
-import x10.matrix.Matrix;
-import x10.matrix.DenseMatrix;
-import x10.matrix.VerifyTools;
-//
 import x10.matrix.block.Grid;
 import x10.matrix.distblock.DistGrid;
 import x10.matrix.distblock.DistMap;
 import x10.matrix.distblock.DistBlockMatrix;
-//
 import x10.matrix.distblock.DupBlockMatrix;
-import x10.matrix.distblock.DistDupMult;
-//
-//import x10.matrix.dist.DistMultDistToDup;
-//import x10.matrix.dist.DistMultDupToDist;
 
 /**
  * Parallel GNNMF implementation is based on GML distributed dense/sparse matrix.
  * Input V, and input-output W and H use grid partitioning, where V and W
  * have the same number of rows and same row partitioning, and
- * W's columns and H's rows are same and share the same partitioning,
- * same as V's columns and H's columns.
+ * W's columns and H's rows are same and share the same partitioning as
+ * V's columns and H's columns.
  * 
  * Input matrix V is partitioned into (rowBsV &#42 colBsV) blocks
  * <p>
@@ -82,18 +76,17 @@ public class GNNMF {
 	var tt:Long = 0;
 	var t1:Long = 0;
 
-
 	public def this(v:DistBlockMatrix, w:DistBlockMatrix(v.M), h:DupBlockMatrix(w.N,v.N), it:Int) {
 		V = v; 
 		W = w as DistBlockMatrix(V.M, wN); 
 		H = h as DupBlockMatrix(W.N,V.N);
 		iteration = it;
-		//-----------------
+
 		Debug.assure(DistGrid.isVertical(v.getGrid(), v.getMap()), 
 		"Input distributed block matrix V does not have vertical distribution");
 		Debug.assure(DistGrid.isVertical(w.getGrid(), w.getMap()), 
 		"Input-output distributed block matrix V does not have vertical distribution");
-		//-----------------
+
 		val gV = V.getGrid();
 		val gW = W.getGrid();
 		val gH = h.getGrid();
@@ -107,7 +100,6 @@ public class GNNMF {
 		//VHt  = DistBlockMatrix.makeDense(V.M, W.N, gV.numRowBlocks, gW.numColBlocks, rowPls, colPls) as DistBlockMatrix(V.M, W.N); // V*H^t
 		//HHt  = DupBlockMatrix.makeDense(H.M, H.M, gH.numRowBlocks, gH.numRowBlocks) as DupBlockMatrix(H.M, H.M); // H * H^t
 		//WHHt = DistBlockMatrix.makeDense(V.M, W.N, gV.numRowBlocks, gW.numColBlocks, rowPls, colPls) as DistBlockMatrix(V.M, W.N);   // W * (H*H^t)
-		//--------------------------------------------------------
 		
 		//This has least overhead in creating matrix, but not compatible if W, V,and H are created in a different way
 		val gridWtV = new Grid(W.N, V.N, gW.colBs, gV.colBs);//captured to all places
@@ -122,22 +114,20 @@ public class GNNMF {
 		HHt  = DupBlockMatrix.makeDense(gridHHt) as DupBlockMatrix(H.M, H.M); // H * H^t
 		val gridWHHt = new Grid(V.M, W.N, gV.rowBs, gW.colBs);
 		WHHt = DistBlockMatrix.makeDense(gridWHHt, V.getMap()) as DistBlockMatrix(V.M, W.N);   // W * (H*H^t)
-		
 	}
 	
 	public static def make(gridV:Grid, gridW:Grid, gridH:Grid, blockMap:DistMap, nzd:Double, it:Int) {
-
 		//------Input matrix data allocation------
 		Debug.flushln("Start memory allocation");
 		Debug.assure(DistGrid.isVertical(gridV, blockMap), "Distribution of block matrix V or W is not vertical");
 		
-		val v = DistBlockMatrix.makeSparse(gridV, blockMap, nzd) as DistBlockMatrix(gridV.M, gridV.N);
-		val w = DistBlockMatrix.makeDense(gridW, blockMap) as DistBlockMatrix(v.M, gridW.N);
-		val h = DupBlockMatrix.makeDense(gridH) as DupBlockMatrix(w.N,v.N);
+		val v = DistBlockMatrix.makeSparse(gridV, blockMap, nzd);
+		val w = DistBlockMatrix.makeDense(gridW, blockMap);
+		val h = DupBlockMatrix.makeDense(gridH);
 		return new GNNMF(v, w, h, it);
 	}
 
-	public static def make(vM:Int, vN:Int, nzd:Double, it:Int, vRowBs:Int, vColBs:Int) {
+	public static def make(vM:Long, vN:Long, nzd:Double, it:Int, vRowBs:Long, vColBs:Long) {
 		//Preset parameters
 		val wColBs = 1;
 		//Vertical distribution
@@ -145,13 +135,11 @@ public class GNNMF {
 		val colPls = 1;
 		//------Input matrix data allocation------
 		Debug.flushln("Start creating input-output matrix and memory allocation");		
-		val v = DistBlockMatrix.makeSparse(vM, vN, vRowBs, vColBs, rowPls, colPls, nzd) as DistBlockMatrix(vM, vN);
-		val w = DistBlockMatrix.makeDense( vM, wN, vRowBs, wColBs, rowPls, colPls) as DistBlockMatrix(vM, wN);
-		val h = DupBlockMatrix.makeDense(  wN, vN, wColBs, vColBs) as DupBlockMatrix(wN, vN);
+		val v = DistBlockMatrix.makeSparse(vM, vN, vRowBs, vColBs, rowPls, colPls, nzd);
+		val w = DistBlockMatrix.makeDense( vM, wN, vRowBs, wColBs, rowPls, colPls);
+		val h = DupBlockMatrix.makeDense(  wN, vN, wColBs, vColBs);
 		return new GNNMF(v, w, h, it);
 	}
-
-	
 	
 	public def init():void {
 		Debug.flushln("Start initialize input data");		
@@ -169,7 +157,7 @@ public class GNNMF {
 		val gV = V.getGrid();
 	
 		Debug.flushln("Starting X10 GNNMF ");
-		Console.OUT.printf("Input matrix V:(%dx%d), partitioning:(%dx%d) blocks, veritical distribution\n", 
+		Console.OUT.printf("Input matrix V:(%dx%d), partitioning:(%dx%d) blocks, vertical distribution\n", 
 						   V.M, V.N, gV.numRowBlocks, gV.numColBlocks);
 		Console.OUT.printf("V nonzero density: %f, total nonzero count: %f\n", nzd, nzc);
 						   
@@ -226,7 +214,7 @@ public class GNNMF {
 	public def run() : void {
 		tt += H.getCommTime();
 		/* Timing */ st = Timer.milliTime();
-		for (var i:Int =0; i<iteration; i++) {
+		for (var i:Long =0; i<iteration; i++) {
 			comp_WV_WWH();
 			/* Timing */ t1 += Timer.milliTime() - st;
 			comp_VH_WHH();
@@ -235,14 +223,13 @@ public class GNNMF {
 	}
 
 	public def verifyRun() : void {
-		
 		Debug.flushln("Prepare verification process\n");
 		//V.print("Input V:");
 		//H.print("Input H:");
 		//W.print("Input W:");
 		val seq = new SeqGNNMF(V, H, W, iteration);
-		//------------------------------------------
-		for (var i:Int =0; i<iteration; i++) {
+
+		for (var i:Long =0; i<iteration; i++) {
 			Debug.flushln("Iteration "+i+" start parallel computing H");
 			comp_WV_WWH();
 			seq.comp_WV_WWH();
@@ -254,29 +241,24 @@ public class GNNMF {
 			if (!seq.verifyW(W)) break;
 
 		}
-		//------------------------------------------
 	}
 	
 	public def printTiming() : void {
-		//
 		var tcalc:Long = 0;
-		//
 		tcalc += WtV.getCalcTime();  // (W^t * V) and (WV / WWH)
 		tcalc += WtW.getCalcTime();  // (W^t * W ) time
 		tcalc += WtWH.getCalcTime(); // (WW * H) 
 		tcalc += H.getCalcTime();    // (H . WV)
-		//
+
 		tcalc += HHt.getCalcTime();  // (H * H^t)
 		tcalc += WHHt.getCalcTime(); // (W * HH)
 		tcalc += VHt.getCalcTime();  // (V * H^t) and (VH / WHH)
 		tcalc += W.getCalcTime();    // (W . VH)
-		//
-		//---------
+
 		var tcomm:Long = 0;
 		tcomm += WtV.getCommTime();  // (W^t * V) all reduce sum time
 		tcomm += WtW.getCommTime();  // (W^t * W) all reduce sum time
 		tcomm += H.getCommTime();   // H initial bcast
-		//
 
 		Console.OUT.printf("Total time:    %dms, Calc: %dms, Comm:  %dms\n",
 						   tt, tcalc, tcomm);
@@ -292,7 +274,5 @@ public class GNNMF {
 		Console.OUT.printf("One time H bcast: %d\n", H.getCommTime());		
 		
 		Console.OUT.flush();
-		
-
 	}
 }

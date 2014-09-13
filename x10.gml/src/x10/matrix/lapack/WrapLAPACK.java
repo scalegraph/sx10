@@ -6,17 +6,15 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.matrix.lapack;
 
-
 /**
- * This Java class defines routine in x10 calling JNI wrap for corresponding lapack routine
+ * Defines routines in X10 calling JNI wrapper for corresponding LAPACK routine
  */
 public class WrapLAPACK {
-
 	static { 
 		System.loadLibrary("jlapack");
 	}

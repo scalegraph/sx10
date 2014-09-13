@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10c.types;
@@ -32,6 +32,15 @@ public class X10CContext_c extends  Context {
 
     public void addGeneratedClasses(ClassDef cd) {
         generatedClasses.add(cd);
+    }
+    
+    // used internally, shallow
+    protected String overideNameForThis = null;
+    public String getOverideNameForThis() { return overideNameForThis; }
+    public String setOverideNameForThis(String s) { 
+        String old = overideNameForThis;
+        overideNameForThis = s; 
+        return old;
     }
 
 }

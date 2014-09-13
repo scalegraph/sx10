@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10cuda.types;
@@ -154,7 +154,7 @@ public class SharedMem implements Cloneable {
 		@Override
 		public void generateCMemPop(StreamWrapper out, Translator tr) {
 			// TODO Auto-generated method stub
-			out.write("pop.populateArr<"+elementType+", x10::array::Array<"+elementType+">*>(");
+			out.write("pop.populateArr<"+elementType+", x10::lang::Rail<"+elementType+">*>(");
             tr.print(null, init, out);
 			out.write(");");
 		}

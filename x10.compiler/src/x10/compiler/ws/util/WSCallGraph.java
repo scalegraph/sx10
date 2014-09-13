@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 
@@ -233,7 +233,7 @@ public class WSCallGraph {
     }
     
     /**
-     * Input format: n:x10.lang.Int args:x10.array.Array[x10.lang.String]{self.rank==1}
+     * Input format: n:x10.lang.Int args:x10.regionarray.Array[x10.lang.String]{self.rank==1}
      * or no name, just type
      * @param type
      * @return Lx10/lang/Int;

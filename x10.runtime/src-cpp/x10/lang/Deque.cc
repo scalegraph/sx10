@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #include <x10aux/config.h>
@@ -31,15 +31,14 @@ Deque* Deque::_make() {
 Deque* Deque::_constructor() {
     queue = x10aux::alloc<Slots>();
     queue->capacity = INITIAL_QUEUE_CAPACITY;
-    queue->data = x10aux::alloc<volatile void*>(INITIAL_QUEUE_CAPACITY * sizeof(void*));
-    memset(queue->data, 0, (INITIAL_QUEUE_CAPACITY * sizeof(void*)));
+    queue->data = x10aux::alloc_z<volatile void*>(INITIAL_QUEUE_CAPACITY * sizeof(void*));
     sp = 0;
     base = 0;
     return this;
 }
 
 const serialization_id_t Deque::_serialization_id =
-    DeserializationDispatcher::addDeserializer(Deque::_deserializer, x10aux::CLOSURE_KIND_NOT_ASYNC);
+    DeserializationDispatcher::addDeserializer(Deque::_deserializer);
 
 void Deque::growQueue() {
     Slots *oldQ = queue;
@@ -50,8 +49,7 @@ void Deque::growQueue() {
     }
     Slots *newQ = x10aux::alloc<Slots>();
     newQ->capacity = newSize;
-    newQ->data = x10aux::alloc<volatile void*>(newSize * sizeof(void*));
-    memset(newQ->data, 0, (newSize * sizeof(void*)));
+    newQ->data = x10aux::alloc_z<volatile void*>(newSize * sizeof(void*));
     queue = newQ;
     
     int b = base;

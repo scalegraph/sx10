@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef X10AUX_STATIC_INIT_H
@@ -37,7 +37,7 @@ namespace x10aux {
 
         static void initField(volatile status* flag,
                               void (*init_func)(void),
-                              x10::lang::CheckedThrowable**,
+                              ::x10::lang::CheckedThrowable**,
                               const char* fname);
 
       private:

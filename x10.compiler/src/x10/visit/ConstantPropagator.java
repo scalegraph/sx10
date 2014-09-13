@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.visit;
@@ -70,7 +70,6 @@ import x10.types.constants.ConstantValue;
 import x10.types.constants.StringValue;
 import x10.types.constraints.CConstraint;
 import x10.util.AltSynthesizer;
-import x10.visit.Desugarer.ClosureCaptureVisitor;
 
 /**
  * Very simple constant propagation pass. 
@@ -238,9 +237,6 @@ public class ConstantPropagator extends ContextVisitor {
         if (e.isConstant())
             return e.constantValue();
         
-        if (e.type().isNull())
-            return ConstantValue.makeNull();
-
         if (e instanceof Field) {
         	Field f = (Field) e;
         	if (f.target() instanceof Expr) {
@@ -278,13 +274,10 @@ public class ConstantPropagator extends ContextVisitor {
         TypeSystem ts = type.typeSystem();
         if (isNative(e, ts))
             return false;
-
-        if (type.isNull())
-            return true;
                 
         if (e.isConstant()) {
             ConstantValue cv = e.constantValue();
-            if (!type.isReference()) return true;
+            if (type.isNull() || !type.isReference()) return true;
             return (cv instanceof ClosureValue);  // ClosureLiterals are the only non-null reference type that we allow ourselves to constant propagate.
         }
 

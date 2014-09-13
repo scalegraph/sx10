@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.util;
@@ -252,7 +252,7 @@ public class Synthesizer {
 	/*
 	public Type addRankConstraint(Type type, XVar receiver, int n, X10TypeSystem ts) {
 	    XTerm v = makeRegionRankTerm(receiver);
-	    XTerm rank = XTerms.makeLit(new Integer(n));
+	    XTerm rank = XTerms.makeLit(Integer.valueOf(n));
 	    return X10TypeMixin.addBinding(type, v, rank);
 	}
 
@@ -264,7 +264,7 @@ public class Synthesizer {
 	        receiver = c.self();
 	    }
 	    XTerm v = makeRegionRankTerm(receiver);
-	    XTerm rank = XTerms.makeLit(new Integer(n));
+	    XTerm rank = XTerms.makeLit(Integer.valueOf(n));
 	    return X10TypeMixin.addBinding(type, v, rank);
 	}
 	*/

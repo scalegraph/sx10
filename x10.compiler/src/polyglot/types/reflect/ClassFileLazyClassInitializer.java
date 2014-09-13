@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.types.reflect;
@@ -652,6 +652,12 @@ public class ClassFileLazyClassInitializer {
         return i;
     }
 
+    private static String stripThrowsSignature(String returnType) {
+        int end = returnType.indexOf('^');
+        if (end > 0) returnType = returnType.substring(0, end); // [MT] strip ThrowsSignature (^xxx;)
+        return returnType;
+    }
+
     /**
      * Create a MethodInstance.
      * @param method The JVM Method data structure.
@@ -675,7 +681,7 @@ public class ClassFileLazyClassInitializer {
     
         int index = type.indexOf(')', start+1);
         List<Ref<? extends Type>> argTypes = typeListForString(type.substring(start+1, index), bounds);
-        Ref<? extends Type> returnType = typeForString(type.substring(index+1), bounds);
+        Ref<? extends Type> returnType = typeForString(stripThrowsSignature(type.substring(index+1)), bounds);
     
         List<Ref<? extends Type>> excTypes = new ArrayList<Ref<? extends Type>>();
         Exceptions exceptions = method.getExceptions();

@@ -6,7 +6,33 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
+ * 
+ * 
+ * This is an interactive graphical demonstration of running
+ * K-Means on population clusters within the United States, 
+ * running the algorithm on CUDA hardware.
+ * 
+ * This program requires the GL library.
+ * Build it with a command something like this:
+ * ../../x10.dist/bin/x10c++ -x10lib ../x10_gl.properties KMeansCUDADemo.x10
+ * 
+ * It requires a larger than normal points.dat file.  Download it from
+ * http://dist.codehaus.org/x10/misc/points.dat
+ * 
+ * Run the program with "X10RT_ACCELS=ALL ./a.out"
+ * Optional argument for the number of clusters, defaults to 60
+ * 
+ * Once the program is running, you should see a map of the US, with population
+ * clusters in green boxes.  Hit 'g' to begin running k-means to adjust their 
+ * positions.  They turn red.  Other keys that you can use while running:
+ * +/- zoom in or out
+ * B,b,V,v adjust brightness
+ * w,a,s,d shift image position in the frame
+ * c centers the image
+ * r resets the map to the start
+ * g starts iterating k-means
+ * f single-step of k-means
  */
 
 import x10.io.Console;
@@ -23,9 +49,6 @@ import x10.util.OptionsParser;
 import x10.util.Option;
 import x10.util.CUDAUtilities;
 
-import x10.array.RemoteArray;
-import x10.array.Array;
-
 import x10.compiler.Unroll;
 import x10.compiler.CUDADirectParams;
 import x10.compiler.CUDA;
@@ -41,15 +64,15 @@ public class KMeansCUDADemo(gpu:Place) {
     val stride : Int;
     val numClusters : Int;
     val dim : Int;
-    val hostClusters : Array[Float]{rank==1, zeroBased, rect, rail};
-    val hostClusterCounts : Array[Int]{rank==1, zeroBased, rect, rail};
-    val hostClustersCopy : Array[Float]{rank==1, zeroBased, rect, rail};
-    var hostPoints : Array[Float]{rank==1, zeroBased, rect, rail};
-    val glPoints : Array[Float]{rank==1, zeroBased, rect, rail};
-    var gpuPoints : RemoteArray[Float]{rank==1, home==gpu};
-    var hostNearest : Array[Int]{rank==1, zeroBased, rect, rail};
-    var gpuNearest : RemoteArray[Int]{rank==1, home==gpu};
-    val vbos = new Array[Int](1);
+    val hostClusters : Rail[Float];
+    val hostClusterCounts : Rail[Int];
+    val hostClustersCopy : Rail[Float];
+    var hostPoints : Rail[Float];
+    val glPoints : Rail[Float];
+    var gpuPoints : GlobalRail[Float]{home==gpu};
+    var hostNearest : Rail[Int];
+    var gpuNearest : GlobalRail[Int]{ home==gpu};
+    val vbos = new Rail[Int](1);
 
     var posX:Float = 0;
     var posY:Float = 0;
@@ -60,11 +83,11 @@ public class KMeansCUDADemo(gpu:Place) {
     var iterating:Boolean = false;
     var step:Boolean = false;
 
-    private static def round_up (x:Int, n:Int) = (x-1) - ((x-1)%n) + n;
+    private static def round_up (x:Int, n:Int) = (x-1n) - ((x-1n)%n) + n;
 
-    static def reset (num_points:Int, num_clusters:Int, dim:Int, points:Array[Float](1), clusters:Array[Float](1)) {
-        for ([p] in 0..(num_clusters-1)) {
-            for ([d] in 0..(dim-1)) {
+    static def reset (num_points:Int, num_clusters:Int, dim:Int, points:Rail[Float], clusters:Rail[Float]) {
+        for (p in 0..(num_clusters-1)) {
+            for (d in 0..(dim-1)) {
                 // stretch them out over the whole points array
                 val p2 = ((p as Float)/num_clusters * num_points) as Int;
                 clusters(p*dim + d) = points(p2 * dim + d);
@@ -72,15 +95,15 @@ public class KMeansCUDADemo(gpu:Place) {
         }
     }
 
-    def this (args: Array[String]{rank==1, zeroBased, rect, rail}) {
+    def this (args: Rail[String]) {
         
         property(here.numChildren()==0 ? here : here.child(0));
 
         GL.glutInit(args);
 
-        val numPoints = 5612730;
-        val numClusters = args.size > 0 ? Int.parseInt(args(0)) : 60;
-        val dim = 2;
+        val numPoints = 5612730n;
+        val numClusters = args.size > 0n ? Int.parseInt(args(0)) : 60n;
+        val dim = 2n;
 
         // file is dimension-major
         val file = new File("points.dat");
@@ -90,45 +113,45 @@ public class KMeansCUDADemo(gpu:Place) {
             Console.ERR.println("You must download this file before you can run the demo.");
         }
         val fr = file.openRead();
-        assert file.size() / 4 / dim == numPoints as Long;
-        val glPoints = new Array[Float](numPoints*dim, (Int) => {
+        assert file.size() / 4n / dim == numPoints as Long;
+        val glPoints = new Rail[Float](numPoints*dim, (Long) => {
             return Float.fromIntBits(Marshal.INT.read(fr).reverseBytes());
         });
-        hostClusters = new Array[Float](numClusters*dim, 0.0f);
+        hostClusters = new Rail[Float](numClusters*dim, 0.0f);
         reset(numPoints, numClusters, dim, glPoints, hostClusters);
 
-        val stride = round_up(numPoints,32);
-        hostPoints = new Array[Float](stride*dim, (i:Int) => {
+        val stride = round_up(numPoints,32n);
+        hostPoints = new Rail[Float](stride*dim, (i:Long) => {
             val d=i/stride, p=i%stride;
             return p<numPoints ? glPoints(p*dim + d) : 0f;
         });
 
-        hostClustersCopy = new Array[Float](numClusters*dim);
-        hostClusterCounts = new Array[Int](numClusters, 100000);
+        hostClustersCopy = new Rail[Float](numClusters*dim);
+        hostClusterCounts = new Rail[Int](numClusters, 100000n);
 
-        gpuPoints = CUDAUtilities.makeRemoteArray[Float](gpu, stride*dim, hostPoints);
+        gpuPoints = CUDAUtilities.makeGlobalRail[Float](gpu, stride*dim, hostPoints);
         Console.OUT.println(gpuPoints.size);
-        hostNearest = new Array[Int](numPoints, 0);
-        gpuNearest = CUDAUtilities.makeRemoteArray[Int](gpu, numPoints, 0);
+        hostNearest = new Rail[Int](numPoints, 0n);
+        gpuNearest = CUDAUtilities.makeGlobalRail[Int](gpu, numPoints, 0n);
 
 
         GL.glutInitDisplayMode(GL.GLUT_RGBA | GL.GLUT_DOUBLE); // double buffered
-        GL.glutInitWindowSize(800, 600);
+        GL.glutInitWindowSize(800n, 600n);
         GL.glutCreateWindow("X10 KMeans Demo");
 
         GL.glewInit();
 
-        val points_sz = numPoints * dim * 4;
+        val points_sz = numPoints * dim * 4n;
 
-        GL.glGenBuffers(vbos.size, vbos, 0);
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, vbos(0));
-        GL.glBufferData(GL.GL_ARRAY_BUFFER, points_sz, glPoints, 0, GL.GL_DYNAMIC_DRAW);
+        GL.glGenBuffers(vbos.size as int, vbos, 0n);
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, vbos(0n));
+        GL.glBufferData(GL.GL_ARRAY_BUFFER, points_sz, glPoints, 0n, GL.GL_DYNAMIC_DRAW);
         {
-            val test_size = new Array[Int](1);
-            GL.glGetBufferParameteriv(GL.GL_ARRAY_BUFFER, GL.GL_BUFFER_SIZE, test_size, 0);
+            val test_size = new Rail[Int](1);
+            GL.glGetBufferParameteriv(GL.GL_ARRAY_BUFFER, GL.GL_BUFFER_SIZE, test_size, 0n);
             assert test_size(0) == points_sz : "Buffer size was incorrect "+test_size(0)+" not "+points_sz+".";
         }
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, 0);
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, 0n);
 
         this.numPoints = numPoints;
         this.numClusters = numClusters;
@@ -139,7 +162,7 @@ public class KMeansCUDADemo(gpu:Place) {
 
     def iterate () {
 
-        Array.copy(hostClusters, 0, hostClustersCopy, 0, numClusters*dim);
+        Rail.copy(hostClusters, 0, hostClustersCopy, 0, numClusters*dim as long);
 
         // avoid serialising 'this'
         val stride = this.stride;
@@ -155,18 +178,18 @@ public class KMeansCUDADemo(gpu:Place) {
         finish async at (gpu2) @CUDA @CUDADirectParams {
             val blocks = CUDAUtilities.autoBlocks(),
                 threads = CUDAUtilities.autoThreads();
-            finish for (block in 0..(blocks-1)) async {
-                val clustercache = new Array[Float](clusters_copy);
-                clocked finish for (thread in 0..(threads-1)) clocked async {
+            finish for (block in 0n..(blocks-1n)) async {
+                val clustercache = new Rail[Float](clusters_copy);
+                clocked finish for (thread in 0n..(threads-1n)) clocked async {
                     val tid = block * threads + thread;
                     val tids = blocks * threads;
                     for (var p:Int=tid ; p<num_points ; p+=tids) {
-                        var closest:Int = -1;
+                        var closest:Int = -1n;
                         var closest_dist:Float = Float.MAX_VALUE;
-                        @Unroll(20) for (k in 0..(num_clusters-1)) {
+                        @Unroll(20) for (k in 0n..(num_clusters-1n)) {
                             // Pythagoras (in dim dimensions)
                             var dist : Float = 0;
-                            for (d in 0..(dim-1)) {
+                            for (d in 0n..(dim-1n)) {
                                 val tmp = gpu_points(p+d*stride)
                                           - @NoInline clustercache(k*dim+d);
                                 dist += tmp * tmp;
@@ -184,26 +207,22 @@ public class KMeansCUDADemo(gpu:Place) {
         }
 
         // bring gpu results onto host
-        finish Array.asyncCopy(gpu_nearest, 0, hostNearest, 0, numPoints);
+        finish Rail.asyncCopy(gpu_nearest, 0, hostNearest, 0, numPoints as long);
 
         // compute new clusters
         hostClusters.fill(0);
-        hostClusterCounts.fill(0);
+        hostClusterCounts.fill(0n);
 
-        val host_nearest_raw = hostNearest.raw();
-        val host_clusters_raw = hostClusters.raw();
-        val host_points_raw = hostPoints.raw();
-        val host_cluster_counts_raw = hostClusterCounts.raw();
-        for (var p:Int=0 ; p<numPoints ; p++) {
-            val closest = host_nearest_raw(p);
-            for (var d:Int=0 ; d<dim ; ++d)
-                host_clusters_raw(closest*dim+d) += host_points_raw(p+d*stride);
-            host_cluster_counts_raw(closest)++;
+        for (var p:Int=0n ; p<numPoints ; p++) {
+            val closest = hostNearest(p);
+            for (var d:Int=0n ; d<dim ; ++d)
+                hostClusters(closest*dim+d) += hostPoints(p+d*stride);
+            hostClusterCounts(closest)++;
         }
 
-        for (var k:Int=0 ; k<num_clusters ; ++k) {
+        for (var k:Int=0n ; k<num_clusters ; ++k) {
             if (hostClusterCounts(k) <= 0) Console.ERR.println("host_cluster_counts("+k+") = "+hostClusterCounts(k));
-            for (var d:Int=0 ; d<dim ; ++d) hostClusters(k*dim+d) /= hostClusterCounts(k);
+            for (var d:Int=0n ; d<dim ; ++d) hostClusters(k*dim+d) /= hostClusterCounts(k);
         }
 
     }
@@ -216,8 +235,8 @@ public class KMeansCUDADemo(gpu:Place) {
             GL.glClear(GL.GL_COLOR_BUFFER_BIT);
 
             // render points
-            GL.glColor4f(1, 1, 1, brightness);
-            GL.glPointSize(1);
+            GL.glColor4f(1n, 1n, 1n, brightness);
+            GL.glPointSize(1n);
             GL.glEnable(GL.GL_POINT_SMOOTH);
             GL.glEnable(GL.GL_BLEND);
             GL.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA);
@@ -225,10 +244,10 @@ public class KMeansCUDADemo(gpu:Place) {
             GL.glEnableClientState(GL.GL_VERTEX_ARRAY);
                 GL.glDisable(GL.GL_DEPTH_TEST);
                 GL.glDisable(GL.GL_CULL_FACE);
-                GL.glBindBuffer(GL.GL_ARRAY_BUFFER, vbos(0));
-                    GL.glVertexPointer[Float](2, GL.GL_FLOAT, 0, null, 0);
-                    GL.glDrawArrays(GL.GL_POINTS, 0, numPoints);
-                GL.glBindBuffer(GL.GL_ARRAY_BUFFER, 0);
+                GL.glBindBuffer(GL.GL_ARRAY_BUFFER, vbos(0n));
+                    GL.glVertexPointer[Float](2n, GL.GL_FLOAT, 0n, null, 0n);
+                    GL.glDrawArrays(GL.GL_POINTS, 0n, numPoints);
+                GL.glBindBuffer(GL.GL_ARRAY_BUFFER, 0n);
             GL.glDisableClientState(GL.GL_VERTEX_ARRAY);
 
             // render clusters
@@ -237,7 +256,7 @@ public class KMeansCUDADemo(gpu:Place) {
 
             GL.glBlendFunc(GL.GL_ONE, GL.GL_ONE);
             GL.glBegin(GL.GL_QUADS);
-                for ([p] in 0..(numClusters-1)) {
+                for (p in 0..(numClusters-1)) {
                     val rad = (Math.sqrt(hostClusterCounts(p) as Double)/Math.PI) as Float * 0.0002f;
                     if (iterating || step) {
                         GL.glColor3f(0.3f, 0.0f, 0.0f);
@@ -274,9 +293,9 @@ public class KMeansCUDADemo(gpu:Place) {
             GL.glMatrixMode(GL.GL_PROJECTION);
             GL.glLoadIdentity();
             if (aspect > 1) {
-                GL.glOrtho(posX - 1/zoom*aspect, posX + 1/zoom*aspect, posY - 1/zoom, posY + 1/zoom, 0, 1);
+                GL.glOrtho(posX - 1/zoom*aspect, posX + 1/zoom*aspect, posY - 1/zoom, posY + 1/zoom, 0n, 1n);
             } else {
-                GL.glOrtho(posX - 1/zoom, posX + 1/zoom, posY - 1/zoom/aspect, posY + 1/zoom/aspect, 0, 1);
+                GL.glOrtho(posX - 1/zoom, posX + 1/zoom, posY - 1/zoom/aspect, posY + 1/zoom/aspect, 0n, 1n);
             }
 
             GL.glMatrixMode(GL.GL_MODELVIEW);
@@ -329,7 +348,7 @@ public class KMeansCUDADemo(gpu:Place) {
             }
         }
         public def reshape (x:Int, y:Int) {
-            GL.glViewport(0, 0, x, y);
+            GL.glViewport(0n, 0n, x, y);
             aspect = x as Float/y;
             setMatrixes();
             GL.glutPostRedisplay();
@@ -343,16 +362,16 @@ public class KMeansCUDADemo(gpu:Place) {
 
         GL.glutMainLoop(new FrameEventHandler());
 
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, 0);
-        GL.glDeleteBuffers(vbos.size, vbos, 0);
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, 0n);
+        GL.glDeleteBuffers(vbos.size as Int, vbos, 0n);
     }
 
-    public static def main (args : Array[String]{rank==1, rect, zeroBased, rail}) {
+    public static def main (args : Rail[String]) {
         try {
 
             new KMeansCUDADemo(args).run();
 
-        } catch (e : Throwable) {
+        } catch (e : CheckedThrowable) {
             e.printStackTrace(Console.ERR);
         }
     }

@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2014.
  *  (C) Rice University 2010-2011.
  *  
  *  Code contributed to the X10 project by Rice under XTENLANG-2685.
@@ -77,7 +77,7 @@ public class CommunicationOptimizer extends ContextVisitor {
     }
 
     private static Name getTmp() {
-        return Name.makeFresh("__comopt__var__");
+        return Name.makeFresh("comopt__var");
     }
 
     public Node override(Node parent, Node n) {
@@ -478,8 +478,8 @@ public class CommunicationOptimizer extends ContextVisitor {
             Type classType = call.target().type();
 
             // Verify the array
-            if (xts.isArray(classType)
-                    && !xts.isX10DistArray(classType)
+            if (xts.isRegionArray(classType)
+                    && !xts.isX10RegionDistArray(classType)
                     && call.methodInstance().name().equals(OperatorNames.APPLY)) {
                 // Check the method arguments, here we only handle .apply(ind)
                 List<Expr> arguments = call.arguments();
@@ -550,8 +550,8 @@ public class CommunicationOptimizer extends ContextVisitor {
                 Type classType = call.target().type(); 
 
                 // Verify the array
-                if (xts.isArray(classType) 
-                        && !xts.isX10DistArray(classType)
+                if (xts.isRegionArray(classType) 
+                        && !xts.isX10RegionDistArray(classType)
                         && call.methodInstance().name().equals(OperatorNames.APPLY)) { 
                     // Check the method arguments, here we only handle .apply(ind)           
                     List<Expr> arguments = call.arguments();                                 
@@ -625,8 +625,8 @@ public class CommunicationOptimizer extends ContextVisitor {
                 //     X10ParsedClassType_c classType = (X10ParsedClassType_c)target.localInstance().type();
                 Type classType = target.localInstance().type();
 
-                if (xts.isArray(classType) 
-                        && !xts.isX10DistArray(classType)
+                if (xts.isRegionArray(classType) 
+                        && !xts.isX10RegionDistArray(classType)
                         && call.methodInstance().name().equals(OperatorNames.APPLY)) {
                     // Handle the Array element reading, which is an array inside the async closure         
                     // Check the method arguments, here we only handle .apply(ind)
@@ -671,8 +671,8 @@ public class CommunicationOptimizer extends ContextVisitor {
                 //     X10ParsedClassType_c classType = (X10ParsedClassType_c)target.localInstance().type();
                 Type classType = target.localInstance().type();
 
-                if (xts.isArray(classType) 
-                        && !xts.isX10DistArray(classType)
+                if (xts.isRegionArray(classType) 
+                        && !xts.isX10RegionDistArray(classType)
                         && call.methodInstance().name().equals(OperatorNames.APPLY)) {
                     // Handle the Array element reading, which is an array inside the async closure
                     // Check the method arguments, here we only handle .apply(ind)
@@ -854,8 +854,8 @@ public class CommunicationOptimizer extends ContextVisitor {
                 // Type classType = target.localInstance().type();
                 Type classType = call.target().type();
 
-                if (xts.isArray(classType)
-                        && !xts.isX10DistArray(classType)
+                if (xts.isRegionArray(classType)
+                        && !xts.isX10RegionDistArray(classType)
                         && call.methodInstance().name().equals(OperatorNames.APPLY)) {
                     // Check the method arguments
                     List<Expr> arguments = call.arguments();

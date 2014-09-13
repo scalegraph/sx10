@@ -6,12 +6,26 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.util;
 
-public interface Builder[Element,Collection] {
-    public def add(Element): Builder[Element,Collection];
-    public def result(): Collection;
+/**
+ * Build a result of type U from a set of elements of type T
+ */
+public interface Builder[T,U] {
+
+    /**
+     * add an element to the builder
+     * @param e an element
+     * @return the builder 
+     */
+    public def add(e:T):Builder[T,U];
+    
+    /**
+     * return a result
+     * @return a result
+     */
+    public def result():U;
 }

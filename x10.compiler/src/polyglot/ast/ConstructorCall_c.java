@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.ast;
@@ -127,7 +127,12 @@ public abstract class ConstructorCall_c extends Stmt_c implements ConstructorCal
 	    w.write(".");
 	} 
 
-	w.write(kind + "(");
+	if (target!= null) {
+	    print(target, w, tr);
+	    w.write(".$init$(");
+	} else {
+	    w.write(kind + "(");
+	}
 
 	w.begin(0);
 

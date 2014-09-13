@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2012.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 import java.security.MessageDigest;
@@ -25,14 +25,14 @@ public class MD {
     static def printDigest(fileName:String, md:MessageDigest) {
         val digest = md.digest();
         // avoid boxing byte to Byte
-        // for (var i:Int = 0; i < digest.length; ++i) {
+        // for (var i:Int = 0n; i < digest.length; ++i) {
         //     Console.OUT.printf("%02x", digest(i));
         // }
         // Console.OUT.println("  " + fileName);
         val sb = new x10.util.StringBuilder();
-        for (var i:Int = 0; i < digest.length; ++i) {
+        for (var i:Int = 0n; i < digest.length; ++i) {
             val hex = (digest(i) as UByte).toHexString();
-            if (hex.length() == 1) sb.add('0'); // zero padding
+            if (hex.length() == 1n) sb.add('0'); // zero padding
             sb.add(hex);
         }
         sb.add("  " + fileName);
@@ -42,14 +42,14 @@ public class MD {
     static def generateDigest(fileName:String, algo:String) {
         try {
             val md = MessageDigest.getInstance(algo);
-            val input = new Array[Byte](BUFFER_SIZE);
+            val input = new Rail[Byte](BUFFER_SIZE);
             val fr = new File(fileName).openRead();
             var len:Int;
             while ((len = fr.available()) > 0) {
-                if (len > input.size) len = input.size;
+                if (len > input.size) len = input.size as Int;
                 fr.read(input, 0, len);
                 val jinput = Java.convert(input);
-                md.update(jinput, 0, len);
+                md.update(jinput, 0n, len);
                 if (len < input.size) break;
             }
             fr.close();
@@ -60,7 +60,7 @@ public class MD {
     }
 
     static def generateDigestParallel(fileNames:Rail[String], algo:String) {
-        finish for (var i:Int = 0; i < fileNames.size; ++i) {
+        finish for (var i:Long = 0; i < fileNames.size; ++i) {
             val fileName = fileNames(i);
             async generateDigest(fileName, algo);
         }
@@ -72,10 +72,10 @@ public class MD {
         var algoTemp:String = "MD5";        
         var filesTemp:Rail[String] = args;
         
-        if (args.size == 0) return;
+        if (args.size == 0L) return;
         
-        if (args(0).charAt(0) == '-') {
-            val args0 = args(0).substring(1);
+        if (args(0).charAt(0n) == '-') {
+            val args0 = args(0).substring(1n);
             var newalgo:Boolean = false;
             if (args0.equalsIgnoreCase("MD5")) {
                 algoTemp = "MD5";
@@ -95,29 +95,29 @@ public class MD {
             }
             if (newalgo) {
                 filesTemp = new Rail[String](args.size - 1);
-                Array.copy(args, 1, filesTemp, 0, args.size - 1);
+                Rail.copy(args, 1L, filesTemp, 0L, args.size - 1);
             }
         }
         
         val algo = algoTemp;
         val files = filesTemp;
         
-        if (files.size == 0) return;
+        if (files.size == 0L) return;
 
-        if (numPlaces == 1) {
+        if (numPlaces == 1L) {
             generateDigestParallel(files, algo);
         } else {
-            val filesArray = new Rail[Rail[String]](numPlaces, (i:Int) => new Rail[String]((files.size + numPlaces - 1 - i) / numPlaces));
-            // for (var i:Int = 0; i < files.size; ++i) {
+            val filesArray = new Rail[Rail[String]](numPlaces, (i:Long) => new Rail[String]((files.size + numPlaces - 1 - i) / numPlaces));
+            // for (var i:Long = 0; i < files.size; ++i) {
             //     filesArray(i % numPlaces)(i / numPlaces) = files(i);
             // }
-            var srcIndex:Int = 0;
-            for (var i:Int = 0; i < numPlaces; ++i) {
+            var srcIndex:Long = 0;
+            for (var i:Long = 0; i < numPlaces; ++i) {
                 val files_i = filesArray(i);
-                Array.copy(files, srcIndex, files_i, 0, files_i.size);
+                Rail.copy(files, srcIndex, files_i, 0L, files_i.size);
                 srcIndex += files_i.size;
             }
-            finish for (var i:Int = 0; i < numPlaces; ++i) {
+            finish for (var i:Long = 0; i < numPlaces; ++i) {
                 val files_i = filesArray(i);
                 at (places(i)) async generateDigestParallel(files_i, algo);
             }

@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 /**
@@ -92,9 +92,6 @@ Thread* Thread::_make(x10::lang::String* name) {
 Thread* Thread::_make() {
     return NULL;
 }
-
-const serialization_id_t Thread::_serialization_id =
-    DeserializationDispatcher::addDeserializer(Thread::_deserializer, x10aux::CLOSURE_KIND_NOT_ASYNC);
 
 // method to bind the process to a single processor
 void Thread::thread_bind_cpu()
@@ -204,6 +201,8 @@ Thread::thread_init(String* name)
     }
     // create this thread's permit object
     thread_permit_init(&__thread_permit);
+    // create this thread's cond_mutex object
+    thread_cmp_init(&__thread_cmp);
 
     __xrxDPrEnd();
 }
@@ -266,6 +265,8 @@ Thread::~Thread()
     pthread_attr_destroy(&__xthread_attr);
     // free thread permit
     thread_permit_destroy(&__thread_permit);
+    // free thread cond_mutex
+    thread_cmp_destroy(&__thread_cmp);
     __xrxDPrEnd();
 }
 
@@ -331,10 +332,7 @@ Thread::thread_sleep_cleanup(void *arg)
 
     __xrxDPrStart();
     pthread_mutex_unlock(&(cmp->mutex));
-    pthread_mutex_destroy(&(cmp->mutex));
-    pthread_cond_destroy(&(cmp->cond));
-    delete cmp;
-    signal(SIGINT, SIG_DFL);
+//    signal(SIGINT, SIG_DFL);
     __xrxDPrEnd();
 }
 
@@ -363,7 +361,9 @@ Thread::intr_hndlr(int signo)
 void
 Thread::sleep(x10_long millis, x10_int nanos)
 {
-    cond_mutex_t *cmp;
+    Thread* th = currentThread();
+    cond_mutex_t *cmp = &(th->__thread_cmp);
+
     x10_boolean done = false;
     struct timeval tval;
     struct timespec tout;
@@ -371,17 +371,15 @@ Thread::sleep(x10_long millis, x10_int nanos)
     int rc;
 
     __xrxDPrStart();
-    signal(SIGINT, intr_hndlr);
-    cmp = new (cond_mutex_t);
-    pthread_mutex_init(&(cmp->mutex), NULL);
-    pthread_cond_init(&(cmp->cond), NULL);
+//    signal(SIGINT, intr_hndlr);
     pthread_mutex_lock(&(cmp->mutex));
     pthread_cleanup_push(thread_sleep_cleanup, (void *)cmp);
     gettimeofday(&tval, NULL);
     tout.tv_sec = tval.tv_sec + (millis/1000);
-    tout.tv_nsec = ((tval.tv_usec + ((millis%1000) * 1000)) * 1000) + nanos;
-    sleep_usec = (tout.tv_sec * 1000 * 1000) +
-                (tout.tv_nsec / 1000);
+    x10_long tout_nanos = ((tval.tv_usec + ((millis%1000) * 1000)) * 1000) + nanos;
+    tout.tv_sec += tout_nanos / 1000000000UL;
+    tout.tv_nsec = tout_nanos % 1000000000UL;
+    sleep_usec = (tout.tv_sec * 1000 * 1000) + (tout.tv_nsec / 1000);
     while (!done) {
         rc = pthread_cond_timedwait(&(cmp->cond), &(cmp->mutex), &tout);
         if (rc == ETIMEDOUT) {
@@ -389,7 +387,7 @@ Thread::sleep(x10_long millis, x10_int nanos)
             done = true;
         } else {
             // might be a spurious wakeup
-            throwException<InterruptedException>();
+            // throwException<InterruptedException>();
             break;
             /*
             struct timeval cval;
@@ -405,6 +403,7 @@ Thread::sleep(x10_long millis, x10_int nanos)
         }
     }
     pthread_cleanup_pop(1);
+    if (!done) throwException<InterruptedException>();
     __xrxDPrEnd();
 }
 
@@ -417,12 +416,28 @@ Thread::thread_permit_init(permit_t *perm)
     perm->permit = false;
 }
 
+// cond_mutex initialization
+void
+Thread::thread_cmp_init(cond_mutex_t *cmp)
+{
+    pthread_mutex_init(&(cmp->mutex), NULL);
+    pthread_cond_init(&(cmp->cond), NULL);
+}
+
 // permit finalization
 void
 Thread::thread_permit_destroy(permit_t *perm)
 {
     pthread_mutex_destroy(&(perm->mutex));
     pthread_cond_destroy(&(perm->cond));
+}
+
+// cond_mutex finalization
+void
+Thread::thread_cmp_destroy(cond_mutex_t *cmp)
+{
+    pthread_mutex_destroy(&(cmp->mutex));
+    pthread_cond_destroy(&(cmp->cond));
 }
 
 // permit cleanup
@@ -535,6 +550,12 @@ Thread::getId()
     return __thread_id;
 }
 
+// Thread context is not used in Native X10, only in Managed X10
+void
+Thread::removeWorkerContext()
+{
+}
+
 // Returns the system thread id.
 x10_long
 Thread::getTid()
@@ -560,17 +581,12 @@ void Thread::__apply()
 {
 }
 
-void Thread::_serialize_body(serialization_buffer &buf) {
+x10aux::serialization_id_t Thread::_get_serialization_id() {
+    x10aux::throwNotSerializableException("Can't serialize x10.lang.Thread");
 }
 
-void Thread::_deserialize_body(deserialization_buffer& buf) {
-}
-
-x10::lang::Reference* Thread::_deserializer(x10aux::deserialization_buffer &buf) {
-    Thread* this_ = new (x10aux::alloc<Thread>()) Thread();
-    buf.record_reference(this_); 
-    this_->_deserialize_body(buf);
-    return this_;
+void Thread::_serialize_body(x10aux::serialization_buffer &buf) {
+    x10aux::throwNotSerializableException("Can't serialize x10.lang.Thread");
 }
 
 RTT_CC_DECLS0(Thread, "x10.lang.Thread", RuntimeType::class_kind)

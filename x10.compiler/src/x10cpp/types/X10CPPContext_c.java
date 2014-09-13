@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10cpp.types;
@@ -34,6 +34,7 @@ import x10.ast.PropertyDecl;
 import x10.types.X10ClassDef;
 import x10.types.X10ClassType;
 import polyglot.types.Context;
+import polyglot.util.Position;
 import x10.util.CollectionFactory;
 import x10.types.X10MethodDef;
 import x10.util.ClassifiedStream;
@@ -81,6 +82,8 @@ public class X10CPPContext_c extends Context {
     public List<PropertyDecl> classProperties() { return classProperties; }
     public List<ClassMember> pendingStaticDecls() { return pendingStaticDecls; }
 
+    public Position lastLine;
+    
     /**
      * For each new class reset the classProperties and pendingStaticDecls structures,
      * ready for fresh accumulation of data.
@@ -126,6 +129,11 @@ public class X10CPPContext_c extends Context {
 	protected boolean insideClosure;
     public boolean isInsideClosure() { return insideClosure; }
     public void setInsideClosure(boolean b) { insideClosure = b; }
+
+    // used externally, deep
+    protected boolean insideTemplateClosure;
+    public boolean isInsideTemplateClosure() { return insideTemplateClosure; }
+    public void setInsideTemplateClosure(boolean b) { insideTemplateClosure = b; }
 
     // used internally, shallow
     public boolean stackAllocateClosure = false;
@@ -189,12 +197,8 @@ public class X10CPPContext_c extends Context {
             cd = supertypeDeclarationType();
         X10MethodDef md = currentCode() instanceof X10MethodDef ? (X10MethodDef) currentCode() : null;
         boolean genericClass = cd.typeParameters().size() != 0;
-        boolean staticMethod = md != null && md.flags().isStatic();
         boolean genericMethod = md != null && md.typeParameters().size() != 0;
-        //[DC] FIXME: what if we've in a static initialiser of a generic class
-        //should return false, but does return true?
-        //[IP] The above should also check for an initializer
-        return (!staticMethod && genericClass) || genericMethod;
+        return (!inStaticContext() && genericClass) || genericMethod;
     }
 
     public X10MethodDef currentMethod() {

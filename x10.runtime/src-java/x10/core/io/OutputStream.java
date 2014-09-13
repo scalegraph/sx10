@@ -6,11 +6,12 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.core.io;
 
+import x10.core.Rail;
 import x10.core.Ref;
 import x10.rtt.NamedType;
 import x10.rtt.RuntimeType;
@@ -18,15 +19,13 @@ import x10.rtt.Type;
 
 public class OutputStream extends Ref {
   
-    private static final long serialVersionUID = 1L;
-
     public void $_serialize(x10.serialization.X10JavaSerializer $serializer) throws java.io.IOException {
         // TODO need check
         $serializer.write(stream);
     }
     public static x10.serialization.X10JavaSerializable $_deserialize_body(OutputStream $_obj, x10.serialization.X10JavaDeserializer $deserializer) throws java.io.IOException {
         // TODO need check
-        $_obj.stream = (java.io.OutputStream) $deserializer.readRef();
+        $_obj.stream = (java.io.OutputStream) $deserializer.readObject();
         return $_obj;
     }
     public static x10.serialization.X10JavaSerializable $_deserializer(x10.serialization.X10JavaDeserializer $deserializer) throws java.io.IOException {
@@ -85,24 +84,23 @@ public class OutputStream extends Ref {
             throw new x10.io.IOException(e.getMessage());
         }
     }
-    
-    // XTENLANG-2680
-    // for !Emitter.manglePrimitivesAsShortName
-    public void write__0$1x10$lang$Byte$2(x10.array.Array buf) {
+
+    public void write(String s) {
         try {
-            stream.write(buf.raw().getByteArray());
+            stream.write(s.getBytes());
         } catch (java.io.IOException e) {
             throw new x10.io.IOException(e.getMessage());
         }
     }
-//    // for Emitter.manglePrimitivesAsShortName
-//    public void write__0$1$B$2(x10.array.Array buf) {
-//        try {
-//            stream.write(buf.raw().getByteArray());
-//        } catch (java.io.IOException e) {
-//            throw x10.runtime.impl.java.ThrowableUtils.getCorrespondingX10Throwable(e);
-//        }
-//    }
+    
+    // XTENLANG-2680
+    public void write__0$1x10$lang$Byte$2(Rail buf) {
+        try {
+            stream.write(buf.getByteArray());
+        } catch (java.io.IOException e) {
+            throw new x10.io.IOException(e.getMessage());
+        }
+    }
 
     public void write(byte[] b, int off, int len) {
         try {
@@ -113,22 +111,14 @@ public class OutputStream extends Ref {
     }
     
     // XTENLANG-2680
-    // for !Emitter.manglePrimitivesAsShortName
-    public void write__0$1x10$lang$Byte$2(x10.array.Array buf, int off, int len) {
+    // LONG_RAIL: unsafe int cast
+    public void write__0$1x10$lang$Byte$2(Rail buf, long off, long len) {
         try {
-            stream.write(buf.raw().getByteArray(), off, len);
+            stream.write(buf.getByteArray(), (int)off, (int)len);
         } catch (java.io.IOException e) {
             throw new x10.io.IOException(e.getMessage());
         }
     }
-//    // for Emitter.manglePrimitivesAsShortName
-//    public void write__0$1$B$2(x10.array.Array buf, int off, int len) {
-//        try {
-//            stream.write(buf.raw().getByteArray(), off, len);
-//        } catch (java.io.IOException e) {
-//            throw x10.runtime.impl.java.ThrowableUtils.getCorrespondingX10Throwable(e);
-//        }
-//    }
 
     public static OutputStream getNativeOutputStream(x10.io.Writer w) {
         OutputStream os = null;
@@ -172,7 +162,6 @@ public class OutputStream extends Ref {
     // NOTE: this class is only used in @Native annotation of x10.io.Writer.getNativeOutputStream()
     //
     public static class WriterOutputStream extends OutputStream {
-        private static final long serialVersionUID = 1L;
         private x10.io.Writer w;
 
         public WriterOutputStream(java.lang.System[] $dummy) {

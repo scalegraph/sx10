@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10cuda.visit;
@@ -18,18 +18,20 @@ import static x10cpp.visit.SharedVarsMethods.DESERIALIZATION_BUFFER;
 import static x10cpp.visit.SharedVarsMethods.DESERIALIZE_METHOD;
 import static x10cpp.visit.SharedVarsMethods.SERIALIZATION_BUFFER;
 import static x10cpp.visit.SharedVarsMethods.SERIALIZATION_ID_FIELD;
-import static x10cpp.visit.SharedVarsMethods.SERIALIZATION_MARKER;
 import static x10cpp.visit.SharedVarsMethods.SERIALIZE_BODY_METHOD;
 import static x10cpp.visit.SharedVarsMethods.THIS;
 import static x10cpp.visit.SharedVarsMethods.SAVED_THIS;
 import static x10cpp.visit.SharedVarsMethods.chevrons;
 import static x10cpp.visit.SharedVarsMethods.make_ref;
 
+import java.io.File;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import polyglot.ast.ArrayInit_c;
 import polyglot.ast.Assert_c;
@@ -110,6 +112,7 @@ import x10.ast.X10CanonicalTypeNode_c;
 import x10.ast.X10Cast_c;
 import x10.ast.X10ClassDecl;
 import x10.ast.X10ClassDecl_c;
+import x10.ast.X10ConstructorCall_c;
 import x10.ast.X10Formal;
 import x10.ast.X10Instanceof_c;
 import x10.ast.X10Loop;
@@ -267,43 +270,32 @@ public class CUDACodeGenerator extends MessagePassingCodeGenerator {
 		complainIfNot2(cond, exp, n, true);
 	}
 
-	private Type arrayCargo(Type typ) {
-		if (xts().isArray(typ)) {
+	private Type railCargo(Type typ) {
+		if (xts().isRail(typ)) {
 			typ = typ.toClass();
 			X10ClassType ctyp = (X10ClassType) typ;
-			assert ctyp.typeArguments() != null && ctyp.typeArguments().size() == 1; // Array[T]
+			assert ctyp.typeArguments() != null && ctyp.typeArguments().size() == 1; // Rail[T]
 			return ctyp.typeArguments().get(0);
 		}
-		if (xts().isRemoteArray(typ)) {
+		if (xts().isGlobalRail(typ)) {
 			typ = typ.toClass();
 			X10ClassType ctyp = (X10ClassType) typ;
-			assert ctyp.typeArguments() != null && ctyp.typeArguments().size() == 1; // RemoteRef[Array[T]]
+			assert ctyp.typeArguments() != null && ctyp.typeArguments().size() == 1; // RemoteRef[Rail[T]]
 			Type type2 = ctyp.typeArguments().get(0);
 			X10ClassType ctyp2 = (X10ClassType) typ;
-			assert ctyp2.typeArguments() != null && ctyp2.typeArguments().size() == 1; // Array[T]
+			assert ctyp2.typeArguments() != null && ctyp2.typeArguments().size() == 1; // Rail[T]
 			return ctyp2.typeArguments().get(0);
 		}
 		return null;
 
 	}
 
-	private boolean isFloatArray(Type typ) {
-		Type cargo = arrayCargo(typ);
-		return cargo != null && cargo.isFloat();
-	}
-
-	private boolean isIntArray(Type typ) {
-		Type cargo = arrayCargo(typ);
-		return cargo != null && cargo.isInt();
-	}
-
 	String prependCUDAType(Type t, String rest) {
 		String type = Emitter.translateType(t, true);
 
-		if (isIntArray(t)) {
-			type = "x10aux::cuda_array<x10_int> ";
-		} else if (isFloatArray(t)) {
-			type = "x10aux::cuda_array<x10_float> ";
+		Type cargo = railCargo(t);
+		if (cargo != null) {
+			type = "x10aux::cuda_array<"+Emitter.translateType(cargo,true)+"> ";
 		} else {
 			type = type + " ";
 		}
@@ -491,22 +483,27 @@ public class CUDACodeGenerator extends MessagePassingCodeGenerator {
 
 			TypeSystem xts = tr.typeSystem();
 			boolean in_template_closure = freeTypeParams.size() > 0;
-			if (in_template_closure)
+			if (in_template_closure) {
 				emitter.printTemplateSignature(freeTypeParams, defn_s);
+			}
 			defn_s.write("const x10aux::serialization_id_t " + cnamet + "::"
-					+ SharedVarsMethods.SERIALIZATION_ID_FIELD + " = ");
+			        + SharedVarsMethods.SERIALIZATION_ID_FIELD + " = ");
 			defn_s.newline(4);
-			String template = in_template_closure ? "template " : "";
-			defn_s.write("x10aux::DeserializationDispatcher::addDeserializer("
-					+ cnamet + "::" + template
-					+ SharedVarsMethods.DESERIALIZE_METHOD
-					+ chevrons("x10::lang::Reference") + ", "+closure_kind_strs[kind]+", " + cnamet
-					+ "::" + template
-					+ SharedVarsMethods.DESERIALIZE_CUDA_METHOD + ", " + cnamet
-					+ "::" + template + SharedVarsMethods.POST_CUDA_METHOD
-					+ ", " + "\"" + hostClassName + "\", \"" + cnamet
-					+ "\");");
-			defn_s.newline();
+			defn_s.writeln("x10aux::DeserializationDispatcher::addDeserializer("
+			        + cnamet + "::"+ SharedVarsMethods.DESERIALIZE_METHOD+ ");");
+
+			if (in_template_closure) {
+			    emitter.printTemplateSignature(freeTypeParams, defn_s);
+			}
+			defn_s.write("const x10aux::serialization_id_t " + cnamet + "::"
+					+ SharedVarsMethods.NETWORK_ID_FIELD + " = ");
+			defn_s.newline(4);
+			defn_s.writeln("x10aux::NetworkDispatcher::addNetworkDeserializer("
+					+ cnamet + "::"+ SharedVarsMethods.DESERIALIZE_METHOD+ ", "
+			        + closure_kind_strs[kind]+", "
+					+ cnamet + "::" + SharedVarsMethods.DESERIALIZE_CUDA_METHOD + ", "
+			        + cnamet + "::" + SharedVarsMethods.POST_CUDA_METHOD+ ", "
+					+ "\"" + hostClassName + "\", \"" + cnamet + "\");");
 			defn_s.forceNewline();
 		} else {
 			super.generateClosureDeserializationIdDef(defn_s, cnamet,
@@ -560,10 +557,8 @@ public class CUDACodeGenerator extends MessagePassingCodeGenerator {
 				for (VarInstance<?> var : env) {
 					Type t = var.type();
 					String name = var.name().toString();
-					if (isIntArray(t) || isFloatArray(t)) {
-						if (!xts().isRemoteArray(t)) {
-							inc.write("x10aux::remote_free(__gpu, (x10_ulong)(size_t)__env." + name + ".raw);");
-						}
+					if (xts().isRail(t)) {
+						inc.write("x10aux::remote_free(__gpu, (x10_ulong)(size_t)__env." + name + ".raw);");
 					}
 					inc.newline();
 				}
@@ -581,7 +576,7 @@ public class CUDACodeGenerator extends MessagePassingCodeGenerator {
 			inc.newline(4);
 			inc.begin(0);
 
-			inc.write(make_ref(cnamet) + " __this = " + cnamet + "::" + DESERIALIZE_METHOD + "<" + cnamet + ">(__buf);");
+			inc.write(make_ref(cnamet) + " __this = reinterpret_cast"+chevrons(make_ref(cnamet)) +"("+ cnamet + "::" + DESERIALIZE_METHOD + "(__buf));");
 			inc.newline();
 
 			for (VarInstance<?> var : env) {
@@ -623,7 +618,7 @@ public class CUDACodeGenerator extends MessagePassingCodeGenerator {
 					&& cuda_kernel.autoThreads != null) {
 				String bname = cuda_kernel.autoBlocks.name().id().toString();
 				String tname = cuda_kernel.autoThreads.name().id().toString();
-				inc.write("x10aux::blocks_threads(__gpu, x10aux::DeserializationDispatcher::getMsgType(_serialization_id), __shm, "
+				inc.write("x10aux::blocks_threads(__gpu, x10aux::NetworkDispatcher::getMsgType(_network_id), __shm, "
 								+ bname + ", " + tname + ");");
 				inc.newline();
 			}
@@ -648,35 +643,28 @@ public class CUDACodeGenerator extends MessagePassingCodeGenerator {
 				Type t = var.type();
 				String name = var.name().toString();
 
-				// String addr = "&(*"+name+")[0]"; // old way for rails
-				String addr = "&" + name + "->FMGL(raw).raw()[0]";
-				// String rr =
-				// "x10aux::get_remote_ref_maybe_null("+name+".operator->())";
-				// // old object model
-				String rr = "&" + name + "->FMGL(rawData).raw()[0]";
-
 				String ts = null;
-				if (isIntArray(t)) {
-					ts = "x10_int";
-				} else if (isFloatArray(t)) {
-					ts = "x10_float";
+				Type cargo = railCargo(t);
+				if (cargo != null) {
+					ts = Emitter.translateType(cargo, true);
 				}
 
-				if (isIntArray(t) || isFloatArray(t)) {
-					if (xts().isRemoteArray(t)) {
-						inc.write("__env." + name + ".raw = (" + ts + "*)(size_t)" + rr + ";");
-						inc.newline();
-						inc.write("__env." + name + ".FMGL(size) = " + name + "->FMGL(size);");
-						inc.newline();
-					} else {
-						String len = name + "->FMGL(size)";
-						String sz = "sizeof(" + ts + ")*" + len;
-						inc.write("__env." + name + ".raw = (" + ts + "*)(size_t)x10aux::remote_alloc(__gpu, " + sz + ");");
-						inc.newline();
-						inc.write("__env." + name + ".FMGL(size) = " + len + ";");
-						inc.newline();
-						inc.write("x10aux::cuda_put(__gpu, (x10_ulong) __env." + name + ".raw, " + addr + ", " + sz + ");");
-					}
+				if (xts().isGlobalRail(t)) {
+					// Just initialise the __env struct with the remote pointer and size
+					inc.write("__env." + name + ".raw = (" + ts + "*)(size_t)" + name + "->__apply();");
+					inc.newline();
+					inc.write("__env." + name + ".FMGL(size) = " + name + "->FMGL(size);");
+					inc.newline();
+				} else if (xts().isRail(t)) {
+					String len = name + "->FMGL(size)";
+					String sz = "sizeof(" + ts + ")*" + len;
+					// Allocate remote storage to receive the captured Rail, initialise __env struct with tihs remote ptr and the size
+					inc.write("__env." + name + ".raw = (" + ts + "*)(size_t)x10aux::remote_alloc(__gpu, " + sz + ");");
+					inc.newline();
+					inc.write("__env." + name + ".FMGL(size) = " + len + ";");
+					inc.newline();
+					// Do the copy into this new storage
+					inc.write("x10aux::cuda_put(__gpu, (x10_ulong) __env." + name + ".raw, &" + name + "->raw[0]" + ", " + sz + ");");
 				} else {
 					inc.write("__env." + name + " = " + name + ";");
 				}
@@ -878,7 +866,73 @@ public class CUDACodeGenerator extends MessagePassingCodeGenerator {
 				"Runtime types not available in @CUDA code.", n, false);
 		super.visit(n);
 	}
-		   
+
+	public void visit(LocalDecl_c dec) {
+
+		if (!generatingCUDACode()) {
+			super.visit(dec);
+			return;
+		}
+
+        Type type = dec.type().type();
+
+	    if (!xts().isRail(type)) {
+	    	super.visit(dec);
+	    	return;
+	    }
+
+	    if (((X10Ext) dec.ext()).annotationMatching(xts().StackAllocate()).isEmpty()) {
+	    	super.visit(dec);
+	    	return;
+	    }
+
+	    // Then we have a stack allocated rail in a CUDA kernel...
+	    
+	    // Check that the child AST is of the form @StackAllocate new Rail[T](literal);
+	    {
+	    Expr init = dec.init();
+		    if (!(init instanceof X10New_c)) {
+	            tr.job().compiler().errorQueue().enqueue(ErrorInfo.WARNING,
+	                    "@StackAllocate initializer was not a new Rail[T].", dec.position());
+		    }
+		    X10New_c constr = (X10New_c) init;
+		    Type target = constr.procedureInstance().returnType();
+		    if (!target.isRail()) {
+	            tr.job().compiler().errorQueue().enqueue(ErrorInfo.WARNING,
+	                    "@StackAllocate target was not a Rail.", dec.position());
+		    }
+		    
+	    }
+
+	    long size = -1;
+        Map<String,Object> knownProperties = Emitter.exploreConstraints(context(), type);
+        Object sizeVal = knownProperties.get("size");
+        if (sizeVal != null) {
+        	// [DC] assume it's a Number, since otherwise would not pass type checking
+        	size = ((Number)sizeVal).longValue();
+        }
+        if (size < 0) {
+            tr.job().compiler().errorQueue().enqueue(ErrorInfo.WARNING,
+                    "@StackAllocate Rail size not known at compile time.", dec.position());
+        }
+        
+        /* GIVEN c of Rail[Float]{size==16}
+        x10aux::cuda_array<x10_float> c;
+        c.FMGL(size) = 16;
+        x10_float c__backing[16];
+        c.raw = c__backing;
+         */
+
+        String name = dec.name().toString();
+        String typeStr = Emitter.translateType(railCargo(type), true);
+        
+        sw.write("x10aux::cuda_array<"+typeStr+"> "+name+";"); sw.newline(0);
+        sw.write(name+".FMGL(size) = "+size+";"); sw.newline(0);
+        sw.write(typeStr+" "+name+"__backing["+(size==0 ? 1 : size)+"];"); sw.newline(0);
+        sw.write(name+".raw = "+name+"__backing;"); sw.newline(0);
+	}
+
+	
 	public static boolean postCompile(X10CPPCompilerOptions options, Compiler compiler, ErrorQueue eq) {
         if (options.post_compiler != null && !options.output_stdout) {
     		CXXCommandBuilder ccb = CXXCommandBuilder.getCXXCommandBuilder(
@@ -887,34 +941,46 @@ public class CUDACodeGenerator extends MessagePassingCodeGenerator {
 					X10CPPTranslator.loadSharedLibProperties(),
 					eq);
     		
-    	    for (String arch : ccb.getCUDAArchitectures()) {
-    	        if (!postCompile(options, compiler, eq, arch, ccb)) return false;
-    	    }       
+           Collection<String> compilationUnits = options.compilationUnits();
+            for (String f : compilationUnits) {
+                if (f.endsWith(".cu")) {
+                    if (!canFindNVCC(ccb)) {
+                        eq.enqueue(ErrorInfo.WARNING, "Found @CUDA annotation, but nvcc is not on path.  Not compiling for GPU.");
+                        return true; // Pretend that we succeeded (non-fatal condition)
+                    }
+
+                    for (String arch : ccb.getCUDAArchitectures()) {
+                        ArrayList<String> nvccCmd = new ArrayList<String>();
+                        nvccCmd.add(ccb.getCUDAPostCompiler());
+                        for (String s : ccb.getCUDAPreFileArgs()) {
+                            nvccCmd.add(s);
+                        }
+                        nvccCmd.add("-arch="+arch);
+                        nvccCmd.add(f);
+                        nvccCmd.add("-o");
+                        nvccCmd.add(f.replace(File.separatorChar, '_').substring(0,f.length() - 3) + "_" + arch + ".cubin");
+                        if (!X10CPPTranslator.doPostCompile(options, eq, compilationUnits, nvccCmd.toArray(new String[nvccCmd.size()]))) {
+                            eq.enqueue(ErrorInfo.POST_COMPILER_ERROR, "Found @CUDA annotation, but compilation of "+f+" with nvcc -arch="+arch+" failed.");
+                            return false;
+                        }
+                    }
+                }
+            }       
         }
 	    return true;
 	}
 
-	private static boolean postCompile(X10CPPCompilerOptions options, Compiler compiler, ErrorQueue eq, String arch, CXXCommandBuilder ccb) {
-		Collection<String> compilationUnits = options.compilationUnits();
-		for (String f : compilationUnits) {
-			if (f.endsWith(".cu")) {
-				ArrayList<String> nvccCmd = new ArrayList<String>();
-				nvccCmd.add(ccb.getCUDAPostCompiler());
-				for (String s : ccb.getCUDAPreFileArgs()) {
-					nvccCmd.add(s);
-				}
-				nvccCmd.add("-arch="+arch);
-				nvccCmd.add(f);
-				nvccCmd.add("-o");
-				nvccCmd.add(f.substring(0,f.length() - 3) + "_" + arch + ".cubin");
-				if (!X10CPPTranslator.doPostCompile(options, eq, compilationUnits, nvccCmd.toArray(new String[nvccCmd.size()]), true)) {
-					eq.enqueue(ErrorInfo.WARNING, "Found @CUDA annotation, but not compiling for GPU because nvcc could not be run (check your $PATH).");
-					return true;
-				}
-			}
-		}
-		return true;
-	}
+    private static boolean canFindNVCC(CXXCommandBuilder ccb) {
+        try {
+            String pc = ccb.getCUDAPostCompiler();
+            Process proc = Runtime.getRuntime().exec(new String[] {"which", pc});
+            proc.waitFor();
+            return proc.exitValue() == 0;
+        } catch (Exception e) {
+            // Failure indicated by falling thru to return false
+        }
+        return false;
+    }
 
 } // end of CUDACodeGenerator
 

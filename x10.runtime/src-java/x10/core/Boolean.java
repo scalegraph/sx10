@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.core;
@@ -27,14 +27,14 @@ import x10.serialization.X10JavaSerializer;
  */
 final public class Boolean extends Struct implements java.lang.Comparable<Boolean>
 {
-    private static final long serialVersionUID = 1L;
-    
     public static final RuntimeType<?> $RTT = Types.BOOLEAN;
     public RuntimeType<?> $getRTT() {return $RTT;}
     public Type<?> $getParam(int i) {return null;}
     
-    public static final Boolean TRUE = new Boolean(true);
-    public static final Boolean FALSE = new Boolean(false);
+    public static final boolean TRUE = true;
+    public static final boolean FALSE = false;
+    public static boolean get$TRUE() { return true; }
+    public static boolean get$FALSE() { return false; }
 
     final boolean $value;
 
@@ -42,8 +42,10 @@ final public class Boolean extends Struct implements java.lang.Comparable<Boolea
         this.$value = value;
     }
 
+    private static final Boolean BOXED_TRUE = new Boolean(true);
+    private static final Boolean BOXED_FALSE = new Boolean(false);
     public static Boolean $box(boolean value) {
-        return value ? TRUE : FALSE;
+        return value ? BOXED_TRUE : BOXED_FALSE;
     }
 
     public static boolean $unbox(Boolean obj) {
@@ -91,7 +93,7 @@ final public class Boolean extends Struct implements java.lang.Comparable<Boolea
     }
 
     @Override
-    public java.lang.String toString() {
+    public String toString() {
         return java.lang.Boolean.toString($value);
     }
     
@@ -111,7 +113,6 @@ final public class Boolean extends Struct implements java.lang.Comparable<Boolea
     public static X10JavaSerializable $_deserialize_body(Boolean $_obj, X10JavaDeserializer $deserializer) throws IOException {
         boolean value  = $deserializer.readBoolean();
         $_obj = new Boolean(value);
-        $deserializer.record_reference($_obj);
         return $_obj;
     }
 }

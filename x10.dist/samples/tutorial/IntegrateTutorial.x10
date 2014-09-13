@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 /**
@@ -46,9 +46,9 @@ public class IntegrateTutorial {
     return expr1 + expr2;
   }
  
-  public static def main(args:Array[String](1)) {
+  public static def main(args:Rail[String]) {
     val obj = new IntegrateTutorial((x:double)=>(x*x + 1.0) * x);
-    val xMax = args.size > 0 ? Int.parse(args(0)) : 10;
+    val xMax = args.size > 0 ? Long.parse(args(0)) : 10;
     val area = obj.computeArea(0, xMax);
     Console.OUT.println("The area of (x*x +1) * x from 0 to "+xMax+" is "+area);
   }

@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #include <x10rt.h>
@@ -49,8 +49,8 @@ namespace x10 {
         Comparable<x10_boolean>::itable<Boolean_iboxthunk> Boolean_iboxthunk::comparable_itable(&Boolean_iboxthunk::compareTo, &Boolean_iboxthunk::equals, &Boolean_iboxthunk::hashCode, &Boolean_iboxthunk::toString, &Boolean_iboxthunk::typeName);
 
         itable_entry itable_Boolean[3] = { itable_entry(&x10aux::getRTT<x10::lang::Any>, &Boolean_iboxthunk::any_itable),
-                                               itable_entry(&x10aux::getRTT<x10::lang::Comparable<x10_boolean> >, &Boolean_iboxthunk::comparable_itable),
-                                               itable_entry(NULL, (void*)&x10aux::RuntimeType::BooleanType) };
+                                           itable_entry(&x10aux::getRTT<x10::lang::Comparable<x10_boolean> >, &Boolean_iboxthunk::comparable_itable),
+                                           itable_entry(NULL, (void*)"x10::lang::Boolean") };
 
         class Char_iboxthunk : IBox<x10_char> { /* implements Any, Comparable[Char], Ordered[Char] */
         public:
@@ -95,10 +95,58 @@ namespace x10 {
         x10::util::Ordered<x10_char>::itable<Char_iboxthunk> Char_iboxthunk::ordered_itable(&Char_iboxthunk::equals, &Char_iboxthunk::hashCode, &Char_iboxthunk::__lt, &Char_iboxthunk::__le, &Char_iboxthunk::__gt, &Char_iboxthunk::__ge, &Char_iboxthunk::toString, &Char_iboxthunk::typeName);
 
         itable_entry itable_Char[4] = { itable_entry(&x10aux::getRTT<x10::lang::Any>, &Char_iboxthunk::any_itable),
-                                               itable_entry(&x10aux::getRTT<x10::lang::Comparable<x10_char> >, &Char_iboxthunk::comparable_itable),
-                                               itable_entry(&x10aux::getRTT<x10::util::Ordered<x10_char> >, &Char_iboxthunk::ordered_itable),
-                                               itable_entry(NULL, (void*)&x10aux::RuntimeType::CharType) };
+                                        itable_entry(&x10aux::getRTT<x10::lang::Comparable<x10_char> >, &Char_iboxthunk::comparable_itable),
+                                        itable_entry(&x10aux::getRTT<x10::util::Ordered<x10_char> >, &Char_iboxthunk::ordered_itable),
+                                        itable_entry(NULL, (void*)"x10::lang::Char") };
 
+        
+        class Complex_iboxthunk : IBox<x10_complex> { /* implements Any, Arithmetic[Complex] */
+        public:
+            static Any::itable<Complex_iboxthunk> any_itable;
+            static Arithmetic<x10_complex>::itable<Complex_iboxthunk> arithmetic_itable;
+
+            /* Methods of Any */
+            x10_boolean equals(Any* arg0) {
+                return x10aux::equals(value, arg0);
+            }
+            x10_int hashCode() {
+                return x10aux::hash_code(value);
+            }
+            String* toString() {
+                return x10aux::to_string(value);
+            }
+            String* typeName() {
+                return x10aux::type_name(value);
+            }
+            /* Methods of Arithmetic */
+            x10_complex __plus() {
+                return value;
+            }
+            x10_complex __minus() {
+                return -value;
+            }
+            x10_complex __plus(x10_complex arg0) {
+                return value + arg0;
+            }
+            x10_complex __minus(x10_complex arg0) {
+                return value - arg0;
+            }
+            x10_complex __times(x10_complex arg0) {
+                return value * arg0;
+            }
+            x10_complex __over(x10_complex arg0) {
+                return value / arg0;
+            }
+        };
+
+        Any::itable<Complex_iboxthunk> Complex_iboxthunk::any_itable(&Complex_iboxthunk::equals, &Complex_iboxthunk::hashCode, &Complex_iboxthunk::toString, &Complex_iboxthunk::typeName);
+        Arithmetic<x10_complex>::itable<Complex_iboxthunk> Complex_iboxthunk::arithmetic_itable(&Complex_iboxthunk::equals, &Complex_iboxthunk::hashCode, &Complex_iboxthunk::__times, &Complex_iboxthunk::__plus, &Complex_iboxthunk::__plus, &Complex_iboxthunk::__minus, &Complex_iboxthunk::__minus, &Complex_iboxthunk::__over, &Complex_iboxthunk::toString, &Complex_iboxthunk::typeName);
+
+        itable_entry itable_Complex[3] = { itable_entry(&x10aux::getRTT<x10::lang::Any>, &Complex_iboxthunk::any_itable),
+                                           itable_entry(&x10aux::getRTT<x10::lang::Arithmetic<x10_complex> >, &Complex_iboxthunk::arithmetic_itable),
+                                           itable_entry(NULL, (void*)"x10::lang::Complex") };
+
+        
 #define BOXED_PRIM_ITABLES_CAO(CPRIM,PRIMCLASS,UTILS)                                  \
         class PRIMCLASS##_iboxthunk : IBox<CPRIM> { /* implements Any, Comparable[PRIMCLASS], Arithmetic[PRIMCLASS], Ordered[PRIMCLASS] */ \
         public:                                                                        \
@@ -167,7 +215,7 @@ namespace x10 {
                                                itable_entry(&x10aux::getRTT<x10::lang::Comparable<CPRIM> >, &PRIMCLASS##_iboxthunk::comparable_itable), \
                                                itable_entry(&x10aux::getRTT<x10::lang::Arithmetic<CPRIM> >, &PRIMCLASS##_iboxthunk::arithmetic_itable), \
                                                itable_entry(&x10aux::getRTT<x10::util::Ordered<CPRIM> >, &PRIMCLASS##_iboxthunk::ordered_itable), \
-                                               itable_entry(NULL, (void*)&x10aux::RuntimeType::PRIMCLASS##Type) }; \
+                                               itable_entry(NULL, (void*)"x10.lang.PRIMCLASS") }; \
 
 #define BOXED_PRIM_ITABLES_CABO(CPRIM,PRIMCLASS,UTILS)                                 \
         class PRIMCLASS##_iboxthunk : IBox<CPRIM> { /* implements Any, Comparable[PRIMCLASS], Arithmetic[PRIMCLASS], Bitwise[PRIMCLASS], Ordered[PRIMCLASS] */ \
@@ -227,14 +275,14 @@ namespace x10 {
             CPRIM __caret(CPRIM arg0) {                                 \
                 return (CPRIM)(value^arg0);                             \
             }                                                           \
-            CPRIM __left(x10_int arg0) {                                \
-                return (CPRIM)(value<<(0x1f&arg0));                     \
+            CPRIM __left(x10_long arg0) {                               \
+                return (CPRIM)(value<<(0x1f&(x10_int)arg0));            \
             }                                                           \
-            CPRIM __right(x10_int arg0) {                               \
-                return (CPRIM)(value>>(0x1f&arg0));                     \
+            CPRIM __right(x10_long arg0) {                              \
+                return (CPRIM)(value>>(0x1f&(x10_int)arg0));            \
             }                                                           \
-            CPRIM __unsigned_right(x10_int arg0) {                      \
-                return (CPRIM)(((x10_ulong)value)>>(0x1f&arg0));        \
+            CPRIM __unsigned_right(x10_long arg0) {                     \
+                return (CPRIM)(((x10_ulong)value)>>(0x1f&(x10_int)arg0)); \
             }                                                           \
             /* Methods of Ordered */                                    \
             x10_boolean __lt(CPRIM arg0) {                              \
@@ -262,7 +310,7 @@ namespace x10 {
                                                itable_entry(&x10aux::getRTT<x10::lang::Arithmetic<CPRIM> >, &PRIMCLASS##_iboxthunk::arithmetic_itable), \
                                                itable_entry(&x10aux::getRTT<x10::lang::Bitwise<CPRIM> >, &PRIMCLASS##_iboxthunk::bitwise_itable), \
                                                itable_entry(&x10aux::getRTT<x10::util::Ordered<CPRIM> >, &PRIMCLASS##_iboxthunk::ordered_itable), \
-                                               itable_entry(NULL, (void*)&x10aux::RuntimeType::PRIMCLASS##Type) }; \
+                                               itable_entry(NULL, (void*)"x10.lang.PRIMCLASS") }; \
 
         BOXED_PRIM_ITABLES_CABO(x10_byte, Byte, ByteNatives)
         BOXED_PRIM_ITABLES_CABO(x10_ubyte, UByte, UByteNatives)
@@ -274,7 +322,6 @@ namespace x10 {
         BOXED_PRIM_ITABLES_CABO(x10_long, Long, LongNatives)
         BOXED_PRIM_ITABLES_CABO(x10_ulong, ULong, ULongNatives)
         BOXED_PRIM_ITABLES_CAO(x10_double, Double, DoubleNatives)
-
     }
 }
 

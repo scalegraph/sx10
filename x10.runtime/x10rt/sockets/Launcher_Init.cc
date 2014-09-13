@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  *
  *  This file was written by Ben Herta for IBM: bherta@us.ibm.com
  */
@@ -102,7 +102,15 @@ void Launcher::initialize(int argc, char ** argv)
 	/* ------------------------------------------------ */
 
 	_argc = argc;
-	_argv = argv;
+
+	// make a copy, because some platforms may delete argv after we return (e.g. Windows 7)
+	_argv = (char**)malloc((argc+1)*sizeof(char*));
+	_argv[argc] = NULL;
+	for (int i=0; i<argc; i++) {
+		_argv[i] = (char*)malloc((strlen(argv[i])+1)*sizeof(char));
+		strcpy(_argv[i], argv[i]);
+	}
+
 	if (NULL==realpath(argv[0], _realpath)) {
         perror("Resolving absolute path of executable");
     }

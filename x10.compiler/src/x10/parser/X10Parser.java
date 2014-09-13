@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 /********************************************************************
  * WARNING!  THIS JAVA FILE IS AUTO-GENERATED FROM x10/parser/x10.g *
@@ -3562,7 +3562,7 @@ public class X10Parser extends Object implements RuleAction
                 break;
             }
             //
-            // Rule 373:  Literal ::= IntegerLiteral$lit
+            // Rule 373:  Literal ::= IntLiteral$lit
             //
             case 373: {
                 //#line 1780 "x10/parser/x10.g"
@@ -3618,7 +3618,7 @@ public class X10Parser extends Object implements RuleAction
                 break;
             }
             //
-            // Rule 379:  Literal ::= UnsignedIntegerLiteral$lit
+            // Rule 379:  Literal ::= UnsignedIntLiteral$lit
             //
             case 379: {
                 //#line 1804 "x10/parser/x10.g"

@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef X10_IO_OUTPUTSTREAM_H
@@ -16,13 +16,14 @@
 
 namespace x10 {
 
-    namespace util {
-        template<class T> class IndexedMemoryChunk;
+    namespace lang {
+        template<class T> class Rail;
+        class String;
     }
 
     namespace io {
 
-        class OutputStreamWriter__OutputStream : public x10::lang::X10Class {
+        class OutputStreamWriter__OutputStream : public ::x10::lang::X10Class {
             public:
             RTT_H_DECLS_CLASS;
 
@@ -36,16 +37,16 @@ namespace x10 {
             virtual void close() { }
             virtual void flush() { }
             virtual void write(x10_int b) = 0;
-            virtual void write(x10::util::IndexedMemoryChunk<x10_byte> b);
-            virtual void write(x10::util::IndexedMemoryChunk<x10_byte> b, x10_int off, x10_int len);
+            virtual void write(::x10::lang::Rail<x10_byte>* b, x10_long off, x10_long len) = 0;
+            virtual void write(::x10::lang::String* s) = 0;
 
             static OutputStreamWriter__OutputStream* STANDARD_OUT();
 
             static OutputStreamWriter__OutputStream* STANDARD_ERR();
 
             // Serialization
-            virtual void _serialize_body(x10aux::serialization_buffer& buf);
-            void _deserialize_body(x10aux::deserialization_buffer& buf);
+            virtual void _serialize_body(::x10aux::serialization_buffer& buf);
+            void _deserialize_body(::x10aux::deserialization_buffer& buf);
         };
     }
 }

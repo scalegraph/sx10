@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.types;
@@ -89,6 +89,7 @@ import x10.types.constraints.CSelf;
 import x10.types.matcher.Subst;
 import x10.util.Synthesizer;
 import x10.types.constraints.XTypeLit;
+import x10.types.constraints.xnative.CNativeLocal;
 import x10.types.constraints.xnative.QualifiedVar;
 
 /**
@@ -260,13 +261,13 @@ public class XTypeTranslator {
         return v;
     }
     static public XTerm expandSelfPropertyMethod(XTerm term) {
-        return expandPropertyMethod(term,false,null,null,null);
+        return expandPropertyMethod(term,false,null,null);
     }
     // todo: merge this code with Checker.expandCall and try to get rid of ts.expandMacros
     static public XTerm expandPropertyMethod(XTerm term, boolean isThisOrSelf,
                         // these three formals help us search for a concrete implementation of the property method
                         // they can be null (then we don't search for an implementation)
-                        TypeSystem ts, ClassType classType, Context context) {
+                        TypeSystem ts, Context context) {
         Def aDef = null;
         XTerm[] args = null; // the first arg is the this-receiver
         if (term instanceof CAtom) {
@@ -285,15 +286,19 @@ public class XTypeTranslator {
         }
         if (aDef==null || !(aDef instanceof X10MethodDef)) return term;
         XTerm receiver = args[0];
-        if (isThisOrSelf) {
-            // for methods (checking overriding) we replace "this.p(...)"
-            if (!(receiver instanceof CThis)) return term;
-        } else {
-            // for subtyping tests we replace "self.p(...)"
-            if (!(receiver instanceof CSelf)) return term;
+        ClassType classType = null;
+        if (receiver instanceof Typed) { // this covers CThis and CNativeLocal and perhaps others
+        	Type t = ((Typed)receiver).type();
+        	t = Types.baseType(t);
+        	if (t instanceof ClassType) {
+        		classType = (ClassType) t;
+        	} else {
+        		assert false;
+        	}
         }
+        // TODO: the type of self is not available on trunk, this is fixed in the constraint branch.
         X10MethodDef def = (X10MethodDef) aDef;
-        if (classType!=null) {
+        if (classType!=null && ts != null) {
             // find the correct def, and return a clone of the XTerm
             final MethodInstance method = ts.findImplementingMethod(classType, def.asInstance(), false, context);
             if (method==null) // the property is abstract in t1

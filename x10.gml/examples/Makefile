@@ -6,7 +6,7 @@
 #  You may obtain a copy of the License at
 #      http://www.opensource.org/licenses/eclipse-1.0.php
 #
-#  (C) Copyright IBM Corporation 2006-2011.
+#  (C) Copyright IBM Corporation 2006-2014.
 #
 
 ###################################################
@@ -69,7 +69,7 @@ help ::
 	@echo " 2) make run --- start run the default target app $(target) built for managed backend"
 	@echo "";
 	@echo " To build apps with GML, you need to build GML library first by";
-	@echo " running \"make gmllib\" at the GML root directory.  This will create all depending libraries, jar files and";
+	@echo " running \"make all\" at the GML root directory.  This will create all depending libraries, jar files and";
 	@echo " and properties, which are used in building apps for managed backend, native";
 	@echo " backend, and native C++ on MPI transport";
 	@echo " NOTE: after GML library is built, the \"include\" in the matrix top directory";

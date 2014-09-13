@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.core;
@@ -15,8 +15,6 @@ package x10.core;
 
 // Base class of all X10 ref objects -- should be generated, but we need this class to get Box to compile.
 public abstract class Ref implements Any {
-    
-    private static final long serialVersionUID = 1L;
     
     // N.B. this is called implicitly by all subclasses of Ref
     public Ref() {}
@@ -27,10 +25,6 @@ public abstract class Ref implements Any {
     // constructor for non-virtual call
     public final Ref x10$lang$Object$$init$S() {return this;}
     
-	
-    // not used
-//    public static Ref $make() { return new Ref(); }
-
     /* TODO to be removed
     public void $init(Object out$){}
     
@@ -39,7 +33,7 @@ public abstract class Ref implements Any {
     */
 
     @Override
-    public java.lang.String toString() {
+    public String toString() {
         return x10.lang.System.identityToString(this);
     }
 
@@ -50,7 +44,7 @@ public abstract class Ref implements Any {
 //    }
 //
 //    @Override
-//    public boolean equals(java.lang.Object other) {
+//    public boolean equals(Object other) {
 //        return x10.lang.System.identityEquals$O(this, other);
 //    }
     

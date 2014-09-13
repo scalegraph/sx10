@@ -6,46 +6,29 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.matrix.comm;
 
-import x10.io.Console;
-import x10.util.Timer;
-import x10.util.ArrayList;
-
 import x10.compiler.Ifdef;
 import x10.compiler.Ifndef;
-import x10.compiler.Uninitialized;
 import x10.compiler.Inline;
 
 import x10.matrix.Debug;
-import x10.matrix.RandTool;
 import x10.matrix.Matrix;
 import x10.matrix.DenseMatrix;
+import x10.matrix.comm.mpi.WrapMPI;
 import x10.matrix.sparse.SparseCSC;
 import x10.matrix.block.MatrixBlock;
-import x10.matrix.distblock.CastPlaceMap;
-
 
 /**
- * Ring cast sends data from here to a set of blocks, or partial broadcast
- *.
+ * Ring cast sends data from here to a set of blocks, or partial broadcast.
  */
 public class BlockRingCast extends BlockRemoteCopy {
-
-	//===========================
-	// Constructor
-	//===========================
-	public def this() {
-		super();
-	}
-	//==================================================
 	// RingCast: receive form previous one and send to one next in a ring 
-	//==================================================
-	public static def rowWise(rid:Int, cid:Int):Int = rid;
-	public static def colWise(rid:Int, cid:Int):Int = cid;
+	public static def rowWise(rid:Long, cid:Long):Long = rid;
+	public static def colWise(rid:Long, cid:Long):Long = cid;
 	
 	/**
 	 * Ring-cast sends data from root block to all blocks in the same row in partition
@@ -55,8 +38,8 @@ public class BlockRingCast extends BlockRemoteCopy {
 	 * @param datCnt     number of data to send out
 	 * @param plst       list of places to receive data
 	 */
-	public static def rowCastToPlaces(distBS:BlocksPLH, rootbid:Int, datCnt:Int, plst:Array[Int](1)) {
-		castToPlaces(distBS, rootbid, datCnt, (r:Int,c:Int)=>r, plst);
+	public static def rowCastToPlaces(distBS:BlocksPLH, rootbid:Long, datCnt:Long, plst:Rail[Long]) {
+		castToPlaces(distBS, rootbid, datCnt, (r:Long,c:Long)=>r, plst);
 	}
 	
 	/**
@@ -67,21 +50,18 @@ public class BlockRingCast extends BlockRemoteCopy {
 	 * @param colCnt     number of data to send out
 	 * @param plst       list of places
 	 */	
-	public static def colCastToPlaces(distBS:BlocksPLH, rootbid:Int, datCnt:Int, plst:Array[Int](1)) {
-		castToPlaces(distBS, rootbid, datCnt, (r:Int,c:Int)=>c, plst);
+	public static def colCastToPlaces(distBS:BlocksPLH, rootbid:Long, datCnt:Long, plst:Rail[Long]) {
+		castToPlaces(distBS, rootbid, datCnt, (r:Long,c:Long)=>c, plst);
 	}
 	
-	/**
-	 * 
-	 */
 	@Inline
-	public static def castToPlaces(distBS:BlocksPLH, rootbid:Int, datCnt:Int, 
-			select:(Int,Int)=>Int, plst:Array[Int](1)) {
+	public static def castToPlaces(distBS:BlocksPLH, rootbid:Long, datCnt:Long, 
+			select:(Long,Long)=>Long, plst:Rail[Long]) {
 
 		val rootpid = distBS().findPlace(rootbid);
 		if (rootpid != here.id()) {
 			//Goto rootpid to start ringcast
-			at (Dist.makeUnique()(rootpid)) {
+			at(Place(rootpid)) {
 				castToPlaces(distBS, rootbid, datCnt, select, plst);
 			}
 			return;
@@ -100,22 +80,21 @@ public class BlockRingCast extends BlockRemoteCopy {
 	}
 	
 
-	//----------------------------------------------------------------
 	/**
 	 * Broadcast data from local root block at here to a list of places. 
 	 */
 	protected static def binaryTreeCastTo(
-			distBS:BlocksPLH, rootbid:Int, datCnt:Int, 
-			select:(Int,Int)=>Int, 
-			plist:Array[Int](1)){
+			distBS:BlocksPLH, rootbid:Long, datCnt:Long, 
+			select:(Long,Long)=>Long, 
+			plist:Rail[Long]){
 
 		val pcnt   = plist.size;
-		val lfcnt:Int = (pcnt+1) / 2; 
+		val lfcnt:Long = (pcnt+1) / 2; 
 		val rtcnt  = pcnt - lfcnt;
 		val rtroot = plist(lfcnt);
 
-		val lfplist = new Array[Int](lfcnt, (i:Int)=>plist(i));
-		val rtplist = new Array[Int](rtcnt, (i:Int)=>plist(lfcnt+i));
+		val lfplist = new Rail[Long](lfcnt, (i:Long)=>plist(i));
+		val rtplist = new Rail[Long](rtcnt, (i:Long)=>plist(lfcnt+i));
 
 		//Debug.flushln("left branch "+lfplist.toString());
 		//Debug.flushln("Right branch "+rtplist.toString());		
@@ -129,11 +108,10 @@ public class BlockRingCast extends BlockRemoteCopy {
 			}
 		}
 	}
-	//--------------------------------------------------------------
 	
 	private static def copyBlockToRightBranch(
-			distBS:BlocksPLH, rootbid:Int, remotepid:Int, datCnt:Int,
-			select:(Int,Int)=>Int, plist:Array[Int](1)) {
+			distBS:BlocksPLH, rootbid:Long, remotepid:Long, datCnt:Long,
+			select:(Long,Long)=>Long, plist:Rail[Long]) {
 
 		if (remotepid == here.id()) {
 			if (plist.size > 1 ) {
@@ -162,18 +140,16 @@ public class BlockRingCast extends BlockRemoteCopy {
 		}
 	}
 
-	//--------------------------------------------------------------
-	//--------------------------------------------------------------
-	private static def x10CopyDenseBlock(distBS:BlocksPLH, rootbid:Int, srcblk:MatrixBlock, rmtpid:Int, datCnt:Int,	select:(Int,Int)=>Int, plist:Array[Int](1)):void {
+	private static def x10CopyDenseBlock(distBS:BlocksPLH, rootbid:Long, srcblk:MatrixBlock, rmtpid:Long, datCnt:Long,	select:(Long,Long)=>Long, plist:Rail[Long]):void {
 		
 		val srcden = srcblk.getMatrix() as DenseMatrix;
-		val srcbuf = new RemoteArray[Double](srcden.d as Array[Double](1){self!=null});
-		at (Dist.makeUnique()(rmtpid)) {
+		val srcbuf = new GlobalRail[Double](srcden.d as Rail[Double]{self!=null});
+		at(Place(rmtpid)) {
 			//Remote capture:distBS, rootbid, datCnt, rtplist
 			val blk  = distBS().findFrontBlock(rootbid, select);
 			val dstden = blk.getMatrix() as DenseMatrix;
 			// Using copyFrom style
-			finish Array.asyncCopy[Double](srcbuf, 0, dstden.d, 0, datCnt);
+			finish Rail.asyncCopy[Double](srcbuf, 0, dstden.d, 0, datCnt);
 			
 			// Perform binary bcast on the right branch
 			if (plist.size > 1 ) {
@@ -185,37 +161,37 @@ public class BlockRingCast extends BlockRemoteCopy {
 	
 	private static def x10CopySparseBlock(
 			distBS:BlocksPLH, 
-			rootbid:Int, srcblk:MatrixBlock, rmtpid:Int, datCnt:Int,
-			select:(Int,Int)=>Int, plist:Array[Int](1)) {
+			rootbid:Long, srcblk:MatrixBlock, rmtpid:Long, datCnt:Long,
+			select:(Long,Long)=>Long, plist:Rail[Long]) {
 		
 		val srcspa = srcblk.getMatrix() as SparseCSC;
-		val srcidx = new RemoteArray[Int   ](srcspa.getIndex() as Array[Int   ]{self!=null});
-		val srcval = new RemoteArray[Double](srcspa.getValue() as Array[Double]{self!=null});
+		val srcidx = new GlobalRail[Long](srcspa.getIndex() as Rail[Long]{self!=null});
+		val srcval = new GlobalRail[Double](srcspa.getValue() as Rail[Double]{self!=null});
 		
-		at (Dist.makeUnique()(rmtpid)) {
+		at(Place(rmtpid)) {
 			//Remote capture:distBS, rootbid, datCnt, rtplist
 			val blk    = distBS().findFrontBlock(rootbid, select);
 			val dstspa = blk.getMatrix() as SparseCSC;
 			// Using copyFrom style
 			dstspa.initRemoteCopyAtDest(datCnt);
-			finish Array.asyncCopy[Int   ](srcidx, 0, dstspa.getIndex(), 0, datCnt);
-			finish Array.asyncCopy[Double](srcval, 0, dstspa.getValue(), 0, datCnt);
+			finish Rail.asyncCopy[Long](srcidx, 0, dstspa.getIndex(), 0, datCnt);
+			finish Rail.asyncCopy[Double](srcval, 0, dstspa.getValue(), 0, datCnt);
 			// Perform binary bcast on the right branch
 			if (plist.size > 1 ) {
 				binaryTreeCastTo(distBS, rootbid, datCnt, select, plist);
 			}
 		}	
 	}	
-	//=======================================================================
+
 	private static def mpiCopyDenseBlock(
 			distBS:BlocksPLH, 
-			rootbid:Int, srcblk:MatrixBlock, rmtpid:Int, datCnt:Int,
-			select:(Int,Int)=>Int, 
-			plist:Array[Int](1)) {
+			rootbid:Long, srcblk:MatrixBlock, rmtpid:Long, datCnt:Long,
+			select:(Long,Long)=>Long, 
+			plist:Rail[Long]) {
 
 		val srcpid = here.id();
 		val srcden = srcblk.getMatrix() as DenseMatrix;
-		val tag    = rootbid;//RandTool.nextInt(Int.MAX_VALUE);
+		val tag    = rootbid;//RandTool.nextLong(Int.MAX_VALUE);
 		//Tag is used to differ different ring cast.
 		//Row and column-wise ringcast must NOT be carried out at the same
 		//time. This tag only allows ringcast be differed by root block id.
@@ -226,7 +202,7 @@ public class BlockRingCast extends BlockRemoteCopy {
 			async {
 				WrapMPI.world.send(srcden.d, 0, datCnt, rmtpid, tag);
 			}
-			at (Dist.makeUnique()(rmtpid)) {
+			at(Place(rmtpid)) {
 				//Remote capture:distBS, rootbid, datCnt, rtplist, tag
 				val blk    = distBS().findFrontBlock(rootbid, select);
 				val dstden = blk.getMatrix() as DenseMatrix;
@@ -243,13 +219,13 @@ public class BlockRingCast extends BlockRemoteCopy {
 	
 	private static def mpiCopySparseBlock(
 			distBS:BlocksPLH, 
-			rootbid:Int, srcblk:MatrixBlock, rmtpid:Int, datCnt:Int,
-			select:(Int,Int)=>Int, 
-			plist:Array[Int](1)) {
+			rootbid:Long, srcblk:MatrixBlock, rmtpid:Long, datCnt:Long,
+			select:(Long,Long)=>Long, 
+			plist:Rail[Long]) {
 
 		val srcpid = here.id();
 		val srcspa = srcblk.getMatrix() as SparseCSC;
-		val tag = rootbid;//RandTool.nextInt(Int.MAX_VALUE);
+		val tag = rootbid;//RandTool.nextLong(Int.MAX_VALUE);
 		//Tag must allow to differ multiply ringcast.
 		
 		@Ifdef("MPI_COMMU") 
@@ -259,7 +235,7 @@ public class BlockRingCast extends BlockRemoteCopy {
 				WrapMPI.world.send(srcspa.getValue(), 0, datCnt, rmtpid, tag+1000000);
 			}
 			
-			at (Dist.makeUnique()(rmtpid)) {
+			at(Place(rmtpid)) {
 				//Remote capture:distBS, rootbid, datCnt, rtplist, tag
 				val blk    = distBS().findFrontBlock(rootbid, select);
 				val dstspa = blk.getMatrix() as SparseCSC;
@@ -276,25 +252,23 @@ public class BlockRingCast extends BlockRemoteCopy {
 		}
 	}	
 	
-	//=======================================================================
-	private static def finalizeRingCastRowwise(distBS:BlocksPLH, rootbid:Int, datCnt:Int, plist:Array[Int](1)){
-		finalizeRingCast(distBS, rootbid, datCnt, (rid:Int,cid:Int)=>rid, plist);
+	private static def finalizeRingCastRowwise(distBS:BlocksPLH, rootbid:Long, datCnt:Long, plist:Rail[Long]){
+		finalizeRingCast(distBS, rootbid, datCnt, (rid:Long,cid:Long)=>rid, plist);
 	}
 
-	private static def finalRingCastColwise(distBS:BlocksPLH, rootbid:Int, datCnt:Int, plist:Array[Int](1)){
-		finalizeRingCast(distBS, rootbid, datCnt, (rid:Int,cid:Int)=>cid, plist);
+	private static def finalRingCastColwise(distBS:BlocksPLH, rootbid:Long, datCnt:Long, plist:Rail[Long]){
+		finalizeRingCast(distBS, rootbid, datCnt, (rid:Long,cid:Long)=>cid, plist);
 	}
 
 	private static def finalizeRingCast(distBS:BlocksPLH, 
-			rootbid:Int, datCnt:Int, 
-			select:(Int,Int)=>Int, plist:Array[Int](1)){
+			rootbid:Long, datCnt:Long, 
+			select:(Long,Long)=>Long, plist:Rail[Long]){
 		
 		val rootpid = here.id();
 		finish {
 			//Remote block set update
-			for (val [p]:Point in plist) {
-				val pid = plist(p);
-				async at (Dist.makeUnique()(pid)) {
+            for (pid in plist) {
+                at(Place(pid)) async {
 					val bset = distBS();
 					val blk  = bset.findFrontBlock(rootbid, select); 
 					if (blk.isSparse() && plist.size > 1) { 
@@ -311,29 +285,28 @@ public class BlockRingCast extends BlockRemoteCopy {
 		}
 	}
 	
-	//===================================================================
-	public static def verifyCast(distBS:BlocksPLH, rootbid:Int, datCnt:Int, select:(Int,Int)=>Int, 
-			plst:Array[Int](1)):Boolean {
+	public static def verifyCast(distBS:BlocksPLH, rootbid:Long, datCnt:Long, select:(Long,Long)=>Long, 
+			plst:Rail[Long]):Boolean {
 		var retval:Boolean = true;
-		val mat = at (Dist.makeUnique()(plst(0))) {
+		val mat = at(x10.regionarray.Dist.makeUnique()(plst(0))) {
 			distBS().findFrontBlock(rootbid, select).getMatrix()
 		};
 				
-		for (var p:Int=1; p<plst.size&&retval; p++) {
+		for (var p:Long=1; p<plst.size&&retval; p++) {
 			val pid = plst(p);
-			val sbj = at (Dist.makeUnique()(pid)) {
+			val sbj = at(Place(pid)) {
 				distBS().findFrontBlock(rootbid, select).getMatrix()
 			};
-			for (var i:Int=0; i<datCnt&&retval; i++)
+			for (var i:Long=0; i<datCnt&&retval; i++)
 				retval &= (mat(i)==sbj(i));
 		}
 		return retval;
 	}
 	
-	public static def verifyRowCast(distBS:BlocksPLH, rootbid:Int, datCnt:Int, plst:Array[Int](1)) =
-		verifyCast(distBS, rootbid, datCnt, (r:Int,c:Int)=>r, plst);
+	public static def verifyRowCast(distBS:BlocksPLH, rootbid:Long, datCnt:Long, plst:Rail[Long]) =
+		verifyCast(distBS, rootbid, datCnt, (r:Long,c:Long)=>r, plst);
 			
-	public static def verifyColCast(distBS:BlocksPLH, rootbid:Int, datCnt:Int, plst:Array[Int](1)) =
-		verifyCast(distBS, rootbid, datCnt, (r:Int,c:Int)=>c, plst);
+	public static def verifyColCast(distBS:BlocksPLH, rootbid:Long, datCnt:Long, plst:Rail[Long]) =
+		verifyCast(distBS, rootbid, datCnt, (r:Long,c:Long)=>c, plst);
 	
 }

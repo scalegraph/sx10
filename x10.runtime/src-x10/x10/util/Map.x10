@@ -6,13 +6,13 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.util;
 
 public interface Map[K,V]   {
-	public def containsKey(k: K): boolean;
+	public def containsKey(k: K): Boolean;
 
 	public def get(k: K): Box[V];
 
@@ -30,9 +30,11 @@ public interface Map[K,V]   {
 	
 	public def entries(): Set[Entry[K,V]];
 	
+	public def size(): Long;
+
 	public static interface Entry[Key,Val] {
 	    public def getKey(): Key;
 	    public def getValue(): Val;
-	    public def setValue(Val): void;
+	    public def setValue(v:Val): void;
 	}
 }

@@ -6,7 +6,7 @@
 #  You may obtain a copy of the License at
 #      http://www.opensource.org/licenses/eclipse-1.0.php
 #
-#  (C) Copyright IBM Corporation 2006-2011.
+#  (C) Copyright IBM Corporation 2006-2014.
 #
 
 ###################################################
@@ -76,4 +76,3 @@ help::
 	@echo " If runtime shows \"NoClassDefFoundError: x10/matrix/Matrix\"";
 	@echo " replace \"~\" by relative directory path or absolute explicit directory path name";
 	@echo "";
-	

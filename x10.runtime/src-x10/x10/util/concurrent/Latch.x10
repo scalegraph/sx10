@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.util.concurrent;
@@ -27,7 +27,7 @@ import x10.compiler.Pinned;
         throw new UnsupportedOperationException("Cannot deserialize "+typeName());
     }
 
-    private var state:boolean = false;
+    private var state:Boolean = false;
 
     /**
      * Set the latch
@@ -55,5 +55,5 @@ import x10.compiler.Pinned;
     /**
      * Check the latch state without blocking
      */
-    public operator this():boolean = state;
+    public operator this():Boolean = state;
 }

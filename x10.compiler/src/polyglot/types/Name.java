@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.types;
@@ -37,11 +37,11 @@ public class Name  implements Serializable {
     static int count = 0;
     
     public static Name makeFresh() {
-        return makeFresh("id");
+        return makeFresh("t");
     }
     
     public static Name makeFresh(String prefix) {
-        return make(prefix + (count++));
+        return make(prefix +"$"+ (count++));
     }
 
     public static Name makeFresh(Name prefix) {

@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #include <stdlib.h>
@@ -77,7 +77,7 @@ void* x10aux::outlinedITableLookup(itable_entry* itables, const RuntimeType* tar
     for (; itables[i].id != 0; i++) {
         fprintf(stderr, "\t\t%p %s\n", (void*)(itables[i].id), ((RuntimeType*)itables[i].id)->name());
     }
-    fprintf(stderr, "\tRTT of receiver %p %s\n", itables[i].itable, itables[i].itable == NULL ? "NULL!" : ((RuntimeType*)(itables[i].itable))->name());
+    fprintf(stderr, "\tName of receiver is %s\n", itables[i].itable == NULL ? "NULL!" : (char*)itables[i].itable);
     fprintf(stderr, "\n");
     fflush(stderr);
     abort();

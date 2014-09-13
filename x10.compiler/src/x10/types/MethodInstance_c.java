@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.types;
@@ -347,7 +347,7 @@ public class MethodInstance_c extends FunctionInstance_c<MethodDef> implements M
                 if (formalNames != null && i < formalNames.size()) {
                     X10LocalInstance a = (X10LocalInstance) formalNames.get(i);
                     if (a != null && ! a.x10Def().isUnnamed())
-                        s = a.name() + ": " + t;
+                        s = a.name() + ":" + t;
                     else
                         s = t;
                 }
@@ -366,10 +366,13 @@ public class MethodInstance_c extends FunctionInstance_c<MethodDef> implements M
         sb.append(CollectionUtil.listToString(formals));
         sb.append(")");
         CConstraint guard = this.guard();
-        if (guard != null)
-            sb.append(guard);
-        else if (x10Def().guard() != null)
-            sb.append(x10Def().guard());
+        if (guard != null) {
+            if (!guard.atoms().isEmpty()) sb.append(guard);
+        }
+        else if (x10Def().guard() != null) {
+            guard = x10Def().guard().get();
+            if (!guard.atoms().isEmpty()) sb.append(guard);
+        }
         TypeConstraint typeGuard = this.typeGuard();
         if (typeGuard != null)
             sb.append(typeGuard);
@@ -377,7 +380,7 @@ public class MethodInstance_c extends FunctionInstance_c<MethodDef> implements M
             sb.append(x10Def().typeGuard());
         Ref<? extends Type> returnType = this.returnTypeRef();
         if (returnType != null && returnType.known()) {
-            sb.append(": ");
+            sb.append(":");
             sb.append(returnType);
         }
         return sb.toString();

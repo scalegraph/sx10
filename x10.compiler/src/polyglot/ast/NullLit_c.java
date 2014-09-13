@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.ast;
@@ -49,9 +49,7 @@ public class NullLit_c extends Lit_c implements NullLit
     }
 
     public boolean isConstant() {
-        // A bold-face lie, but necessary until we rework the ConstantPropagator to properly represent NullLit's
-        // See XTENLANG-2675.
-        return false;  
+        return true;  
     }
     
     public ConstantValue constantValue() {

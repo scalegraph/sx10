@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef X10_LANG_CLOSURE_H
@@ -15,6 +15,7 @@
 #include <x10aux/config.h>
 
 #include <x10/lang/Reference.h>
+#include <x10aux/basic_functions.h>
 
 #define X10_LANG_ANY_H_NODEPS
 #include <x10/lang/Any.h>
@@ -43,11 +44,11 @@ namespace x10 {
 
             virtual x10_int hashCode();
             
-            virtual String* toString();
+            virtual String* toString() { return ::x10aux::identity_to_string(this); }
             
             virtual const char* toNativeString();
 
-            virtual x10::lang::String* typeName();
+            virtual ::x10::lang::String* typeName();
         };
     }
 }

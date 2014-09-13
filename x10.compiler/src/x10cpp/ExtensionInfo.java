@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10cpp;
@@ -47,6 +47,7 @@ import x10.ExtensionInfo.X10Scheduler.ValidatingVisitorGoal;
 import x10.ast.X10NodeFactory_c;
 import x10.optimizations.Optimizer;
 import x10.visit.CheckNativeAnnotationsVisitor;
+import x10.visit.ExpressionFlattener;
 import x10.visit.InstanceInvariantChecker;
 import x10.visit.NativeClassVisitor;
 import x10.visit.StaticNestedClassRemover;
@@ -57,6 +58,7 @@ import x10cpp.postcompiler.CXXCommandBuilder;
 import x10cpp.postcompiler.PrecompiledLibrary;
 import x10cpp.types.X10CPPSourceClassResolver;
 import x10cpp.types.X10CPPTypeSystem_c;
+import x10cpp.visit.TupleRemover;
 import x10cpp.visit.X10CPPTranslator;
 import x10cpp.visit.CastInjector;
 
@@ -68,18 +70,22 @@ import x10cpp.visit.CastInjector;
 public class ExtensionInfo extends x10.ExtensionInfo {
 
 
+    @Override
 	public String compilerName() {
 		return "x10c++";
 	}
 
+    @Override
 	public polyglot.main.Version version() {
 		return new Version();
 	}
 
+    @Override
 	protected NodeFactory createNodeFactory() {
 		return new X10NodeFactory_c(this, new X10CPPExtFactory_c(), new X10CPPDelFactory_c()) { };
 	}
 
+    @Override
 	protected TypeSystem createTypeSystem() {
 		return new X10CPPTypeSystem_c(this);
 	}
@@ -114,6 +120,7 @@ public class ExtensionInfo extends x10.ExtensionInfo {
     // =================================
 	// X10-specific goals and scheduling
 	// =================================
+    @Override
 	protected Scheduler createScheduler() {
 		return new X10CPPScheduler(this);
 	}
@@ -142,9 +149,14 @@ public class ExtensionInfo extends x10.ExtensionInfo {
 		    return new PostCompiled(extInfo) {
                 private static final long serialVersionUID = 1834245937046911633L;
 
+                @Override
                 protected boolean invokePostCompiler(Options options, Compiler compiler, ErrorQueue eq) {
 		            if (System.getProperty("x10.postcompile", "TRUE").equals("FALSE"))
 		                return true;
+		            // Ensure that there is no post compilation for ONLY_TYPE_CHECKING jobs
+                    X10CompilerOptions opts = extensionInfo().getOptions();
+                    if (opts.x10_config.ONLY_TYPE_CHECKING) return true;
+                    
 		            return X10CPPTranslator.postCompile((X10CPPCompilerOptions)options, compiler, eq);
 		        }
 		    }.intern(this);
@@ -164,8 +176,13 @@ public class ExtensionInfo extends x10.ExtensionInfo {
                 if (g == nvc) {
                     goals.add(ExternAnnotationVisitor(job));
                 } else if (g == cg) {
+                    goals.add(TupleRemover(job));
+                    if (Optimizer.FLATTENING(this.extensionInfo())) {
+                        goals.add(FinalExpressionFlattener(job));
+                    }
                     goals.add(CastInjector(job));
-                    goals.add(PreCodegenASTInvariantChecker(job));
+                    boolean stmtExprsAllowed = true || !Optimizer.FLATTENING(this.extensionInfo()); // FIXME:  XTENLANG-2236:  enable this check once we can flatten Runtime
+                    goals.add(PreCodegenASTInvariantChecker(job, stmtExprsAllowed));
                 }
                 goals.add(g);
             }
@@ -183,21 +200,31 @@ public class ExtensionInfo extends x10.ExtensionInfo {
 		    return new ForgivingVisitorGoal("NativeAnnotation", job, new ExternAnnotationVisitor(job, ts, nf, nativeAnnotationLanguage())).intern(this);
 		}
 
-		public Goal PreCodegenASTInvariantChecker(Job job) {
-		    return new ValidatingVisitorGoal("CodegenASTInvariantChecker", job, new PreCodeGenASTChecker(job)).intern(this);
+		public Goal PreCodegenASTInvariantChecker(Job job, boolean stmtExprsAllowed) {
+		    return new ValidatingVisitorGoal("CodegenASTInvariantChecker", job, new PreCodeGenASTChecker(job, stmtExprsAllowed)).intern(this);
 		}
 		
 		public Goal CastInjector(Job job) {
 		    return new ValidatingVisitorGoal("CastInjector", job, new CastInjector(job, extInfo.typeSystem(), extInfo.nodeFactory())).intern(this);
 		}
+		
+		public Goal TupleRemover(Job job) {
+		    return new ValidatingVisitorGoal("TupleRemover", job, new TupleRemover(job, extInfo.typeSystem(), extInfo.nodeFactory())).intern(this);
+		}
+		
+		public Goal FinalExpressionFlattener(Job job) {
+		    return new ValidatingVisitorGoal("FinalExpressionFlattener", job, new ExpressionFlattener(job, extInfo.typeSystem(), extInfo.nodeFactory())).intern(this);
+		}
 	}
 
 	// TODO: [IP] Override targetFactory() (rather, add createTargetFactory to polyglot)
 
+    @Override
 	protected X10CPPCompilerOptions createOptions() {
 		return new X10CPPCompilerOptions(this);
 	}
 
+    @Override
 	public X10CPPCompilerOptions getOptions() {
 	    return (X10CPPCompilerOptions) super.getOptions();
 	}
