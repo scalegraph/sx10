@@ -1040,7 +1040,8 @@ void x10rt_net_allreduce (x10rt_team team, x10rt_place role,
     abort();
 }
 
-void x10rt_net_team_members (x10rt_team team, x10rt_place *members)
+void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg)
+//void x10rt_net_team_members (x10rt_team team, x10rt_place *members)
 {
     abort();
 }

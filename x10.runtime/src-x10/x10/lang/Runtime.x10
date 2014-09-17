@@ -401,14 +401,10 @@ public final class Runtime {
         }
 
         // park until given work to do -> idle thread
-//<<<<<<< HEAD
         def take(random:Random, worker:Worker):Activity {
             if (BUSY_WAITING) return null;
-            if (idleCount - spareNeeded >= NTHREADS - 1) return null; // better safe than sorry
-//=======
-//        def take(worker:Worker):Activity {
-//            if (multiplace && busyWaiting && (idleCount - spareNeeded >= NTHREADS - 1)) return null;
-//>>>>>>> mergeSvn
+            //if (idleCount - spareNeeded >= NTHREADS - 1) return null; // better safe than sorry
+            if (multiplace && busyWaiting && (idleCount - spareNeeded >= NTHREADS - 1)) return null;
             lock.lock();
             convert();
             if (multiplace && busyWaiting && (idleCount >= NTHREADS - 1)) {
@@ -469,30 +465,17 @@ public final class Runtime {
             lock.unlock();
             return worker.activity;
         }
-//<<<<<<< HEAD
         
         // deal the top activity in the queue to idle worker if any
         def deal(worker :Worker) :void {
             if (BUSY_WAITING) return;
-            if (idleCount - spareNeeded <= 0) return;
-//=======
-//
-//        // deal to idle worker if any
-//        // return true on success
-//        def give(activity:Activity):Boolean {
-//            if (idleCount - spareNeeded <= 0n && !probing) return false;
-//>>>>>>> mergeSvn
+            if (idleCount - spareNeeded <= 0n) return;
             lock.lock();
             convert();
             if (idleCount <= 0n) {
                 val p = probing;
                 lock.unlock();
-//<<<<<<< HEAD
                 return;
-//=======
-//                if (p && multiplace) x10rtUnblockProbe();
-//                return false;
-//>>>>>>> mergeSvn
             }
 			var activity :Activity = null;
 			while(worker.size() > 0 && (activity = worker.steal()) == null) ;
@@ -600,7 +583,8 @@ public final class Runtime {
         // inner loop to help j9 jit
         private def loop():Boolean {
             for (var i:Int = 0n; i < BOUND; i++) {
-                do activity = poll(); while (activity != null && pool.deal(activity));
+                //do activity = poll(); while (activity != null && pool.deal(activity));
+                activity = poll();
                 if (activity == null) {
                     activity = pool.scan(random, this);
                     if (activity == null) return false; // [DC] only happens when pool's latch is released
@@ -642,7 +626,8 @@ public final class Runtime {
         private def loop2(latch:SimpleLatch):Boolean {
             for (var i:Int = 0n; i < BOUND; i++) {
                 if (latch()) return false;
-                do activity = poll(); while (activity != null && pool.deal(activity));
+                //do activity = poll(); while (activity != null && pool.deal(activity));
+                activity = poll();
                 if (activity == null) return false;
 //                if (activity.finishState().simpleLatch() != latch) {
 //                    push(activity);
@@ -730,8 +715,8 @@ public final class Runtime {
         }
 
         // attempt to deal the top activity in the queue to idle worker
-        def deal(worker :Worker):void { }//workers.deal(worker); }
-        def deal(worker :Activity):Boolean { return true; }
+        def deal(worker :Worker):void { workers.deal(worker); }
+        //def deal(worker :Activity):Boolean { return true; }
 
         // release permit (called by worker upon termination)
         def release():void {
@@ -743,7 +728,7 @@ public final class Runtime {
         def scan(random:Random, worker:Worker):Activity {
             var activity:Activity = null;
             var next:Int = random.nextInt(workers.count);
-            val init:Int = next;
+            var i:Int = 2n;
             for (;;) {
                 if (null != activity || latch()) return activity;
                 // go to sleep if too many threads are running
@@ -764,23 +749,16 @@ public final class Runtime {
                 }
                 activity = worker.poll();
                 if (null != activity || latch()) return activity;
-                do {
-                    // try local worker
-                    if (next < MAX_THREADS && null != workers(next)) { // avoid race with increase method
-                        activity = workers(next).steal();
-                    }
+                // try random worker
+                if (next < MAX_THREADS && null != workers(next)) { // avoid race with increase method
+                    activity = workers(next).steal();
+                }
+                if (++next == workers.count) next = 0n;
+                if (i-- == 0n) {
                     if (null != activity || latch()) return activity;
-//<<<<<<< HEAD
                     activity = workers.take(random, worker);
-                    //i = 2;
-            //    }
-//=======
-            }while(false);
-//                    if (++next == workers.count) next = 0n;
-//                } while (next != init);
-//                // time to back off
-//                activity = workers.take(worker);
-//>>>>>>> mergeSvn
+                    i = 2n;
+                }
             }
         }
 

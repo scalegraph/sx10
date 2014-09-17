@@ -311,7 +311,8 @@ X10RT_C void x10rt_net_allreduce (x10rt_team team, x10rt_place role,
  * \param ch As in #x10rt_lgl_team_members
  * \param arg As in #x10rt_lgl_team_members
  */
-X10RT_C void x10rt_net_team_members (x10rt_team team, x10rt_place *members);
+//X10RT_C void x10rt_net_team_members (x10rt_team team, x10rt_place *members);
+X10RT_C void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg);
 
 /** \see #x10rt_lgl_scatterv
  * \param team As in #x10rt_lgl_scatterv

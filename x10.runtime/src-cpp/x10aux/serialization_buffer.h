@@ -250,7 +250,8 @@ namespace x10aux {
 
     // Case for references e.g. Reference*
     template<class T> struct serialization_buffer::Write<T*> {
-        static void _(serialization_buffer &buf, T* val);
+        static void size(serialization_buffer &buf, T* val);
+        static void write(serialization_buffer &buf, T* val);
     };
     template<class T> void serialization_buffer::Write<T*>::size(serialization_buffer &buf,
                                                                    T* val) {
@@ -266,7 +267,7 @@ namespace x10aux {
         ::x10::lang::Reference* valAsRef = reinterpret_cast< ::x10::lang::Reference*>(val);
         serialize_reference(buf, valAsRef);
     }
-    template<class T> void serialization_buffer::Write<T*>::size(serialization_buffer &buf,
+    template<class T> void serialization_buffer::Write<T*>::write(serialization_buffer &buf,
                                                                    T* val) {
         _S_("Serializing a "<<ANSI_SER<<ANSI_BOLD<<TYPENAME(T)<<ANSI_RESET<<" into buf: "<<&buf);
         size(buf, val);

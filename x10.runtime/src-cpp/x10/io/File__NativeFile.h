@@ -35,7 +35,7 @@ namespace x10 {
 
             virtual x10_boolean mkdirs(const char *s);
 
-            virtual x10_boolean mkdirs(const char *s);
+//            virtual x10_boolean mkdirs(const char *s);
 
             static int cmp(const void* a, const void* b);
 

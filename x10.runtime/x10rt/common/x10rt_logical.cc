@@ -1123,11 +1123,15 @@ void x10rt_lgl_allreduce (x10rt_team team, x10rt_place role,
     }
 }
 
+static void x10rt_net_one_setter (void *arg)
+{ *((int*)arg) = 1; }
 void x10rt_lgl_team_members (x10rt_team team, x10rt_place *members)
 {
     ESCAPE_IF_ERR;
     if (has_collectives_append) {
-        x10rt_net_team_members(team, members);
+        //x10rt_net_team_members(team, members);
+		int finished = 0;
+		x10rt_net_team_members(team, members, x10rt_net_one_setter, &finished);
     } else {
         x10rt_emu_team_members(team, members);
     }
