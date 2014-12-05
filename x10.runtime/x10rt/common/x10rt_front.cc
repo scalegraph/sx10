@@ -173,10 +173,10 @@ void x10rt_finalize (void)
 { x10rt_lgl_finalize(); }
 
 
-//void x10rt_team_members (x10rt_team team, x10rt_place *members)
-//{
-//    x10rt_lgl_team_members(team, members);
-//}
+void x10rt_team_members (x10rt_team team, x10rt_place *members)
+{
+    x10rt_lgl_team_members(team, members);
+}
 
 x10rt_coll_type x10rt_coll_support () {
 	return x10rt_lgl_coll_support();

@@ -347,7 +347,7 @@ public class Emitter {
 		if (type instanceof FunctionType) {
 		    FunctionType ft = (FunctionType) type;
 		    List<Type> args = ft.argumentTypes();
-		    name = (qualify ? "::":"") + translate_mangled_FQN(baseName(ft, true));
+		    name = (qualify ? " ::":"") + translate_mangled_FQN(baseName(ft, true));
 		    String typeArgs = "";
 		    boolean firstArg = true;
 		    for (Type argType : args) {
@@ -395,8 +395,8 @@ public class Emitter {
 							env.put(key, propertyKnowledge.get(key));
 					}
 					String nr_name = nativeSubst("NativeRep", env, pat);
-					if (qualify && nr_name.contains("::")) {
-					    nr_name = "::"+nr_name;
+					if (qualify && nr_name.contains("::") && !nr_name.trim().startsWith("typename")) {
+					    nr_name = " ::"+nr_name;
 					}
 					return nr_name;
 				}
@@ -404,7 +404,7 @@ public class Emitter {
 					name = fullName(ct).toString();
 				}
 			}
-		    name = (qualify ? "::":"") + translate_mangled_FQN(name);
+		    name = (qualify ? " ::":"") + translate_mangled_FQN(name);
 			if (typeArguments.size() != 0) {
 				String args = "";
 				int s = typeArguments.size();

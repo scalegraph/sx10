@@ -244,6 +244,18 @@ public final struct PlaceLocalHandle[T]{T isref, T haszero} {
         return handle;
     }
 
+	public static def makeFlat[T,U](pg:PlaceGroup, init_here:(Int)=>U, init_there:(U)=>T){T isref}:PlaceLocalHandle[T] {
+		val handle:PlaceLocalHandle[T];
+		@Pragma(Pragma.FINISH_NONE) finish handle = at(Place.FIRST_PLACE) PlaceLocalHandle[T]();
+		@Pragma(Pragma.FINISH_SPMD) finish for (i in 0n..(pg.numPlaces() as Int - 1n)) {
+			val v:U = init_here(i);
+			at (pg(i)) async handle.set(init_there(v));
+		}
+		return handle;
+	}
+
+
+
     /**
      * Create a distributed object with local state of type T
      * at each place in the argument PlaceGroup.  For each place in the

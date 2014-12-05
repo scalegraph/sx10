@@ -126,7 +126,7 @@ namespace x10aux {
         serialization_buffer (void) : buffer(NULL), limit(NULL), cursor(NULL), map(), size_flag(false), write_flag(false) {}
 
         ~serialization_buffer (void) {
-            if (buffer!=NULL) {
+            if (buffer!=NULL && write_flag==false) {
                 ::x10aux::dealloc(buffer);
             }
         }

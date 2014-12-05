@@ -19,6 +19,8 @@ import x10.compiler.NativeRep;
 import x10.compiler.StackAllocate;
 import x10.lang.Zero;
 
+import x10.array.OrderedPlaceGroup;
+
 import x10.util.concurrent.AtomicInteger;
 import x10.util.concurrent.Lock;
 import x10.util.Pair;
@@ -37,8 +39,8 @@ import x10.compiler.Pragma;
  */
 public struct Team {
     private static struct DoubleIdx(value:Double, idx:Int) {}
-    private static val DEBUG:Boolean = false;
-    private static val DEBUGINTERNALS:Boolean = false;
+    private static val DEBUG:Boolean = true;
+    private static val DEBUGINTERNALS:Boolean = true;
     
     // on native X10, probe is faster, but sleep works too.
     // on Managed X10, probe sometimes deadlocks, so sleep is required
@@ -59,20 +61,33 @@ public struct Team {
     /** Returns the places of the team.
      */
     public def places() {
-    	//if(members == null) setupMembers();
-        val members = new RailBuilder[Place]();
-        for (p in Team.state(id).places) {
-            members.add(p);
-        }
-    	return members.result();
+    	val numMembers = size();
+    	val membersimc = new Rail[Int](numMembers);
+    	nativeMembers(id, membersimc);
+    	return new Rail[Place](numMembers,  (i :Long) => Place(membersimc(i)));
+
+    	////if(members == null) setupMembers();
+        //val members = new RailBuilder[Place]();
+        //for (p in Team.state(id).places) {
+        //    members.add(p);
+        //}
+    	//return members.result();
     }
 
     /** Returns the role of here
      */
     public def role() : Rail[Int] {
-    	//if(members == null) setupMembers();
-    	return role(Team.state(id).places, here);
+    	return role(placeGroup(), here);
+
+    //	//if(members == null) setupMembers();
+    //	return role(Team.state(id).places, here);
     }
+    public def role(place:Place) : Rail[Int] = {
+    	return role(placeGroup(), place);
+
+        //return role(Team.state(id).places, place);
+    }
+    
     private static def role(places:PlaceGroup, place:Place) {
         val role = new RailBuilder[Int]();
         //for ([p] in places) {
@@ -90,14 +105,28 @@ public struct Team {
     /** Returns the PlaceGroup of the places of the team.
      */
     public def placeGroup() : PlaceGroup = {
-        return Team.state(id).places;
+        return new OrderedPlaceGroup(places());
+        //return new SparsePlaceGroup(places());
+
+//        //Console.OUT.println(""+id);
+//        //Console.OUT.flush();
+//        return Team.state(id).places;
+//        //return Team.state(0).places;
     }
 
     /** Returns the place corresponding to the given role.
      * @param role Our role in this team
      */
     public def place(role:Int) : Place = places()(role);
-//
+
+    private static def nativeMembers(id:Int, result:Rail[Int]) : void {
+        //@Native("java", "x10.x10rt.TeamSupport.nativeSplit(id, role, color, new_role, result);")
+        @Native("c++", "x10rt_team_members(id, (x10rt_place*)result->raw);") {}
+    }
+
+    private def setupMembers() {
+    }
+
 //<<<<<<< HEAD
 //    private static isDebug = System.getenv().containsKey("X10_TEAM_DEBUG");
 //	public static @Inline def debugln(pkg:String, str: String) {
@@ -202,6 +231,7 @@ public struct Team {
 //=======
     /** A team that has one member at each place. */
     public static val WORLD = Team(0n, PlaceGroup.WORLD, here.id());
+    //public static val WORLD = Team(PlaceGroup.WORLD);
     
     // TODO: the role argument is not really needed, and can be buried in lower layers, 
     // but BG/P is difficult to modify so we need to track it for now
@@ -225,22 +255,30 @@ public struct Team {
         collectiveSupportLevel = nativeCollectiveSupport();
         if (DEBUG) Runtime.println(here + " reported native collective support level of " + collectiveSupportLevel);
         if (collectiveSupportLevel > X10RT_COLL_NOCOLLECTIVES) {
-            if (Team.roles.capacity() <= id) // TODO move this check into the GrowableRail.grow() method
+            if (Team.roles.capacity() <= id){ // TODO move this check into the GrowableRail.grow() method
                 Team.roles.grow(id+1);
-            while (Team.roles.size() < id)
+            }
+            while (Team.roles.size() < id){
                 Team.roles.add(-1n); // I am not a member of this team id.  Insert a dummy value.
+            }
             Team.roles(id) = role as Int;
             if (DEBUG) Runtime.println(here + " created native team "+id);
     	}
         if (collectiveSupportLevel < X10RT_COLL_ALLNONBLOCKINGCOLLECTIVES) {
             if (DEBUG) Runtime.println(here + " creating our own team "+id);
-            if (Team.state.capacity() <= id) // TODO move this check into the GrowableRail.grow() method
+            if (Team.state.capacity() <= id){ // TODO move this check into the GrowableRail.grow() method
                 Team.state.grow(id+1);
-            while (Team.state.size() < id)
+            }
+            while (Team.state.size() < id){
                 Team.state.add(null); // I am not a member of this team id.  Insert a dummy value.
+            }
             val teamState = new LocalTeamState(places, id, places.indexOf(here));
+        if(id == 0n){
+            Team.state(id) = teamState;
+        }else{
             atomic { Team.state(id) = teamState; }
             teamState.init();
+        }
             if (DEBUG) Runtime.println(here + " created our own team "+id);
     	}
     }
