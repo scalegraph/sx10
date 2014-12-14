@@ -416,15 +416,15 @@ public struct Team {
         @Native("c++", "x10rt_scatter(id, role, root, &src->raw[src_off], &dst->raw[dst_off], sizeof(TPMGL(T)), count, ::x10aux::coll_handler, ::x10aux::coll_enter());") {}
     }
     
-    //private static def dummyChunk[T]() { return IndexedMemoryChunk.allocateUninitialized[T](0); }; 
+    private static def dummyChunk[T]() { return Unsafe.allocRailUninitialized[T](0);}//IndexedMemoryChunk.allocateUninitialized[T](0); }; 
 
-    //private static def getRawOrDummyChunk[T](arr: Array[T]) {
-    //    if (arr == null)
-    //        return dummyChunk[T]();
-    //    else
-    //        return arr.raw();
-    //};
-    //
+    private static def getRawOrDummyChunk[T](arr: Rail[T]) {
+        if (arr == null)
+            return dummyChunk[T]();
+        else
+            return arr;
+    };
+    
 
     /** Scatters the given array, called by the root.  Blocks until all members have received their part of root's array.
      * Each member receives a contiguous and distinct portion of the src array.
@@ -454,266 +454,271 @@ public struct Team {
     }
 
 
-//    /** Almost same as scatter except for permitting messages to have different sizes.
-//     *
-//     * @see #scatter
-//
-//     * @param role Our role in the team
-//     *
-//     * @param root The member who is supplying the data
-//     *
-//     * @param src The data that will be sent (will only be used by the root
-//     * member)
-//     *
-//     * @param src_offs The offsets into src at which to start reading
-//     *
-//     * @param src_counts The numbers of elements being sent
-//     * 
-//     * @param dst The rail into which the data will be received for this member
-//     *
-//     * @param dst_off The offset into dst at which to start writing
-//     *
-//     * @param dst_count The numbers of elements being received
-//     */
-//    public def scatterv[T] (role:Int, root:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst:Array[T], dst_off:Int, dst_count:Int) : void {
-//        scatterv(id, role, root, getRawOrDummyChunk(src), getRawOrDummyChunk(src_offs), getRawOrDummyChunk(src_counts), getRawOrDummyChunk(dst), dst_off, dst_count);
-//    }
-//
-//    public def scatterv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], src_counts:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_off:Int, dst_count:Int) : void {
-//        if (needToSerialize[T]()) {
-//            if (role == root) {
-//                val places = size();
-//                val ser_offs = new Array[Int](places);
-//                val ser_counts = new Array[Int](places);
-//                val ser_src = ParallelSerialization.serialize(src, src_offs, src_counts, ser_offs.raw(), ser_counts.raw());
-//                val deser_counts = scatter[Int](role, root, ser_counts, 1);
-//                val deser_dst = new Array[Byte](deser_counts(0));
-//                finish nativeScatterv(id, role, root, ser_src, ser_offs.raw(), ser_counts.raw(), deser_dst.raw(), 0, deser_counts(0));
-//                ParallelSerialization.deserialize(dst, dst_off, dst_count, deser_dst.raw(), 0, deser_counts(0));
-//            }
-//            else {
-//                val deser_counts = scatter[Int](role, root, null, 1);
-//                val deser_dst = new Array[Byte](deser_counts(0));
-//                finish nativeScatterv(id, role, root, dummyChunk[Byte](), dummyChunk[Int](), dummyChunk[Int](), deser_dst.raw(), 0, deser_counts(0));
-//                ParallelSerialization.deserialize(dst, dst_off, dst_count, deser_dst.raw(), 0, deser_counts(0));
-//            }
-//        }
-//        else {
-//            finish nativeScatterv(id, role, root, src, src_offs, src_counts, dst, dst_off, dst_count);
-//        }
-//    }
-//
-//    private static def nativeScatterv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], src_counts:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_off:Int, dst_count:Int) : void {
-//        @Native("java", "x10.x10rt.TeamSupport.nativeScatterV(id, role, root, src, src_offs, src_counts, dst, dst_off, dst_count);")
-//        @Native("c++", "x10rt_scatterv(id, role, root, src->raw(), src_offs->raw(), src_counts->raw(), &dst->raw()[dst_off], dst_count, sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
-//    }
-//    
-//    /** Almost same as scatter except for permitting messages to have different sizes.
-//     * The received array is structured so that the portions are sorted in ascending
-//     * order, e.g., the first member gets the portion at the head of sbuf, and the
-//     * last member gets the last portion.
-//     *
-//     * @see #scatterv
-//     *
-//     * @param role Our role in the team
-//     *
-//     * @param root The member who is supplying the data
-//     *
-//     * @param src The data that will be sent 
-//     *
-//     * @param src_offs The offsets into src at which to start reading
-//     *
-//     * @param src_counts The numbers of elements being sent
-//     *
-//     * @param dst_count The numbers of elements being received
-//     *
-//     * @return received array
-//     */
-//    public def scatterv[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int], dst_count:Int) {
-//        assert(role != root || src_counts.size == size());
-//        assert(role != root || src_offs.size == size());
-//        val dst = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](dst_count));
-//        scatterv(role, root, src, src_offs, src_counts, dst, 0, dst_count);
-//        return dst;
-//    }
-//
-//    /** Blocks until the root have received each part of all member's array.
-//     * Each member sends a contiguous and distinct portion of the src array.
-//     * dst will be structured so that the portions are sorted in ascending
-//     * order, e.g., the first member gets the portion at offset src_off of sbuf, and the
-//     * last member gets the last portion.
-//     *
-//     * @param role Our role in the team
-//     *
-//     * @param root The member who is receiving the data
-//     *
-//     * @param src The data that will be sent 
-//     *
-//     * @param src_off The offset into src at which to start reading
-//     *
-//     * @param dst The rail into which the data will be received (will only be used by the root
-//     * member)
-//     *
-//     * @param dst_off The offset into dst at which to start writing (will only be used by the root
-//     * member)
-//     *
-//     * @param count The number of elements being transferred
-//     */
-//    public def gather[T] (role:Int, root:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
-//        gather(id, role, root, src.raw(), src_off, getRawOrDummyChunk(dst), dst_off, count);
-//    }
-//
-//    public def gather[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
-//        if (needToSerialize[T]()) {
-//            if (role == root) {
-//                val places = size();
-//                val ser_src = ParallelSerialization.serialize(src, src_off, count);
-//                val ser_count = ser_src.length();
-//                val deser_counts = gather1[Int](role, root, ser_count);
-//                val deser_offs = new Array[Int](places+1);
-//                deser_offs(0) = 0;
-//                for (i in 0..(places-1)) deser_offs(i+1) = deser_counts(i) + deser_offs(i);
-//                val deser_dst = new Array[Byte](deser_offs(places));
-//                finish nativeGatherv(id, role, root, ser_src, 0, ser_count, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
-//                val dst_counts = new Array[Int](places, count);
-//                val dst_offs = new Array[Int](places, (i :Int) => i * count);
-//                ParallelSerialization.deserialize(dst, dst_offs.raw(), dst_counts.raw(), deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
-//            }
-//            else {
-//                val ser_src = ParallelSerialization.serialize(src, src_off, count);
-//                val ser_count = ser_src.length();
-//                val deser_counts = gather1[Int](role, root, ser_count);
-//                finish nativeGatherv(id, role, root, ser_src, 0, ser_count, dummyChunk[Byte](), dummyChunk[Int](), dummyChunk[Int]());
-//            }
-//        }
-//        else {
-//            finish nativeGather(id, role, root, src, src_off, dst, dst_off, count);
-//        }
-//    }
-//
-//    private static def nativeGather[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
-//        @Native("java", "x10.x10rt.TeamSupport.nativeGather(id, role, root, src, src_off, dst, dst_off, count);")
-//        @Native("c++", "x10rt_gather(id, role, root, &src->raw()[src_off], &dst->raw()[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
-//    }
-//
-//    /** Gathers the given array.
-//     * Blocks until the root have received each part of all member's array.
-//     * Each member sends a contiguous and distinct portion of the src array.
-//     * dst will be structured so that the portions are sorted in ascending
-//     * order, e.g., the first member gets the portion at offset src_off of sbuf, and the
-//     * last member gets the last portion.
-//     *
-//     * @see #gather
-//     *
-//     * @param role Our role in the team
-//     *
-//     * @param root The member who is receiving the data
-//     *
-//     * @param src The data that will be sent 
-//     *
-//     * @param count The number of elements being transferred
-//     *
-//     * @return received array
-//     */
-//    public def gather[T] (role:Int, root:Int, src:Array[T], count:Int) {
-//        val dst = (role == root) ? new Array[T](IndexedMemoryChunk.allocateUninitialized[T](count * size())) : null;
-//        gather(role, root, src, 0, dst, 0, count);
-//        return dst;
-//    }
-//
-//    /** Almost same as gather except that each member sends one data.
-//     *
-//     * @param role Our role in the team
-//     *
-//     * @param root The member who is receiving the data
-//     *
-//     * @param src The data that will be sent 
-//     *
-//     * @param count The number of elements being transferred
-//     */
-//    public def gather1[T] (role:Int, root:Int, src:T) {T haszero} : Array[T](1) {
-//        val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
-//        src_raw(0) = src;
-//        val dst : Array[T](1) = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](role == root ? size() : 0)) ;
-//        gather(role, root, new Array[T](src_raw), 0, dst, 0, 1);
-//        return dst;
-//    }
-//
-//    /** Almost same as gather except for permitting messages to have different sizes.
-//     *
-//     * @param role Our role in the team
-//     *
-//     * @param root The member who is receiving the data
-//     *
-//     * @param src The data that will be sent 
-//     *
-//     * @param src_off The offset into src at which to start reading
-//     *
-//     * @param src_count The numbers of elements being sent
-//     * 
-//     * @param dst The rail into which the data will be received (will only be used by the root
-//     * member)
-//     *
-//     * @param dst_offs The offsets into dst at which to start writing (will only be used by the root
-//     * member)
-//     *
-//     * @param dst_counts The numbers of elements being transferred
-//     */
-//
-//    public def gatherv[T] (role:Int, root:Int, src:Array[T], src_off:Int, src_count:Int, dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
-//        gatherv(id, role, root, getRawOrDummyChunk(src), src_off, src_count, getRawOrDummyChunk(dst), getRawOrDummyChunk(dst_offs), getRawOrDummyChunk(dst_counts));
-//    }
-//
-//    public def gatherv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, src_count:Int, dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
-//        if (needToSerialize[T]()) {
-//            if (role == root) {
-//                val places = size();
-//                val ser_src = ParallelSerialization.serialize(src, src_off, src_count);
-//                val ser_count = ser_src.length();
-//                val deser_counts = gather1[Int](role, root, ser_count);
-//                val deser_offs = new Array[Int](places+1);
-//                deser_offs(0) = 0;
-//                for (i in 0..(places-1)) deser_offs(i+1) = deser_counts(i) + deser_offs(i);
-//                val deser_dst = new Array[Byte](deser_offs(places));
-//                finish nativeGatherv(id, role, root, ser_src, 0, ser_count, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
-//                ParallelSerialization.deserialize(dst, dst_offs, dst_counts, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
-//            }
-//            else {
-//                val ser_src = ParallelSerialization.serialize(src, src_off, src_count);
-//                val ser_count = ser_src.length();
-//                val deser_counts = gather1[Int](role, root, ser_count);
-//                finish nativeGatherv(id, role, root, ser_src, 0, ser_count, dummyChunk[Byte](), dummyChunk[Int](), dummyChunk[Int]());
-//            }
-//        }
-//        else {
-//            finish nativeGatherv(id, role, root, src, src_off, src_count, dst, dst_offs, dst_counts);
-//        }
-//    }
-//
-//    private static def nativeGatherv[T] (id:Int, role:Int, root:Int, src:IndexedMemoryChunk[T], src_off:Int, src_count:Int, dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
-//        @Native("java", "x10.x10rt.TeamSupport.nativeGatherV(id, role, root, src, src_off, src_count, dst, dst_offs, dst_counts);")
-//        @Native("c++", "x10rt_gatherv(id, role, root, &src->raw()[src_off], src_count, dst->raw(), dst_offs->raw(), dst_counts->raw(), sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
-//    }
-//
-//    public def gatherv[T] (role:Int, root:Int, src:Array[T], dst_offs:Array[Int], dst_counts:Array[Int] ) {
-//        val dst = (role == root) ? new Array[T](IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0))) : null;
-//        gatherv(role, root, src, 0, src.size, dst, dst_offs, dst_counts);
-//        return dst;
-//    }
-//
-//    private static def countsToOffs (counts:Array[Int](1)) {
-//    	val acc = counts.scan((x:Int, y:Int)=> x+y, 0);
-//    	return new Array[Int](counts.size, (i:Int)=>(i==0) ? 0 : acc(i-1));
-//    }
-//    
-//    public def gatherv[T] (role:Int, root:Int, src:Array[T], dst_counts:Array[Int](1) ) {
-//        if (role == root) {
-//            val dst_offs = countsToOffs(dst_counts);
-//            return gatherv[T](role, root, src, dst_offs, dst_counts);
-//        } else {
-//            return gatherv[T](role, root, src, null, null);
-//        }
-//    }
+    /** Almost same as scatter except for permitting messages to have different sizes.
+     *
+     * @see #scatter
+
+     * @param role Our role in the team
+     *
+     * @param root The member who is supplying the data
+     *
+     * @param src The data that will be sent (will only be used by the root
+     * member)
+     *
+     * @param src_offs The offsets into src at which to start reading
+     *
+     * @param src_counts The numbers of elements being sent
+     * 
+     * @param dst The rail into which the data will be received for this member
+     *
+     * @param dst_off The offset into dst at which to start writing
+     *
+     * @param dst_count The numbers of elements being received
+     */
+    public def scatterv[T] (role:Int, root:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int], dst:Rail[T], dst_off:Int, dst_count:Int) : void {
+        scatterv(id, role, root, getRawOrDummyChunk(src), getRawOrDummyChunk(src_offs), getRawOrDummyChunk(src_counts), getRawOrDummyChunk(dst), dst_off, dst_count);
+    }
+
+    public def scatterv[T] (id:Int, role:Int, root:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int], dst:Rail[T], dst_off:Int, dst_count:Int) : void {
+        //if (needToSerialize[T]()) {
+        //    if (role == root) {
+        //        val places = size();
+        //        val ser_offs = new Array[Int](places);
+        //        val ser_counts = new Array[Int](places);
+        //        val ser_src = ParallelSerialization.serialize(src, src_offs, src_counts, ser_offs.raw(), ser_counts.raw());
+        //        val deser_counts = scatter[Int](role, root, ser_counts, 1);
+        //        val deser_dst = new Array[Byte](deser_counts(0));
+        //        finish nativeScatterv(id, role, root, ser_src, ser_offs.raw(), ser_counts.raw(), deser_dst.raw(), 0, deser_counts(0));
+        //        ParallelSerialization.deserialize(dst, dst_off, dst_count, deser_dst.raw(), 0, deser_counts(0));
+        //    }
+        //    else {
+        //        val deser_counts = scatter[Int](role, root, null, 1);
+        //        val deser_dst = new Array[Byte](deser_counts(0));
+        //        finish nativeScatterv(id, role, root, dummyChunk[Byte](), dummyChunk[Int](), dummyChunk[Int](), deser_dst.raw(), 0, deser_counts(0));
+        //        ParallelSerialization.deserialize(dst, dst_off, dst_count, deser_dst.raw(), 0, deser_counts(0));
+        //    }
+        //}
+        //else {
+            finish nativeScatterv(id, role, root, src, src_offs, src_counts, dst, dst_off, dst_count);
+        //}
+    }
+
+    private static def nativeScatterv[T] (id:Int, role:Int, root:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int], dst:Rail[T], dst_off:Int, dst_count:Int) : void {
+        @Native("java", "x10.x10rt.TeamSupport.nativeScatterV(id, role, root, src, src_offs, src_counts, dst, dst_off, dst_count);")
+        @Native("c++", "x10rt_scatterv(id, role, root, src->raw, src_offs->raw, src_counts->raw, &dst->raw[dst_off], dst_count, sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
+    }
+    
+    /** Almost same as scatter except for permitting messages to have different sizes.
+     * The received array is structured so that the portions are sorted in ascending
+     * order, e.g., the first member gets the portion at the head of sbuf, and the
+     * last member gets the last portion.
+     *
+     * @see #scatterv
+     *
+     * @param role Our role in the team
+     *
+     * @param root The member who is supplying the data
+     *
+     * @param src The data that will be sent 
+     *
+     * @param src_offs The offsets into src at which to start reading
+     *
+     * @param src_counts The numbers of elements being sent
+     *
+     * @param dst_count The numbers of elements being received
+     *
+     * @return received array
+     */
+    public def scatterv[T] (role:Int, root:Int, src:Rail[T], src_counts:Rail[Int], src_offs:Rail[Int], dst_count:Int) {
+        assert(role != root || src_counts.size == size());
+        assert(role != root || src_offs.size == size());
+        //val dst = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](dst_count));
+        val dst = new Rail[T](Unsafe.allocRailUninitialized[T](dst_count));
+        scatterv(role, root, src, src_offs, src_counts, dst, 0n, dst_count);
+        return dst;
+    }
+
+    /** Blocks until the root have received each part of all member's array.
+     * Each member sends a contiguous and distinct portion of the src array.
+     * dst will be structured so that the portions are sorted in ascending
+     * order, e.g., the first member gets the portion at offset src_off of sbuf, and the
+     * last member gets the last portion.
+     *
+     * @param role Our role in the team
+     *
+     * @param root The member who is receiving the data
+     *
+     * @param src The data that will be sent 
+     *
+     * @param src_off The offset into src at which to start reading
+     *
+     * @param dst The rail into which the data will be received (will only be used by the root
+     * member)
+     *
+     * @param dst_off The offset into dst at which to start writing (will only be used by the root
+     * member)
+     *
+     * @param count The number of elements being transferred
+     */
+    public def gather[T] (role:Int, root:Int, src:Rail[T], src_off:Int, dst:Rail[T], dst_off:Int, count:Int) : void {
+        gather(id, role, root, src, src_off, getRawOrDummyChunk(dst), dst_off, count);
+    }
+
+    public def gather[T] (id:Int, role:Int, root:Int, src:Rail[T], src_off:Int, dst:Rail[T], dst_off:Int, count:Int) : void {
+        //if (needToSerialize[T]()) {
+        //    if (role == root) {
+        //        val places = size();
+        //        val ser_src = ParallelSerialization.serialize(src, src_off, count);
+        //        val ser_count = ser_src.length();
+        //        val deser_counts = gather1[Int](role, root, ser_count);
+        //        val deser_offs = new Array[Int](places+1);
+        //        deser_offs(0) = 0;
+        //        for (i in 0..(places-1)) deser_offs(i+1) = deser_counts(i) + deser_offs(i);
+        //        val deser_dst = new Array[Byte](deser_offs(places));
+        //        finish nativeGatherv(id, role, root, ser_src, 0, ser_count, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+        //        val dst_counts = new Array[Int](places, count);
+        //        val dst_offs = new Array[Int](places, (i :Int) => i * count);
+        //        ParallelSerialization.deserialize(dst, dst_offs.raw(), dst_counts.raw(), deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+        //    }
+        //    else {
+        //        val ser_src = ParallelSerialization.serialize(src, src_off, count);
+        //        val ser_count = ser_src.length();
+        //        val deser_counts = gather1[Int](role, root, ser_count);
+        //        finish nativeGatherv(id, role, root, ser_src, 0, ser_count, dummyChunk[Byte](), dummyChunk[Int](), dummyChunk[Int]());
+        //    }
+        //}
+        //else {
+            finish nativeGather(id, role, root, src, src_off, dst, dst_off, count);
+        //}
+    }
+
+    private static def nativeGather[T] (id:Int, role:Int, root:Int, src:Rail[T], src_off:Int, dst:Rail[T], dst_off:Int, count:Int) : void {
+        @Native("java", "x10.x10rt.TeamSupport.nativeGather(id, role, root, src, src_off, dst, dst_off, count);")
+        @Native("c++", "x10rt_gather(id, role, root, &src->raw[src_off], &dst->raw[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
+    }
+
+    /** Gathers the given array.
+     * Blocks until the root have received each part of all member's array.
+     * Each member sends a contiguous and distinct portion of the src array.
+     * dst will be structured so that the portions are sorted in ascending
+     * order, e.g., the first member gets the portion at offset src_off of sbuf, and the
+     * last member gets the last portion.
+     *
+     * @see #gather
+     *
+     * @param role Our role in the team
+     *
+     * @param root The member who is receiving the data
+     *
+     * @param src The data that will be sent 
+     *
+     * @param count The number of elements being transferred
+     *
+     * @return received array
+     */
+    public def gather[T] (role:Int, root:Int, src:Rail[T], count:Int) {
+        //val dst = (role == root) ? new Array[T](IndexedMemoryChunk.allocateUninitialized[T](count * size())) : null;
+        val dst = (role == root) ? new Rail[T](Unsafe.allocRailUninitialized[T](count * size())) : null;
+        gather(role, root, src, 0n, dst, 0n, count);
+        return dst;
+    }
+
+    /** Almost same as gather except that each member sends one data.
+     *
+     * @param role Our role in the team
+     *
+     * @param root The member who is receiving the data
+     *
+     * @param src The data that will be sent 
+     *
+     * @param count The number of elements being transferred
+     */
+    public def gather1[T] (role:Int, root:Int, src:T) {T haszero} : Rail[T] {
+        val src_raw = Unsafe.allocRailUninitialized[T](1);
+        src_raw(0) = src;
+        val dst : Rail[T] = new Rail[T](Unsafe.allocRailUninitialized[T](role == root ? size() : 0)) ;
+        gather(role, root, src_raw, 0n, dst, 0n, 1n);
+        return dst;
+    }
+
+    /** Almost same as gather except for permitting messages to have different sizes.
+     *
+     * @param role Our role in the team
+     *
+     * @param root The member who is receiving the data
+     *
+     * @param src The data that will be sent 
+     *
+     * @param src_off The offset into src at which to start reading
+     *
+     * @param src_count The numbers of elements being sent
+     * 
+     * @param dst The rail into which the data will be received (will only be used by the root
+     * member)
+     *
+     * @param dst_offs The offsets into dst at which to start writing (will only be used by the root
+     * member)
+     *
+     * @param dst_counts The numbers of elements being transferred
+     */
+
+    public def gatherv[T] (role:Int, root:Int, src:Rail[T], src_off:Int, src_count:Int, dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
+        gatherv(id, role, root, getRawOrDummyChunk(src), src_off, src_count, getRawOrDummyChunk(dst), getRawOrDummyChunk(dst_offs), getRawOrDummyChunk(dst_counts));
+    }
+
+    public def gatherv[T] (id:Int, role:Int, root:Int, src:Rail[T], src_off:Int, src_count:Int, dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
+        //if (needToSerialize[T]()) {
+        //    if (role == root) {
+        //        val places = size();
+        //        val ser_src = ParallelSerialization.serialize(src, src_off, src_count);
+        //        val ser_count = ser_src.length();
+        //        val deser_counts = gather1[Int](role, root, ser_count);
+        //        val deser_offs = new Array[Int](places+1);
+        //        deser_offs(0) = 0;
+        //        for (i in 0..(places-1)) deser_offs(i+1) = deser_counts(i) + deser_offs(i);
+        //        val deser_dst = new Array[Byte](deser_offs(places));
+        //        finish nativeGatherv(id, role, root, ser_src, 0, ser_count, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+        //        ParallelSerialization.deserialize(dst, dst_offs, dst_counts, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+        //    }
+        //    else {
+        //        val ser_src = ParallelSerialization.serialize(src, src_off, src_count);
+        //        val ser_count = ser_src.length();
+        //        val deser_counts = gather1[Int](role, root, ser_count);
+        //        finish nativeGatherv(id, role, root, ser_src, 0, ser_count, dummyChunk[Byte](), dummyChunk[Int](), dummyChunk[Int]());
+        //    }
+        //}
+        //else {
+            finish nativeGatherv(id, role, root, src, src_off, src_count, dst, dst_offs, dst_counts);
+        //}
+    }
+
+    private static def nativeGatherv[T] (id:Int, role:Int, root:Int, src:Rail[T], src_off:Int, src_count:Int, dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
+        @Native("java", "x10.x10rt.TeamSupport.nativeGatherV(id, role, root, src, src_off, src_count, dst, dst_offs, dst_counts);")
+        @Native("c++", "x10rt_gatherv(id, role, root, &src->raw[src_off], src_count, dst->raw, dst_offs->raw, dst_counts->raw, sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
+    }
+
+    public def gatherv[T] (role:Int, root:Int, src:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int] ) {
+        val dst = (role == root) ? new Rail[T](Unsafe.allocRailUninitialized[T](RailUtils.reduce(dst_counts, (x:Int, y:Int)=>x+y, 0n))) : null;
+        gatherv(role, root, src, 0n, src.size as Int, dst, dst_offs, dst_counts);
+        return dst;
+    }
+
+    private static def countsToOffs (counts:Rail[Int]) {
+    	//val acc = counts.scan((x:Int, y:Int)=> x+y, 0n);
+    	//return new Rail[Int](counts.size, (i:Long)=>(i==0) ? 0n : acc(i-1));
+        Console.OUT.println("countsToOffs is not implemented");
+        assert(false);
+        return new Rail[Int](1);
+    }
+    
+    public def gatherv[T] (role:Int, root:Int, src:Rail[T], dst_counts:Rail[Int] ) {
+        if (role == root) {
+            val dst_offs = countsToOffs(dst_counts);
+            return gatherv[T](role, root, src, dst_offs, dst_counts);
+        } else {
+            return gatherv[T](role, root, src, null, null);
+        }
+    }
 
     /** Blocks until all members have received root's array.
      *
@@ -774,95 +779,101 @@ public struct Team {
         @Native("c++", "x10rt_bcast(id, role, root, &src->raw[src_off], &dst->raw[dst_off], sizeof(TPMGL(T)), count, ::x10aux::coll_handler, ::x10aux::coll_enter());") {}
     }
     
-//    public def bcast1[T] (root:Int, src:T) : T {
-//    	val src_raw = new Rail[T](1);
-//    	src_raw(0) = src;
-//    	val dst_raw = new Rail[T](1);
-//        bcast(root, src_raw, 0, dst_raw, 0, 1);
-//        return dst_raw(0);
-//    }
-//
-//    public def bcast[T] (role:Int, root:Int, src:Rail[T], count:Int) {
-//    	val dst_raw = new Rail[T](count);
-//        bcast(root, src, 0, dst_raw, 0, count);
-//        return new dst_raw;
-//    }
-//
-//    public def allgather1[T] (role:Int, src:T) {
-//        val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
-//        src_raw(0) = src;
-//        val dst = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](size()));
-//        allgather(role, new Array[T](src_raw), 0, dst, 0, 1);
-//        return dst;
-//    }
-//
-//    public def allgather[T] (role:Int, src:Array[T]) {
-//        val dst = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](src.size * size()));
-//        allgather(role, src, 0, dst, 0, src.size);
-//        return dst;
-//    }
-//
-//    public def allgather[T] (role:Int, src:Array[T], src_off:Int, dst:Array[T], dst_off:Int, count:Int) : void {
-//        allgather(id, role, src.raw(), src_off, dst.raw(), dst_off, count);
-//    }
-//
-//    public def allgather[T](id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
-//        if (needToSerialize[T]()) {
-//            val places = size();
-//            val ser_src = ParallelSerialization.serialize(src, src_off, count);
-//            val ser_count = ser_src.length();
-//            val deser_counts = allgather1[Int](role, ser_count);
-//            val deser_offs = new Array[Int](places + 1);
-//            deser_offs(0) = 0;
-//            for (i in 0..(places-1)) deser_offs(i+1) = deser_counts(i) + deser_offs(i);
-//            val deser_dst = new Array[Byte](deser_offs(places));
-//            finish nativeAllgatherv(id, role, ser_src, 0, ser_count, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
-//            val dst_offs = new Array[Int](places, (i :Int) => i * count);
-//            val dst_counts = new Array[Int](places, count);
-//            ParallelSerialization.deserialize(dst, dst_offs.raw(), dst_counts.raw(), deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
-//        }
-//        else {
-//            finish nativeAllgather(id, role, src, src_off, dst, dst_off, count);
-//        }
-//    }
-//
-//    private static def nativeAllgather[T](id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, dst:IndexedMemoryChunk[T], dst_off:Int, count:Int) : void {
-//        @Native("java", "x10.x10rt.TeamSupport.nativeAllGather(id, role, src, src_off, dst, dst_off, count);")
-//        @Native("c++", "x10rt_allgather(id, role, &src->raw()[src_off], &dst->raw()[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
-//    }
-//    
-//    public def allgatherv[T] (role:Int, src:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) {
-//        val dst = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0)));
-//        allgatherv(role, src, 0, src.size, dst, dst_offs, dst_counts);
-//        return dst;
-//    }
-//
-//    public def allgatherv[T] (role:Int, src:Array[T], src_off:Int, src_count:Int, dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
-//        allgatherv(id, role, src.raw(), src_off, src_count, dst.raw(), dst_offs.raw(), dst_counts.raw());
-//    }
-//
-//    public def allgatherv[T] (id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, src_count:Int, dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
-//        if (needToSerialize[T]()) {
-//            val places = size();
-//            val ser_src = ParallelSerialization.serialize(src, src_off, src_count);
-//            val ser_count = ser_src.length();
-//            val deser_counts = allgather1[Int](role, ser_count);
-//            val deser_offs = new Array[Int](places + 1);
-//            deser_offs(0) = 0;
-//            for (i in 0..(places-1)) deser_offs(i+1) = deser_counts(i) + deser_offs(i);
-//            val deser_dst = new Array[Byte](deser_offs(places));
-//            finish nativeAllgatherv(id, role, ser_src, 0, ser_count, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
-//            ParallelSerialization.deserialize(dst, dst_offs, dst_counts, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
-//        }
-//        else {
-//            finish nativeAllgatherv(id, role, src, src_off, src_count, dst, dst_offs, dst_counts);
-//        }
-//    }
-//
-//    private static def nativeAllgatherv[T] (id:Int, role:Int, src:IndexedMemoryChunk[T], src_off:Int, src_count:Int, dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
-//        @Native("java", "x10.x10rt.TeamSupport.nativeAllGatherV(id, role, src, src_off, src_count, dst, dst_offs, dst_counts);")
-//        @Native("c++", "x10rt_allgatherv(id, role, &src->raw()[src_off], src_count, dst->raw(), dst_offs->raw(), dst_counts->raw(), sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
-//    }
+    public def bcast1[T] (root:Int, src:T) : T {
+    	val src_raw = new Rail[T](1, (Long)=>src);
+    	//src_raw(0) = src;
+    	//val dst_raw = new Rail[T](1);
+        val dst_raw = Unsafe.allocRailUninitialized[T](1);
+        bcast(root, src_raw, 0, dst_raw, 0, 1);
+        return dst_raw(0);
+    }
+
+    public def bcast[T] (role:Int, root:Int, src:Rail[T], count:Int) {
+    	//val dst_raw = new Rail[T](count);
+        val dst_raw = Unsafe.allocRailUninitialized[T](count);
+        bcast(root, src, 0, dst_raw, 0, count as Long);
+        return dst_raw;
+    }
+
+    public def allgather1[T] (role:Int, src:T) {
+        //val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
+        val src_raw = new Rail[T](1, (Long)=>src);
+        //src_raw(0) = src;
+        //val dst = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](size()));
+        val dst = Unsafe.allocRailUninitialized[T](size());
+        //allgather(role, new Array[T](src_raw), 0, dst, 0, 1);
+        allgather(role, src_raw, 0n, dst, 0n, 1n);
+        return dst;
+    }
+
+    public def allgather[T] (role:Int, src:Rail[T]) {
+        val dst = new Rail[T](Unsafe.allocRailUninitialized[T](src.size * size()));
+        allgather(role, src, 0n, dst, 0n, src.size as Int);
+        return dst;
+    }
+
+    public def allgather[T] (role:Int, src:Rail[T], src_off:Int, dst:Rail[T], dst_off:Int, count:Int) : void {
+        allgather(id, role, src, src_off, dst, dst_off, count);
+    }
+
+    public def allgather[T](id:Int, role:Int, src:Rail[T], src_off:Int, dst:Rail[T], dst_off:Int, count:Int) : void {
+        //if (needToSerialize[T]()) {
+        //    val places = size();
+        //    val ser_src = ParallelSerialization.serialize(src, src_off, count);
+        //    val ser_count = ser_src.length();
+        //    val deser_counts = allgather1[Int](role, ser_count);
+        //    val deser_offs = new Array[Int](places + 1);
+        //    deser_offs(0) = 0;
+        //    for (i in 0..(places-1)) deser_offs(i+1) = deser_counts(i) + deser_offs(i);
+        //    val deser_dst = new Array[Byte](deser_offs(places));
+        //    finish nativeAllgatherv(id, role, ser_src, 0, ser_count, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+        //    val dst_offs = new Array[Int](places, (i :Int) => i * count);
+        //    val dst_counts = new Array[Int](places, count);
+        //    ParallelSerialization.deserialize(dst, dst_offs.raw(), dst_counts.raw(), deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+        //}
+        //else {
+            finish nativeAllgather(id, role, src, src_off, dst, dst_off, count);
+        //}
+    }
+
+    private static def nativeAllgather[T](id:Int, role:Int, src:Rail[T], src_off:Int, dst:Rail[T], dst_off:Int, count:Int) : void {
+        @Native("java", "x10.x10rt.TeamSupport.nativeAllGather(id, role, src, src_off, dst, dst_off, count);")
+        @Native("c++", "x10rt_allgather(id, role, &src->raw[src_off], &dst->raw[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
+    }
+    
+    public def allgatherv[T] (role:Int, src:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) {
+        //val dst = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0)));
+        val dst = new Rail[T](Unsafe.allocRailUninitialized[T](RailUtils.reduce(dst_counts, (x:Int, y:Int)=>x+y, 0n)));
+        allgatherv(role, src, 0n, src.size as Int, dst, dst_offs, dst_counts);
+        return dst;
+    }
+
+    public def allgatherv[T] (role:Int, src:Rail[T], src_off:Int, src_count:Int, dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
+        allgatherv(id, role, src, src_off, src_count, dst, dst_offs, dst_counts);
+    }
+
+    public def allgatherv[T] (id:Int, role:Int, src:Rail[T], src_off:Int, src_count:Int, dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
+        //if (needToSerialize[T]()) {
+        //    val places = size();
+        //    val ser_src = ParallelSerialization.serialize(src, src_off, src_count);
+        //    val ser_count = ser_src.length();
+        //    val deser_counts = allgather1[Int](role, ser_count);
+        //    val deser_offs = new Array[Int](places + 1);
+        //    deser_offs(0) = 0;
+        //    for (i in 0..(places-1)) deser_offs(i+1) = deser_counts(i) + deser_offs(i);
+        //    val deser_dst = new Array[Byte](deser_offs(places));
+        //    finish nativeAllgatherv(id, role, ser_src, 0, ser_count, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+        //    ParallelSerialization.deserialize(dst, dst_offs, dst_counts, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+        //}
+        //else {
+            finish nativeAllgatherv(id, role, src, src_off, src_count, dst, dst_offs, dst_counts);
+        //}
+    }
+
+    private static def nativeAllgatherv[T] (id:Int, role:Int, src:Rail[T], src_off:Int, src_count:Int, dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
+        @Native("java", "x10.x10rt.TeamSupport.nativeAllGatherV(id, role, src, src_off, src_count, dst, dst_offs, dst_counts);")
+        @Native("c++", "x10rt_allgatherv(id, role, &src->raw[src_off], src_count, dst->raw, dst_offs->raw, dst_counts->raw, sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
+    }
 
     /** Blocks until all members have received their part of each other member's array.
      * Each member receives a contiguous and distinct portion of the src array.
@@ -935,54 +946,55 @@ public struct Team {
         @Native("c++", "x10rt_alltoall(id, role, &src->raw[src_off], &dst->raw[dst_off], sizeof(TPMGL(T)), count, ::x10aux::coll_handler, ::x10aux::coll_enter());") {}
     }
 
-//    public def alltoall[T] (role:Int, src:Rail[T]){T haszero} {
-//        assert(src != null);
-//    	assert(src.size % size() == 0);
-//    	val dst_raw = new Rail[T](src.size);//IndexedMemoryChunk.allocateUninitialized[T](src.size);
-//        alltoall(id, role, src, 0, dst_raw, 0, src.size / size());
-//        return new Rail[T](dst_raw);
-//    }
-//    
-//    public def alltoallv[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst:Array[T], dst_offs:Array[Int], dst_counts:Array[Int]) : void {
-//        alltoallv(id, role, src.raw(), src_offs.raw(), src_counts.raw(), dst.raw(), dst_offs.raw(), dst_counts.raw());
-//    }
-//
-//    public def alltoallv[T] (id:Int, role:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], src_counts:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
-//        if (needToSerialize[T]()) {
-//            val places = size();
-//            val ser_offs = new Array[Int](places);
-//            val ser_counts = new Array[Int](places);
-//            val ser_src = ParallelSerialization.serialize(src, src_offs, src_counts, ser_offs.raw(), ser_counts.raw());
-//            val deser_counts = new Array[Int](places);
-//            finish nativeAlltoall(id, role, ser_counts.raw(), 0, deser_counts.raw(), 0, 1);
-//            val deser_offs = new Array[Int](places + 1);
-//            deser_offs(0) = 0;
-//            for (i in 0..(places-1)) deser_offs(i+1) = deser_counts(i) + deser_offs(i);
-//            val deser_dst = new Array[Byte](deser_offs(places));
-//            finish nativeAlltoallv(id, role, ser_src, ser_offs.raw(), ser_counts.raw(), deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
-//            ParallelSerialization.deserialize(dst, dst_offs, dst_counts, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
-//        }
-//        else {
-//            finish nativeAlltoallv(id, role, src, src_offs, src_counts, dst, dst_offs, dst_counts);
-//        }
-//    }
-//
-//    private static def nativeAlltoallv[T] (id:Int, role:Int, src:IndexedMemoryChunk[T], src_offs:IndexedMemoryChunk[Int], src_counts:IndexedMemoryChunk[Int], dst:IndexedMemoryChunk[T], dst_offs:IndexedMemoryChunk[Int], dst_counts:IndexedMemoryChunk[Int]) : void {
-//        @Native("java", "x10.x10rt.TeamSupport.nativeAllToAllV(id, role, src, src_offs, src_counts, dst, dst_offs, dst_counts);")
-//        @Native("c++", "x10rt_alltoallv(id, role, src->raw(), src_offs->raw(), src_counts->raw(), dst->raw(), dst_offs->raw(), dst_counts->raw(), sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
-//    }
-//
-//    public def alltoallv[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int], dst_offs:Array[Int], dst_counts:Array[Int]) {
-//        assert(src != null);
-//        assert(src_counts.size == size());
-//        assert(src_offs.size == size());
-//        assert(dst_counts.size == size());
-//        assert(dst_offs.size == size());
-//        assert(size() > 0);
-//        val dst = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0)));
-//        alltoallv(role, src, src_offs, src_counts, dst, dst_offs, dst_counts);
-//        return dst;
-//    }
+    public def alltoall[T] (role:Int, src:Rail[T]){T haszero} {
+        assert(src != null);
+    	assert(src.size % size() == 0);
+    	val dst_raw = new Rail[T](src.size);//IndexedMemoryChunk.allocateUninitialized[T](src.size);
+        //alltoall(id, role, src, 0n, dst_raw, 0n, src.size / size());
+        alltoall(src, 0, dst_raw, 0, src.size / size());
+        return new Rail[T](dst_raw);
+    }
+    
+    public def alltoallv[T] (role:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int], dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
+        alltoallv(id, role, src, src_offs, src_counts, dst, dst_offs, dst_counts);
+    }
+
+    public def alltoallv[T] (id:Int, role:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int], dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
+        //if (needToSerialize[T]()) {
+        //    val places = size();
+        //    val ser_offs = new Array[Int](places);
+        //    val ser_counts = new Array[Int](places);
+        //    val ser_src = ParallelSerialization.serialize(src, src_offs, src_counts, ser_offs.raw(), ser_counts.raw());
+        //    val deser_counts = new Array[Int](places);
+        //    finish nativeAlltoall(id, role, ser_counts.raw(), 0, deser_counts.raw(), 0, 1);
+        //    val deser_offs = new Array[Int](places + 1);
+        //    deser_offs(0) = 0;
+        //    for (i in 0..(places-1)) deser_offs(i+1) = deser_counts(i) + deser_offs(i);
+        //    val deser_dst = new Array[Byte](deser_offs(places));
+        //    finish nativeAlltoallv(id, role, ser_src, ser_offs.raw(), ser_counts.raw(), deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+        //    ParallelSerialization.deserialize(dst, dst_offs, dst_counts, deser_dst.raw(), deser_offs.raw(), deser_counts.raw());
+        //}
+        //else {
+            finish nativeAlltoallv(id, role, src, src_offs, src_counts, dst, dst_offs, dst_counts);
+        //}
+    }
+
+    private static def nativeAlltoallv[T] (id:Int, role:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int], dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
+        @Native("java", "x10.x10rt.TeamSupport.nativeAllToAllV(id, role, src, src_offs, src_counts, dst, dst_offs, dst_counts);")
+        @Native("c++", "x10rt_alltoallv(id, role, src->raw, src_offs->raw, src_counts->raw, dst->raw, dst_offs->raw, dst_counts->raw, sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
+    }
+
+    public def alltoallv[T] (role:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int], dst_offs:Rail[Int], dst_counts:Rail[Int]) {
+        assert(src != null);
+        assert(src_counts.size == size());
+        assert(src_offs.size == size());
+        assert(dst_counts.size == size());
+        assert(dst_offs.size == size());
+        assert(size() > 0);
+        val dst = new Rail[T](Unsafe.allocRailUninitialized[T](RailUtils.reduce(dst_counts, (x:Int, y:Int)=>x+y, 0n)));
+        alltoallv(role, src, src_offs, src_counts, dst, dst_offs, dst_counts);
+        return dst;
+    }
 
     /** Indicates the operation to perform when reducing. */
     public static val ADD = 0n;
@@ -1744,164 +1756,171 @@ public struct Team {
 	    }
 	}
 
-    //private def flatten[T] (src:Array[Array[T](1)](1)) : Pair[Array[T](1), Pair[Array[Int](1), Array[Int](1)]] {
-    //    val sizes:Array[Int](1) = src.map((x:Array[T])=>x.size as Int);
-    //    val size = sizes.reduce((x:Int, y:Int)=>x+y, 0);
-    //    val acc:Array[Int](1) = sizes.scan((x:Int, y:Int)=> x+y, 0);
-    //    val offs:Array[Int](1) = new Array[Int](acc.size, (i:Int)=>(i==0) ? 0 : acc(i-1));
-    //    val find_arr = (i:Int) => {
-    //        assert(i < size);
-    //        val ind = ArrayUtils.binarySearch(acc, i );
-    //        if (ind >= 0) {
-    //            var max_ind:Int = ind;
-    //            while (max_ind < acc.size - 1 && acc(max_ind) == acc(max_ind + 1)) ++max_ind;
-    //            assert(max_ind + 1< acc.size);
-    //            return max_ind + 1;
-    //        }
-    //        else return -(ind +1);
-    //    };
-    //    val flatten_src:Array[T](1) = new Array[T](size, (i:Int)=> 
-    //        src(find_arr(i))(i - offs(find_arr(i)))
-    //    );
-    //    return Pair[Array[T](1), Pair[Array[Int](1), Array[Int](1)]](flatten_src, Pair[Array[Int](1), Array[Int](1)](offs, sizes));
-    //}
+    private def flatten[T] (src:Rail[Rail[T]]) : Pair[Rail[T], Pair[Rail[Int], Rail[Int]]] {
+        //val sizes:Rail[Int] = src.map((x:Rail[T])=>x.size as Int);
+        val sizes = new Rail[Int](1);
+        RailUtils.map(src, sizes, (x:Rail[T])=>x.size as Int);
+        //val size = sizes.reduce((x:Int, y:Int)=>x+y, 0n);
+        val size = RailUtils.reduce(sizes, (x:Int, y:Int)=>x+y, 0n);
+        Console.OUT.println("flatten is not implemented");
+        assert(false);
+        //val acc:Rail[Int] = sizes.scan((x:Int, y:Int)=> x+y, 0n);
+        val acc = new Rail[Int](1);
+        val offs:Rail[Int] = new Rail[Int](acc.size, (i:Long)=>(i==0) ? 0n : acc(i-1));
+        val find_arr = (i:Long) => {
+            assert(i < size);
+            //val ind = ArrayUtils.binarySearch(acc, i );
+            val ind = RailUtils.binarySearch(acc, i as Int);
+            if (ind >= 0) {
+                var max_ind:Long = ind;
+                while (max_ind < acc.size - 1 && acc(max_ind) == acc(max_ind + 1)) ++max_ind;
+                assert(max_ind + 1< acc.size);
+                return max_ind + 1;
+            }
+            else return -(ind +1);
+        };
+        val flatten_src:Rail[T] = new Rail[T](size, (i:Long)=> 
+            src(find_arr(i))(i - offs(find_arr(i)))
+        );
+        return Pair[Rail[T], Pair[Rail[Int], Rail[Int]]](flatten_src, Pair[Rail[Int], Rail[Int]](offs, sizes));
+    }
 
 
-    //public def scatter[T] (role:Int, root:Int, src:Array[T]) {
-    //    val team_size = size();
-    //    assert(role != root || src != null);
-    //    assert(role != root || src.size % team_size == 0);
-    //    val src_size = role == root ? src.size : Zero.get[Int]();
-    //    val count = bcast1(role, root, src_size / team_size);
-    //    debugln("scatter", "count: " + count);
-    //    return scatter(role, root, src, count);
-    //}
+    public def scatter[T] (role:Int, root:Int, src:Rail[T]){T haszero} {
+        val team_size = size();
+        assert(role != root || src != null);
+        assert(role != root || src.size % team_size == 0);
+        val src_size = src.size;//role == root ? src.size : Zero.get[Long]();
+        val count = bcast1(root, src_size / team_size);
+        debugln("scatter", "count: " + count);
+        return scatter(role, root, src, count as Int);
+    }
 
-    //public def scatterv[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int], src_offs:Array[Int]) {
-    //    assert(role != root || src_counts != null);
-    //    assert(role != root || src_offs != null);
-    //    val team_size = size();
-    //    assert(role != root || src_counts.size == team_size);
-    //    assert(role != root || src_offs.size == team_size);
-    //    val dst_count = scatter(role, root, src_counts, 1)(0);
-    //    debugln("scatterv", "dst_count: " + dst_count);
-    //    return scatterv(role, root, src, src_counts, src_offs, dst_count);
-    //}
+    public def scatterv[T] (role:Int, root:Int, src:Rail[T], src_counts:Rail[Int], src_offs:Rail[Int]) {
+        assert(role != root || src_counts != null);
+        assert(role != root || src_offs != null);
+        val team_size = size();
+        assert(role != root || src_counts.size == team_size);
+        assert(role != root || src_offs.size == team_size);
+        val dst_count = scatter(role, root, src_counts, 1n)(0);
+        debugln("scatterv", "dst_count: " + dst_count);
+        return scatterv(role, root, src, src_counts, src_offs, dst_count);
+    }
 
-    //public def scatterv[T] (role:Int, root:Int, src:Array[T], src_counts:Array[Int]) {
-    //    assert(role != root || src_counts != null);
-    //    val src_offs : Array[Int] = role == root ? countsToOffs(src_counts as Array[Int](1)) : null;
-    //    debugln("scatterv", "src_offs: " +  src_offs);
-    //    return scatterv[T](role, root, src, src_counts, src_offs);
-    //}
+    public def scatterv[T] (role:Int, root:Int, src:Rail[T], src_counts:Rail[Int]) {
+        assert(role != root || src_counts != null);
+        val src_offs : Rail[Int] = role == root ? countsToOffs(src_counts as Rail[Int]) : null;
+        debugln("scatterv", "src_offs: " +  src_offs);
+        return scatterv[T](role, root, src, src_counts, src_offs);
+    }
 
-    //public def scatterv[T] (role:Int, root:Int, src:Array[Array[T](1)](1)) {
-    //    if (role == root) {
-    //        assert(src != null);
-    //        val flatten_src_tuple = flatten(src);
-    //        val flatten_src = flatten_src_tuple.first;
-    //        val src_offs = flatten_src_tuple.second.first;
-    //        val src_sizes = flatten_src_tuple.second.second;
-    //        debugln("scatterv", "flatten_src_tuple: " + flatten_src_tuple);
-    //        return scatterv[T](role, root, flatten_src, src_sizes, src_offs);
-    //    } else {
-    //        debugln("scatterv", "non root");
-    //        return scatterv[T](role, root, null, null, null);
-    //    }
-    //}
+    public def scatterv[T] (role:Int, root:Int, src:Rail[Rail[T]]) {
+        if (role == root) {
+            assert(src != null);
+            val flatten_src_tuple = flatten(src);
+            val flatten_src = flatten_src_tuple.first;
+            val src_offs = flatten_src_tuple.second.first;
+            val src_sizes = flatten_src_tuple.second.second;
+            debugln("scatterv", "flatten_src_tuple: " + flatten_src_tuple);
+            return scatterv[T](role, root, flatten_src, src_sizes, src_offs);
+        } else {
+            debugln("scatterv", "non root");
+            return scatterv[T](role, root, null, null, null);
+        }
+    }
 
-    //public def gatherv[T] (role:Int, root:Int, src:Array[T](1)) {
-    //    assert(src != null);
-    //    val src_size = (role == root) ? src.size : 0;
-    //    val dst_counts = gather1[Int](role, root, src_size);
-    //    debugln("gatherv", "dst_counts: " + dst_counts);
-    //    return gatherv[T](role, root, src, dst_counts);
-    //}
+    public def gatherv[T] (role:Int, root:Int, src:Rail[T]) {
+        assert(src != null);
+        val src_size = (role == root) ? src.size : 0;
+        val dst_counts = gather1[Int](role, root, src_size as Int);
+        debugln("gatherv", "dst_counts: " + dst_counts);
+        return gatherv[T](role, root, src, dst_counts);
+    }
 
-    //public def bcast[T] (role:Int, root:Int, src:Array[T]) {
-    //    assert(role != root || src != null);
-    //    val src_size = (role == root) ? src.size : 0;
-    //    val count = bcast1(role, root, src_size);
-    //    debugln("bcast", "count: " + count);
-    //    bcast(role, root, src, count);
-    //}
+    public def bcast[T] (role:Int, root:Int, src:Rail[T]) {
+        assert(role != root || src != null);
+        val src_size = (role == root) ? src.size : 0;
+        val count = bcast1(root, src_size);
+        debugln("bcast", "count: " + count);
+        bcast(role, root, src, count as Int);
+    }
 
-    //public def allgatherv[T] (role:Int, src:Array[T]) {
-    //    assert(src != null);
-    //    val dst_counts = allgather1(role, src.size as Int);
-    //    val dst_offs = countsToOffs(dst_counts);
-    //    debugln("allgatherv", "dst_counts: " + dst_counts);
-    //    debugln("allgatherv", "dst_offs: " + dst_offs);
+    public def allgatherv[T] (role:Int, src:Rail[T]) {
+        assert(src != null);
+        val dst_counts = allgather1(role, src.size as Int);
+        val dst_offs = countsToOffs(dst_counts);
+        debugln("allgatherv", "dst_counts: " + dst_counts);
+        debugln("allgatherv", "dst_offs: " + dst_offs);
 
-    //    return allgatherv[T](role, src, dst_offs, dst_counts);
-    //}
+        return allgatherv[T](role, src, dst_offs, dst_counts);
+    }
 
-    //public def alltoallvWithBreakdown[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int]) : Pair[Array[T](1),Array[Int](1)] {
-    //    assert(src != null);
-    //    assert(src_offs != null);
-    //    assert(src_counts != null);
-    //    val dst_counts = alltoall(role, src_counts);
-    //    val dst_offs = countsToOffs(dst_counts);
-    //    val dst = alltoallv[T](role, src, src_offs, src_counts, dst_offs, dst_counts);
-    //    debugln("alltoallvWithBreakdown", "dst_counts: " + dst_counts);
-    //    debugln("alltoallvWithBreakdown", "dst_offs: " + dst_offs);
-    //    debugln("alltoallvWithBreakdown", "dst: " + dst);
-    //    return Pair[Array[T](1),Array[Int](1)](dst, dst_counts);
-    //}
+    public def alltoallvWithBreakdown[T] (role:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int]) : Pair[Rail[T],Rail[Int]] {
+        assert(src != null);
+        assert(src_offs != null);
+        assert(src_counts != null);
+        val dst_counts = alltoall(role, src_counts);
+        val dst_offs = countsToOffs(dst_counts);
+        val dst = alltoallv[T](role, src, src_offs, src_counts, dst_offs, dst_counts);
+        debugln("alltoallvWithBreakdown", "dst_counts: " + dst_counts);
+        debugln("alltoallvWithBreakdown", "dst_offs: " + dst_offs);
+        debugln("alltoallvWithBreakdown", "dst: " + dst);
+        return Pair[Rail[T],Rail[Int]](dst, dst_counts);
+    }
 
-    //public def alltoallvWithBreakdown[T] (role:Int, src:Array[Array[T](1)](1)) : Pair[Array[T](1),Array[Int](1)] {
-    //    assert(src != null);
-    //    val flatten_src_tuple = flatten(src);
-    //    val flatten_src = flatten_src_tuple.first;
-    //    val src_offs = flatten_src_tuple.second.first;
-    //    val src_sizes = flatten_src_tuple.second.second;
-    //    debugln("alltoallvWithBreakdown", "src_counts: " + src_sizes);
-    //    debugln("alltoallvWithBreakdown", "src_offs: " + src_offs);
-    //    debugln("alltoallvWithBreakdown", "flatten_src: " + flatten_src);
-    //    return alltoallvWithBreakdown(role, flatten_src, src_offs, src_sizes);
-    //}
+    public def alltoallvWithBreakdown[T] (role:Int, src:Rail[Rail[T]]) : Pair[Rail[T],Rail[Int]] {
+        assert(src != null);
+        val flatten_src_tuple = flatten(src);
+        val flatten_src = flatten_src_tuple.first;
+        val src_offs = flatten_src_tuple.second.first;
+        val src_sizes = flatten_src_tuple.second.second;
+        debugln("alltoallvWithBreakdown", "src_counts: " + src_sizes);
+        debugln("alltoallvWithBreakdown", "src_offs: " + src_offs);
+        debugln("alltoallvWithBreakdown", "flatten_src: " + flatten_src);
+        return alltoallvWithBreakdown(role, flatten_src, src_offs, src_sizes);
+    }
 
-    //public def alltoallv[T] (role:Int, src:Array[T], src_offs:Array[Int], src_counts:Array[Int]) {
-    //    assert(src != null);
-    //    assert(src_offs != null);
-    //    assert(src_counts != null);
-    //    val dst_counts = alltoall(role, src_counts);
-    //    val dst_offs = countsToOffs(dst_counts);
-    //    val dst = alltoallv[T](role, src, src_offs, src_counts, dst_offs, dst_counts);
-    //    debugln("alltoallv", "dst_counts: " + dst_counts);
-    //    debugln("alltoallv", "dst_offs: " + dst_offs);
-    //    debugln("alltoallv", "dst: " + dst);
-    //    return dst;
-    //}
+    public def alltoallv[T] (role:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int]) {
+        assert(src != null);
+        assert(src_offs != null);
+        assert(src_counts != null);
+        val dst_counts = alltoall(role, src_counts);
+        val dst_offs = countsToOffs(dst_counts);
+        val dst = alltoallv[T](role, src, src_offs, src_counts, dst_offs, dst_counts);
+        debugln("alltoallv", "dst_counts: " + dst_counts);
+        debugln("alltoallv", "dst_offs: " + dst_offs);
+        debugln("alltoallv", "dst: " + dst);
+        return dst;
+    }
 
-    //public def alltoallv[T] (role:Int, src:Array[T], src_counts:Array[Int](1)) {
-    //    assert(src != null);
-    //    assert(src_counts != null);
-    //    val src_offs = countsToOffs(src_counts);
-    //    debugln("alltoallv", "src_offs: " + src_offs);
-    //    return alltoallv[T](role, src, src_offs, src_counts);
-    //}
+    public def alltoallv[T] (role:Int, src:Rail[T], src_counts:Rail[Int]) {
+        assert(src != null);
+        assert(src_counts != null);
+        val src_offs = countsToOffs(src_counts);
+        debugln("alltoallv", "src_offs: " + src_offs);
+        return alltoallv[T](role, src, src_offs, src_counts);
+    }
 
-    //public def alltoallv[T] (role:Int, src:Array[Array[T](1)](1)) {
-    //    assert(src != null);
-    //    val flatten_src_tuple = flatten(src);
-    //    val flatten_src = flatten_src_tuple.first;
-    //    val src_offs = flatten_src_tuple.second.first;
-    //    val src_sizes = flatten_src_tuple.second.second;
-    //    debugln("alltoallv", "src_counts: " + src_sizes);
-    //    debugln("alltoallv", "src_offs: " + src_offs);
-    //    debugln("alltoallv", "flatten_src: " + flatten_src);
-    //    return alltoallv(role, flatten_src, src_offs, src_sizes);
-    //}
+    public def alltoallv[T] (role:Int, src:Rail[Rail[T]]) {
+        assert(src != null);
+        val flatten_src_tuple = flatten(src);
+        val flatten_src = flatten_src_tuple.first;
+        val src_offs = flatten_src_tuple.second.first;
+        val src_sizes = flatten_src_tuple.second.second;
+        debugln("alltoallv", "src_counts: " + src_sizes);
+        debugln("alltoallv", "src_offs: " + src_offs);
+        debugln("alltoallv", "flatten_src: " + flatten_src);
+        return alltoallv(role, flatten_src, src_offs, src_sizes);
+    }
 
-    //private static val OPT_REMOTE_OP = 0;
-    //private static val OPT_COLLECTIVES = 1;
-    //private static val OPT_COLLECTIVES_APPEND = 2;
+    private static val OPT_REMOTE_OP = 0;
+    private static val OPT_COLLECTIVES = 1;
+    private static val OPT_COLLECTIVES_APPEND = 2;
 
-    //private static def nativeSupports (opt:Int) : Int {
-    //    @Native("java", "return x10.x10rt.TeamSupport.nativeSize(opt);")
-    //    @Native("c++", "return (x10_int)x10rt_supports(static_cast<x10rt_opt>(opt));") { return -1; }
-    //}
+    private static def nativeSupports (opt:Int) : Int {
+        @Native("java", "return x10.x10rt.TeamSupport.nativeSize(opt);")
+        @Native("c++", "return (x10_int)x10rt_supports(static_cast<x10rt_opt>(opt));") { return -1n; }
+    }
 }
 
 // vim: shiftwidth=4:tabstop=4:expandtab
