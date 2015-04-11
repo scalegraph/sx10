@@ -15,10 +15,10 @@ import x10.compiler.Inline;
 import x10.util.StringBuilder;
 import x10.util.ArrayList;
 
-import x10.matrix.Debug;
+import x10.matrix.util.Debug;
 import x10.matrix.Matrix;
-import x10.matrix.MathTool;
-import x10.matrix.RandTool;
+import x10.matrix.util.MathTool;
+import x10.matrix.util.RandTool;
 import x10.matrix.sparse.SparseCSC;
 
 public type SparseCSCBuilder(bld:SparseCSCBuilder)=SparseCSCBuilder{self==bld};
@@ -96,6 +96,7 @@ public class SparseCSCBuilder(M:Long, N:Long) implements MatrixBuilder {
 				append(ca.index(offset), c, ca.value(offset));
 			}
 		}
+        this.toSparseCSC();
 		return this;
 	}
 
@@ -112,6 +113,7 @@ public class SparseCSCBuilder(M:Long, N:Long) implements MatrixBuilder {
 				append(c, r, ca.value(offset));
 			}
 		}
+        this.toSparseCSC();
 		return this;
 	}
 
@@ -126,6 +128,8 @@ public class SparseCSCBuilder(M:Long, N:Long) implements MatrixBuilder {
 				if (MathTool.isZero(v)) continue;
 				append(r, c, v);
 			}
+
+        this.toSparseCSC();
 		return this;
 	}
 	
@@ -149,6 +153,7 @@ public class SparseCSCBuilder(M:Long, N:Long) implements MatrixBuilder {
 				if (c>=N) break;
 			}
 		}
+        this.toSparseCSC();
 		return this;
 	}
 

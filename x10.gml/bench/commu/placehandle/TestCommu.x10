@@ -16,7 +16,7 @@ import x10.util.Timer;
 import x10.regionarray.Dist;
 import x10.regionarray.DistArray;
 
-import x10.matrix.Debug;
+import x10.matrix.util.Debug;
 import x10.matrix.DenseMatrix;
 import x10.matrix.block.Grid;
 import x10.matrix.dist.DistDenseMatrix;
@@ -44,7 +44,7 @@ class TestArrayCommu {
 	public val iter:Long;
 	public val M:Long;
 
-	public val nplace:Long = Place.MAX_PLACES;
+	public val nplace:Long = Place.numPlaces();
 	public val segt:Rail[Long];
 	
 	public var syncTime:Long = 0;
@@ -64,7 +64,7 @@ class TestArrayCommu {
 	
 	public val szlist:Rail[Long];
 	
-	public val checkTime = new Rail[Long](Place.MAX_PLACES);
+	public val checkTime = new Rail[Long](Place.numPlaces());
 	
 	public def this(args:Rail[String]) {
 		val m = args.size > 0 ? Long.parse(args(0)):1024;
@@ -74,11 +74,11 @@ class TestArrayCommu {
 
 		segt =  new Rail[Long](nplace, (i:Long)=>m);   
 
-        val localA = PlaceLocalHandle.make[Rail[Double]](PlaceGroup.WORLD, ()=>(new Rail[Double](m)));
+        val localA = PlaceLocalHandle.make[Rail[Double]](Place.places(), ()=>(new Rail[Double](m)));
         dstA = DistArray.make[Rail[Double]](Dist.makeUnique(), (Point)=>localA());
         this.localA = localA;
 
-        val localB = PlaceLocalHandle.make[Rail[Double]](PlaceGroup.WORLD, ()=>(new Rail[Double](m)));
+        val localB = PlaceLocalHandle.make[Rail[Double]](Place.places(), ()=>(new Rail[Double](m)));
         dstB = DistArray.make[Rail[Double]](Dist.makeUnique(), (Point)=>localB());
         this.localB = localB;
 
@@ -237,7 +237,7 @@ class TestArrayCommu {
 			val dat=new DenseMatrix(M, 1, localA() as Rail[Double]);
 			//dat.print("Result");
 			val tgt=new DenseMatrix(M, 1, org);
-			tgt.cellMult(nplace);
+			tgt.scale(nplace);
 			ret = dat.equals(tgt as Matrix(dat.M, dat.N));
 			if (ret)
 				Console.OUT.println("Test reduce of PlaceLocalHandle  passed!");

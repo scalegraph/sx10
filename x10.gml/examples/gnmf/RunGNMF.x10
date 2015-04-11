@@ -9,9 +9,9 @@
  *  (C) Copyright IBM Corporation 2011-2014.
  */
 
-import x10.matrix.Debug;
+import x10.matrix.util.Debug;
 import x10.matrix.Matrix;
-import x10.matrix.VerifyTools;
+import x10.matrix.util.VerifyTool;
 
 import gnmf.GNNMF;
 import gnmf.SeqGNNMF;
@@ -30,7 +30,7 @@ import gnmf.SeqGNNMF;
  * <p> (1) Rows of W and V. Default 1000
  * <p> (2) Non-zero sparsity of W and V. Default 0.001
  * <p> (3) Number of iterations. Default 10
- * <p> (4) Number of row blocks partitioning V and W. Default is the number of places, or Place.MAX_PLACES.
+ * <p> (4) Number of row blocks partitioning V and W. Default is the number of places, or Place.numPlaces().
  * <p> (5) Number of column blocks partitioning V. Default 1
  * <p> (6) Verification flag. Default 0 (no verification); 1 (sequential version run); 
  * 2 (parallel version run and full matrix verification); 3 (parallel version run and random sampling verification).
@@ -41,7 +41,7 @@ public class RunGNMF {
 		val mD = args.size > 0 ? Long.parse(args(0)):1000;
 		val nZ = args.size > 1 ? Double.parse(args(1)):0.001;
 		val iT = args.size > 2 ? Int.parse(args(2)):10n;
-		val rbV= args.size > 3 ? Long.parse(args(3)):Place.MAX_PLACES;
+		val rbV= args.size > 3 ? Long.parse(args(3)):Place.numPlaces();
 		val cbV= args.size > 4 ? Long.parse(args(4)):1;
 		val tV = args.size > 5 ? Long.parse(args(5)):0;
 		val nV = args.size > 6 ? Long.parse(args(6)):100000;
@@ -57,23 +57,23 @@ public class RunGNMF {
 				t.run();
 				t.printTiming();
 			} else if (tV == 1) { /* Sequential run */
-				val seq = new SeqGNNMF(t.V, t.H, t.W, t.iteration);
+				val seq = new SeqGNNMF(t.V, t.H, t.W, t.iterations);
 				seq.run();
 				seq.printTiming();
 			} else if (tV == 2) { /* Verification of whole matrices*/
 				t.verifyRun();
 			} else { /* Random sampling verification */
 				Debug.flushln("Prepare sequential run");
-				val seq = new SeqGNNMF(t.V, t.H, t.W, t.iteration);
+				val seq = new SeqGNNMF(t.V, t.H, t.W, t.iterations);
 				Debug.flushln("Start parallel run");
 				t.run();
 				Debug.flushln("Start sequential run");
 				seq.run();
 				Debug.flushln("Verify W");
 				// t.W.equals(seq.W as Matrix(t.W.M, t.W.N)); // XTENLANG-3384
-				VerifyTools.testSame(t.W, seq.W, tV);
+				VerifyTool.testSame(t.W, seq.W, tV);
 				Debug.flushln("Verify H");
-				VerifyTools.testSame(t.H, seq.H, tV);
+				VerifyTool.testSame(t.H, seq.H, tV);
 			}
 		}
 	}

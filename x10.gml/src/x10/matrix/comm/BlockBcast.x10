@@ -15,7 +15,6 @@ import x10.regionarray.Dist;
 import x10.compiler.Ifdef;
 import x10.compiler.Ifndef;
 
-import x10.matrix.Debug;
 import x10.matrix.Matrix;
 import x10.matrix.DenseMatrix;
 import x10.matrix.comm.mpi.WrapMPI;
@@ -56,7 +55,7 @@ public class BlockBcast extends BlockRemoteCopy {
 			} else if (mat0.isSparse()) {
 				dsz= mpiBcastSparse(distBS, rootbid, coloff, colcnt);
 			} else {
-				Debug.exit("Block type is not supported");
+				throw new UnsupportedOperationException("Block type is not supported");
 			}
 		}
 		
@@ -150,7 +149,7 @@ public class BlockBcast extends BlockRemoteCopy {
 			};
 		} else {
 			val rtblk = distBS().findBlock(rootbid);
-			if (Place.MAX_PLACES > 1) {
+			if (Place.numPlaces() > 1) {
 				datcnt = compBlockDataSize(distBS, rootbid, colOff, colCnt);
 				if (datcnt == 0L) return 0L;
 				if (rtblk.isSparse()) {
@@ -179,7 +178,7 @@ public class BlockBcast extends BlockRemoteCopy {
 				val sttpl = 0;
 				copyCastToBranch(distBS, srcblk, colOff, colCnt, datcnt, sttpl, plcnt);
 			}
-			val plcnt = Place.MAX_PLACES-here.id();
+			val plcnt = Place.numPlaces()-here.id();
 			if (plcnt > 1 ) async {
 				castToBranch(distBS, srcblk, colOff, colCnt, datcnt, plcnt);
 			}
@@ -231,7 +230,7 @@ public class BlockBcast extends BlockRemoteCopy {
 				distBS().sync(dstblk, colOff, colCnt);
 			}
 		} else {
-			Debug.exit("Matrix block type is not supported");
+			throw new UnsupportedOperationException("Matrix block type is not supported");
 		}
 	}	
 
@@ -261,7 +260,7 @@ public class BlockBcast extends BlockRemoteCopy {
 	// 		//Remote block set update
 	// 		val bset = distBS();
 	// 		val blk  = (here.id()==rootpid)?bset.findBlock(rootbid):bset.getFirst();
-	// 		if (blk.isSparse() && Place.MAX_PLACES > 1) {
+	// 		if (blk.isSparse() && Place.numPlaces() > 1) {
 	// 			val spa = blk.getMatrix() as SparseCSC;
 	// 			if (here.id() != rootpid)
 	// 				spa.finalizeRemoteCopyAtDest();

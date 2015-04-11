@@ -14,7 +14,7 @@
 import x10.util.Timer;
 
 import x10.matrix.Matrix;
-import x10.matrix.Debug;
+import x10.matrix.util.Debug;
 import x10.matrix.DenseMatrix;
 import x10.matrix.block.Grid;
 import x10.matrix.block.DenseBlockMatrix;
@@ -159,7 +159,7 @@ class TestMatP2PCopy {
 		var ret:Boolean = true;
 		Console.OUT.println("\nTest P2P copy of dist block matrix over "+ numplace+" placaces");
 		
-		val np    = Place.MAX_PLACES;
+		val np    = Place.numPlaces();
 		val gpart = new Grid(M*np, N, np, 1);
 		val dstDA = DistDenseMatrix.make(gpart);
 		val blkDA = DenseBlockMatrix.make(gpart);

@@ -24,7 +24,7 @@ echo "Making temp dir"
 if [ -z "$TMP_DIR" ]; then
   export TMP_DIR=/tmp/precommit-$USER
 fi
-if [[ "$UNAME" = CYGWIN* ]]; then TMP_DIR="$(cygpath -am "$TMP_DIR")"; fi
+if [ -n "$IS_CYGWIN" ]; then TMP_DIR="$(cygpath -am "$TMP_DIR")"; fi
 
 rm -rf "$TMP_DIR"
 mkdir -p "$TMP_DIR"
@@ -42,15 +42,15 @@ echo "Compiling PreCommit.x10 with x10c++"
 cd "$ROOT/x10.tests/tests-inactive/Misc"
 
 nice "$ROOT/x10.dist/bin/x10c++" -O -DEBUG \
- -sourcepath "$ROOT/x10.dist/samples/tutorial" \
+ -sourcepath "$ROOT/x10.dist/samples" \
  -sourcepath "$ROOT/x10.tests/tests/x10lib" \
  -sourcepath "$ROOT/x10.tests/tests/APGAS/Async" \
  -sourcepath "$ROOT/x10.tests/tests/APGAS/At" \
  -sourcepath "$ROOT/x10.tests/tests/APGAS/Atomic" \
  -sourcepath "$ROOT/x10.tests/tests/APGAS/Clock" \
  -sourcepath "$ROOT/x10.tests/tests/APGAS/Place" \
- -sourcepath "$ROOT/x10.tests/tests/Arrays/Distribution" \
- -sourcepath "$ROOT/x10.tests/tests/Arrays/Region" \
+ -sourcepath "$ROOT/x10.tests/tests/Regionarray/Distribution" \
+ -sourcepath "$ROOT/x10.tests/tests/Regionarray/Region" \
  -sourcepath "$ROOT/x10.tests/tests/Constructs/Call" \
  -sourcepath "$ROOT/x10.tests/tests/Constructs/Cast" \
  -sourcepath "$ROOT/x10.tests/tests/Constructs/Closures" \
@@ -80,15 +80,15 @@ mkdir -p "${TMP_DIR}.tmp"
 cd "$ROOT/x10.tests/tests-inactive/Misc"
 
 nice "$ROOT/x10.dist/bin/x10c" -O \
- -sourcepath "$ROOT/x10.dist/samples/tutorial" \
+ -sourcepath "$ROOT/x10.dist/samples" \
  -sourcepath "$ROOT/x10.tests/tests/x10lib" \
  -sourcepath "$ROOT/x10.tests/tests/APGAS/Async" \
  -sourcepath "$ROOT/x10.tests/tests/APGAS/At" \
  -sourcepath "$ROOT/x10.tests/tests/APGAS/Atomic" \
  -sourcepath "$ROOT/x10.tests/tests/APGAS/Clock" \
  -sourcepath "$ROOT/x10.tests/tests/APGAS/Place" \
- -sourcepath "$ROOT/x10.tests/tests/Arrays/Distribution" \
- -sourcepath "$ROOT/x10.tests/tests/Arrays/Region" \
+ -sourcepath "$ROOT/x10.tests/tests/Regionarray/Distribution" \
+ -sourcepath "$ROOT/x10.tests/tests/Regionarray/Region" \
  -sourcepath "$ROOT/x10.tests/tests/Constructs/Call" \
  -sourcepath "$ROOT/x10.tests/tests/Constructs/Cast" \
  -sourcepath "$ROOT/x10.tests/tests/Constructs/Closures" \

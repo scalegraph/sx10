@@ -66,6 +66,7 @@ public abstract class InnerClassRemover extends ContextVisitor {
     
     protected abstract ContextVisitor localClassRemover();
 
+    @Override
     public Node override(Node parent, Node n) {
         if (n instanceof SourceFile) {
             ContextVisitor lcv = localClassRemover();
@@ -265,6 +266,7 @@ public abstract class InnerClassRemover extends ContextVisitor {
         return (ClassDecl) cd.visitChildren(new NodeVisitor() {
             LocalDef li;
 
+            @Override
             public Node override(Node parent, Node n) {
                 if (n instanceof ClassBody) {
                     return null;
@@ -306,6 +308,7 @@ public abstract class InnerClassRemover extends ContextVisitor {
 //                return null;
             }
 
+            @Override
             public Node leave(Node parent, Node old, Node n, NodeVisitor v) {
                 if (parent instanceof ConstructorCall && li != null && n instanceof Expr) {
                     return fixQualifier((Expr) n, li);
@@ -317,6 +320,7 @@ public abstract class InnerClassRemover extends ContextVisitor {
     
     public Expr fixQualifier(Expr e, final LocalDef li) {
         return (Expr) e.visit(new NodeVisitor() {
+            @Override
             public Node leave(Node old, Node n, NodeVisitor v) {
                 if (n instanceof Field) {
                     Field f = (Field) n;

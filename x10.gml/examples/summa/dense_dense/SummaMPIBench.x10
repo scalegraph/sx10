@@ -9,10 +9,10 @@ import x10.compiler.Ifdef;
 import x10.compiler.Ifndef;
 
 import x10.matrix.Matrix;
-import x10.matrix.Debug;
+import x10.matrix.util.Debug;
 import x10.matrix.DenseMatrix;
 import x10.matrix.DenseMultXTen;
-import x10.matrix.VerifyTools;
+import x10.matrix.util.VerifyTool;
 
 import x10.matrix.block.Grid;
 import x10.matrix.dist.DistDenseMatrix;
@@ -43,7 +43,7 @@ class RunSummaMPIBench{
 	public val iter:Int;
 	public val M:Long, N:Long, K:Long;
 	public val testps:Int, lastps:Int;
-	public val nplace:Int = Place.MAX_PLACES;
+	public val nplace:Int = Place.numPlaces();
 	public val aPart:Grid, bPart:Grid, btPart:Grid, cPart:Grid;
 
 	val A:DistDenseMatrix(aPart.M, aPart.N);

@@ -25,7 +25,6 @@ import x10.serialization.X10JavaSerializer;
  * Represents a boxed UShort value. Boxed representation is used when casting
  * a UShort value into type Any or parameter type T.
  */
-@SuppressWarnings("serial")
 final public class UShort extends java.lang.Number implements StructI, java.lang.Comparable<UShort>,
 // for X10PrettyPrinterVisitor.exposeSpecialDispatcherThroughSpecialInterface
 //    x10.lang.Arithmetic<UShort>, x10.lang.Bitwise<UShort>, x10.util.Ordered<UShort>
@@ -159,6 +158,10 @@ final public class UShort extends java.lang.Number implements StructI, java.lang
     public boolean $gt$Z(Object a, Type t) { return UIntUtils.gt($value,((UShort)a).$value); }
     public boolean $le$Z(Object a, Type t) { return UIntUtils.le($value,((UShort)a).$value); }
     public boolean $ge$Z(Object a, Type t) { return UIntUtils.ge($value,((UShort)a).$value); }
+
+    private Object writeReplace() throws java.io.ObjectStreamException {
+        return new x10.serialization.SerializationProxy(this);
+    }
 
     public void $_serialize(X10JavaSerializer $serializer) throws IOException {
         $serializer.write($value);

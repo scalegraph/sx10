@@ -12,11 +12,9 @@
 package harness;
 
 import x10.compiler.WS;
-import x10.regionarray.*;
-import x10.util.*;
 import x10.io.Console;
 import x10.io.File;
-
+import x10.util.Random;
 
 /**
  * Test harness abstract class.
@@ -56,8 +54,7 @@ abstract public class x10Test {
     // to build up a path.  
     // If X10_TEST_DIR is not set, this method simply returns file
     public static def pathCombine(prefix:String, file:String):String {
-        val env = System.getenv();
-        val home = env.getOrElse("X10_TEST_DIR", null);
+        val home = System.getenv("X10_TEST_DIR");
         if (home == null) {
             return file;
         } else {
@@ -79,14 +76,12 @@ abstract public class x10Test {
 
     public static def success(): void = {
         println(PREFIX+"Test succeeded.");
-	   at (Place.FIRST_PLACE) 
-	     System.setExitCode(0n);
+        System.setExitCode(0n);
     }
 
     public static def failure(): void = {
         println(PREFIX+"Test failed.");
-        at (Place.FIRST_PLACE)
-           System.setExitCode(1n);
+        System.setExitCode(1n);
     }
 
     protected static def reportResult(b: boolean): void = {

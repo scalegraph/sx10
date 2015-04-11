@@ -19,10 +19,10 @@ import x10.compiler.*;
  * 
  * For Managed X10:
  *   $ x10 ResilientKMeans.x10
- *   $ X10_RESILIENT_MODE=1 X10_NPLACES=4 x10 ResilientKMeans [num_points] [num_clusters]
+ *   $ X10_RESILIENT_MODE=11 X10_NPLACES=4 x10 ResilientKMeans [num_points] [num_clusters]
  * For Native X10:
  *   $ x10c++ ResilientKMeans.x10 -o ResilientKMeans
- *   $ X10_RESILIENT_MODE=1 X10_NPLACES=4 runx10 ResilientKMeans [num_points] [num_clusters]
+ *   $ X10_RESILIENT_MODE=11 X10_NPLACES=4 runx10 ResilientKMeans [num_points] [num_clusters]
  */
 class ResilientKMeansDecimation {
     
@@ -34,12 +34,12 @@ class ResilientKMeansDecimation {
     public static def main(args:Rail[String]) {here == Place.FIRST_PLACE} {
         val POINTS = (args.size>=1) ? Long.parseLong(args(0)) : 1000000L;
         val CLUSTERS = (args.size>=2) ? Long.parseLong(args(1)): 4L;
-        Console.OUT.println("KMeans: Abstract " + Place.MAX_PLACES*POINTS + " points in " + DIM + "D space into "
-                            + CLUSTERS + " clusters, using " + Place.MAX_PLACES + " places");
+        Console.OUT.println("KMeans: Abstract " + Place.numPlaces()*POINTS + " points in " + DIM + "D space into "
+                            + CLUSTERS + " clusters, using " + Place.numPlaces() + " places");
         
         /*
         finish for (p in Place.places()) at (p) {
-            Console.OUT.println(here+" running in "+Runtime.getName());
+            Console.OUT.println(here+" running in "+x10.xrx.Runtime.getName());
         }
         */
 
@@ -49,7 +49,7 @@ class ResilientKMeansDecimation {
          */
         Console.OUT.println("Creating points array...  ");
         val creation_before = System.nanoTime();
-        val points_local = PlaceLocalHandle.make[Rail[Float], Random](PlaceGroup.WORLD, (p:Place)=>new Random(p.id), (rnd:Random) => new Rail[Float](POINTS*DIM, (i:Long)=>rnd.nextFloat()));
+        val points_local = PlaceLocalHandle.make[Rail[Float], Random](Place.places(), (p:Place)=>new Random(p.id), (rnd:Random) => new Rail[Float](POINTS*DIM, (i:Long)=>rnd.nextFloat()));
         val creation_after = System.nanoTime();
         Console.OUT.println("-- Took "+(creation_after-creation_before)/1E9+" seconds");
         
@@ -65,9 +65,9 @@ class ResilientKMeansDecimation {
         val central_clusters_gr = GlobalRef(central_clusters);
         val central_cluster_counts_gr = GlobalRef(central_cluster_counts);
         /* For local calculation */
-        val local_curr_clusters = PlaceLocalHandle.make[Rail[Float]](PlaceGroup.WORLD, ()=>new Rail[Float](CLUSTERS*DIM));
-        val local_new_clusters = PlaceLocalHandle.make[Rail[Float]](PlaceGroup.WORLD, ()=>new Rail[Float](CLUSTERS*DIM));
-        val local_cluster_counts = PlaceLocalHandle.make[Rail[Long]](PlaceGroup.WORLD, ()=>new Rail[Long](CLUSTERS));
+        val local_curr_clusters = PlaceLocalHandle.make[Rail[Float]](Place.places(), ()=>new Rail[Float](CLUSTERS*DIM));
+        val local_new_clusters = PlaceLocalHandle.make[Rail[Float]](Place.places(), ()=>new Rail[Float](CLUSTERS*DIM));
+        val local_cluster_counts = PlaceLocalHandle.make[Rail[Long]](Place.places(), ()=>new Rail[Long](CLUSTERS));
         
         /*
          * Calculate KMeans using multiple places
@@ -96,10 +96,13 @@ class ResilientKMeansDecimation {
                     }
                 }
             } catch (es:MultipleExceptions) {
-                for (e in es.exceptions()) {
-                    if (!(e instanceof DeadPlaceException)) throw e;
-                    Console.OUT.println("DeadPlaceException thrown from " + (e as DeadPlaceException).place);
+                val deadPlaceExceptions = es.getExceptionsOfType[DeadPlaceException]();
+                for (dpe in deadPlaceExceptions) {
+                    Console.OUT.println("DeadPlaceException thrown from " + dpe.place);
+                    // No recovery is necessary, completeness will be checked by number of processed points
                 }
+                val filtered = es.filterExceptionsOfType[DeadPlaceException]();
+                if (filtered != null) throw filtered;
             }
             val dist_clusters_after = System.nanoTime();
             Console.OUT.println("-- Took "+(dist_clusters_after-dist_clusters_before)/1E9+" seconds");
@@ -170,10 +173,13 @@ class ResilientKMeansDecimation {
                     } /* at (pl) async */
                 } /* finish for (pl) */
             } catch (es:MultipleExceptions) {
-                for (e in es.exceptions()) {
-                    if (!(e instanceof DeadPlaceException)) throw e;
-                    Console.OUT.println("DeadPlaceException thrown from " + (e as DeadPlaceException).place);
+                val deadPlaceExceptions = es.getExceptionsOfType[DeadPlaceException]();
+                for (dpe in deadPlaceExceptions) {
+                    Console.OUT.println("DeadPlaceException thrown from " + dpe.place);
+                    // No recovery is necessary, completeness will be checked by number of processed points
                 }
+                val filtered = es.filterExceptionsOfType[DeadPlaceException]();
+                if (filtered != null) throw filtered;
             }
             val compute_clusters_after = System.nanoTime();
             Console.OUT.println("-- Took "+(compute_clusters_after-compute_clusters_before)/1E9+" seconds.  Used "+points_used()()+" points this iteration.");

@@ -147,7 +147,7 @@ public final class Rail<T> extends Ref implements x10.lang.Iterable,
         }
     }
 
-    public Rail(Type T, long size, x10.lang.Runtime.MemoryAllocator alloc) {
+    public Rail(Type T, long size, x10.xrx.Runtime.MemoryAllocator alloc) {
         this(T, size);
     }
 
@@ -177,6 +177,10 @@ public final class Rail<T> extends Ref implements x10.lang.Iterable,
     /*
      * Serialization
      */
+
+    private Object writeReplace() throws java.io.ObjectStreamException {
+        return new x10.serialization.SerializationProxy(this);
+    }
 
     public void $_serialize(X10JavaSerializer serializer) throws java.io.IOException {
         serializer.write(T);
@@ -368,7 +372,7 @@ public final class Rail<T> extends Ref implements x10.lang.Iterable,
         int dstIndex = (int)dstIndexL;
         int numElems = (int)numElemsL;
         // synchronous version for the same place
-        if (dst.rail.home.id == x10.lang.Runtime.home().id) {
+        if (dst.rail.home.id == x10.xrx.Runtime.home().id) {
             System.arraycopy(src.value, srcIndex, dst.$apply().value, dstIndex, numElems);
             return;
         }
@@ -384,9 +388,9 @@ public final class Rail<T> extends Ref implements x10.lang.Iterable,
             System.arraycopy(src.getBackingArray(), srcIndex, dataToCopy, 0, numElems);
         }
 
-        VoidFun_0_0 copyBody = new $Closure$0(dataToCopy, dst, dstIndex, numElems);
+        VoidFun_0_0 copyBody = new $Closure$0(dataToCopy, dst, dstIndex, numElems, null);
 
-        x10.lang.Runtime.runAsync(dst.rail.home, copyBody, null);
+        x10.xrx.Runtime.runAsync(dst.rail.home, copyBody, null);
     }
 
     // static nested class version of copyBody
@@ -395,19 +399,26 @@ public final class Rail<T> extends Ref implements x10.lang.Iterable,
         public GlobalRail<T> dst;
         public int dstIndex;
         public int numElems;
+        public VoidFun_0_0 notif;
 
         // Just for allocation
         $Closure$0() {
         }
-        $Closure$0(Object srcData, GlobalRail<T> dst, int dstIndex, int numElems) {
+        $Closure$0(Object srcData, GlobalRail<T> dst, int dstIndex, int numElems, VoidFun_0_0 notif) {
             this.srcData = srcData;
             this.dst = dst;
             this.dstIndex = dstIndex;
             this.numElems = numElems;
+            this.notif = notif;
         }
         public void $apply() {
-            Object dstData = dst.$apply().getBackingArray();
-            System.arraycopy(srcData, 0, dstData, dstIndex, numElems);
+            if (numElems > 0) {
+                Object dstData = dst.$apply().getBackingArray();
+                System.arraycopy(srcData, 0, dstData, dstIndex, numElems);
+            }
+            if (notif != null) {
+                notif.$apply();
+            }
         }
         public static final RuntimeType<$Closure$0> $RTT = StaticVoidFunType.<$Closure$0> make($Closure$0.class, new Type[] { VoidFun_0_0.$RTT });
         public RuntimeType<$Closure$0> $getRTT() {
@@ -425,6 +436,7 @@ public final class Rail<T> extends Ref implements x10.lang.Iterable,
             }
             $serializer.write(this.dst);
             $serializer.write(this.dstIndex);
+            $serializer.write(this.notif);
         }
 
         public static X10JavaSerializable $_deserializer(X10JavaDeserializer $deserializer) throws IOException {
@@ -440,23 +452,36 @@ public final class Rail<T> extends Ref implements x10.lang.Iterable,
             }
             $_obj.dst = $deserializer.readObject();
             $_obj.dstIndex = $deserializer.readInt();
+            $_obj.notif = $deserializer.readObject();
             return $_obj;
         }
     }
 
-    public static <T> void uncountedCopy__0$1x10$lang$Rail$$T$2__2$1x10$lang$Rail$$T$2$2$2(Type T, Rail<T> src, long srcIndexL, GlobalRail<T> dst, long dstIndexL, long numElemsL, VoidFun_0_0 notifier) {
+    public static <T> void uncountedCopy__0$1x10$lang$Rail$$T$2__2$1x10$lang$Rail$$T$2(Type T, Rail<T> src, long srcIndexL, GlobalRail<T> dst, long dstIndexL, long numElemsL, VoidFun_0_0 notifier) {
         int srcIndex = (int)srcIndexL;
         int dstIndex = (int)dstIndexL;
         int numElems = (int)numElemsL;
         // synchronous version for the same place
-        if (dst.rail.home.id == x10.lang.Runtime.home().id) {
+        if (dst.rail.home.id == x10.xrx.Runtime.home().id) {
             System.arraycopy(src.value, srcIndex, dst.$apply().value, dstIndex, numElems);
             notifier.$apply();
             return;
         }
 
-        throw new java.lang.UnsupportedOperationException("uncountedCopy not implemented for multivm");
-        // notifier.$apply();
+        // extra copy here simplifies logic and allows us to do this entirely at the Java level.
+        // We'll eventually need to optimize this by writing custom native/JNI code instead of treating
+        // it as just another async to execute remotely.
+        final Object dataToCopy;
+        if (numElems == src.size) {
+            dataToCopy = src.getBackingArray();
+        } else {
+            dataToCopy = src.T.makeArray(numElems);
+            System.arraycopy(src.getBackingArray(), srcIndex, dataToCopy, 0, numElems);
+        }
+
+        VoidFun_0_0 copyBody = new $Closure$0(dataToCopy, dst, dstIndex, numElems, notifier);
+
+        x10.xrx.Runtime.runUncountedAsync(dst.rail.home, copyBody, null);
     }
 
     public static <T> void asyncCopy__0$1x10$lang$Rail$$T$2__2$1x10$lang$Rail$$T$2(Type T, final GlobalRail<T> src, final long srcIndexL, Rail<T> dst, final long dstIndexL, final long numElemsL) {
@@ -464,17 +489,16 @@ public final class Rail<T> extends Ref implements x10.lang.Iterable,
         int dstIndex = (int)dstIndexL;
         int numElems = (int)numElemsL;
         // synchronous version for the same place
-        if (src.rail.home.id == x10.lang.Runtime.home().id) {
+        if (src.rail.home.id == x10.xrx.Runtime.home().id) {
             System.arraycopy(src.$apply().value, srcIndex, dst.value, dstIndex, numElems);
             return;
         }
 
-        // A really bad implementation!  Leaks dst!!  Non-optimized copies! Extra distributed async/finish traffic!
         final GlobalRail<T> dstWrapper = new GlobalRail<T>(ParameterizedType.make(Rail.$RTT, dst.T), dst, null);
 
-        VoidFun_0_0 copyBody1 = new $Closure$1<T>(src, srcIndex, dstWrapper, dstIndex, numElems);
+        VoidFun_0_0 copyBody1 = new $Closure$1<T>(src, srcIndex, dstWrapper, dstIndex, numElems, null);
 
-        x10.lang.Runtime.runAsync(src.rail.home, copyBody1, null);
+        x10.xrx.Runtime.runAsync(src.rail.home, copyBody1, null);
     }
 
     // static nested class version of copyBody1
@@ -484,16 +508,18 @@ public final class Rail<T> extends Ref implements x10.lang.Iterable,
         public GlobalRail<T> dstWrapper;
         public int dstIndex;
         public int numElems;
+        public VoidFun_0_0 notifier;
 
         //Just for allocation
         $Closure$1() {
         }
-        $Closure$1(GlobalRail<T> src, int srcIndex, GlobalRail<T> dstWrapper, int dstIndex, int numElems) {
+        $Closure$1(GlobalRail<T> src, int srcIndex, GlobalRail<T> dstWrapper, int dstIndex, int numElems, VoidFun_0_0 notifier) {
             this.src = src;
             this.srcIndex = srcIndex;
             this.dstWrapper = dstWrapper;
             this.dstIndex = dstIndex;
             this.numElems = numElems;
+            this.notifier = notifier;
         }
         public void $apply() {
             // This body runs at src's home.  It accesses the data for src and then does
@@ -512,9 +538,13 @@ public final class Rail<T> extends Ref implements x10.lang.Iterable,
             }
 
             // N.B. copyBody2 is same as copyBody 
-            VoidFun_0_0 copyBody2 = new $Closure$0(dataToCopy, dstWrapper, dstIndex, numElems);
+            VoidFun_0_0 copyBody2 = new $Closure$0(dataToCopy, dstWrapper, dstIndex, numElems, notifier);
 
-            x10.lang.Runtime.runAsync(dstWrapper.rail.home, copyBody2, null);
+            if (notifier != null) {
+                x10.xrx.Runtime.runUncountedAsync(dstWrapper.rail.home, copyBody2, null);
+            } else {
+                x10.xrx.Runtime.runAsync(dstWrapper.rail.home, copyBody2, null);
+            }
         }
         public static final RuntimeType<$Closure$1<?>> $RTT = StaticVoidFunType.<$Closure$1<?>> make($Closure$1.class, new Type[] { VoidFun_0_0.$RTT });
         public RuntimeType<$Closure$1<?>> $getRTT() {
@@ -531,6 +561,7 @@ public final class Rail<T> extends Ref implements x10.lang.Iterable,
             $serializer.write(this.dstWrapper);
             $serializer.write(this.dstIndex);
             $serializer.write(this.numElems);
+            $serializer.write(this.notifier);
         }
 
         public static X10JavaSerializable $_deserializer(X10JavaDeserializer $deserializer) throws IOException {
@@ -545,22 +576,26 @@ public final class Rail<T> extends Ref implements x10.lang.Iterable,
             $_obj.dstWrapper = $deserializer.readObject();
             $_obj.dstIndex = $deserializer.readInt();
             $_obj.numElems = $deserializer.readInt();
+            $_obj.notifier = $deserializer.readObject();
             return $_obj;
         }
     }
 
-    public static <T> void uncountedCopy__0$1x10$lang$Rail$$T$2__2$1x10$lang$Rail$$T$2$2$2(Type T, GlobalRail<T> src, long srcIndexL, Rail<T> dst, long dstIndexL, long numElemsL, VoidFun_0_0 notifier) {
+    public static <T> void uncountedCopy__0$1x10$lang$Rail$$T$2__2$1x10$lang$Rail$$T$2(Type T, GlobalRail<T> src, long srcIndexL, Rail<T> dst, long dstIndexL, long numElemsL, VoidFun_0_0 notifier) {
         int srcIndex = (int)srcIndexL;
         int dstIndex = (int)dstIndexL;
         int numElems = (int)numElemsL;
         // synchronous version for the same place
-        if (src.rail.home.id == x10.lang.Runtime.home().id) {
+        if (src.rail.home.id == x10.xrx.Runtime.home().id) {
             System.arraycopy(src.$apply().value, srcIndex, dst.value, dstIndex, numElems);
             notifier.$apply();
             return;
         }
 
-        throw new java.lang.UnsupportedOperationException("uncountedCopy not implemented for multivm");
-        // notifier.$apply();
+        final GlobalRail<T> dstWrapper = new GlobalRail<T>(ParameterizedType.make(Rail.$RTT, dst.T), dst, null);
+
+        VoidFun_0_0 copyBody1 = new $Closure$1<T>(src, srcIndex, dstWrapper, dstIndex, numElems, notifier);
+
+        x10.xrx.Runtime.runUncountedAsync(src.rail.home, copyBody1, null);
     }
 }

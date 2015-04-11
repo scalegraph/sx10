@@ -9,19 +9,14 @@
  *  (C) Copyright IBM Corporation 2006-2014.
  */
 
+import harness.x10Test;
+
 import x10.matrix.DenseMatrix;
 
 import x10.matrix.sparse.SparseCSC;
 import x10.matrix.sparse.SparseCSR;
 
-public class TestSparseMult{
-    public static def main(args:Rail[String]) {
-		val testcase = new SparseMult(args);
-		testcase.run();
-	}
-}
-
-class SparseMult {
+public class TestSparseMult extends x10Test {
 	public val density:Double;
 	public val M:Long;
 	public val N:Long;
@@ -31,12 +26,11 @@ class SparseMult {
 		M = args.size > 0 ? Long.parse(args(0)):50;
 		density = args.size > 1 ? Double.parse(args(1)):0.5;
 		N = args.size > 2 ? Long.parse(args(2)):(M as Int)+1;
-		K = args.size > 3 ? Long.parse(args(3)):(M as Int)+2;	
+		K = args.size > 3 ? Long.parse(args(3)):(M as Int)+2;
 	}
 
-	public def run(): void {
+    public def run():Boolean {
 		var ret:Boolean = true;
- 		// Set the matrix function
 		ret &= (testMultCC());
  		ret &= (testMultCR());
  		ret &= (testMultCD());
@@ -48,12 +42,9 @@ class SparseMult {
  		ret &= (testMultDC());
  		ret &= (testMultDR());
 
-		if (ret)
-			Console.OUT.println("CSC Multiply Test passed!");
-		else
-			Console.OUT.println("------------------CSC Multiply Test failed!------------------");
+        return ret;
 	}
-	
+
 	public def testMultCC():Boolean {
 		Console.OUT.println("Test CSC * CSC -> CSC");
 		val a = SparseCSC.make(M, K, density);
@@ -64,9 +55,7 @@ class SparseMult {
 		val db= b.toDense();
 		val dc= da % db;
 		val ret = dc.equals(c);
-		if (ret)
-			Console.OUT.println("CSC * CSC test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("---------CSC * CSC test failed!---------");
 		return ret;
 	}
@@ -81,9 +70,7 @@ class SparseMult {
 		val db= b.toDense();
 		val dc= da % db;
 		val ret = dc.equals(c);
-		if (ret)
-			Console.OUT.println("CSC * CSR test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("---------CSC * CSR test failed!---------");
 		return ret;
 	}
@@ -99,14 +86,11 @@ class SparseMult {
 		val db= b;
 		val dc= da % db;
 		val ret = dc.equals(c);
-		if (ret)
-			Console.OUT.println("CSC * Dense test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("---------CSC * Dense test failed!---------");
 		return ret;
 	}
 
-	// SCR * 
 	public def testMultRC():Boolean {
 		Console.OUT.println("Test CSR * CSC -> Dense");
 		val a = SparseCSR.make(M, K, density);
@@ -119,13 +103,11 @@ class SparseMult {
 		val dc= da % db;
 		val ret = dc.equals(c);
 
-		if (ret)
-			Console.OUT.println("CSR * CSC test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("---------CSR * CSC test failed!---------");
 		return ret;
 	}
-	
+
 	public def testMultRR():Boolean {
 		Console.OUT.println("Test CSR * CSR -> Dense");
 		val a = SparseCSR.make(M, K, density);
@@ -138,9 +120,7 @@ class SparseMult {
 		val dc= da % db;
 		val ret = dc.equals(c);
 
-		if (ret)
-			Console.OUT.println("CSR * CSR test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("---------CSR * CSR test failed!---------");
 		return ret;
 	}
@@ -157,9 +137,7 @@ class SparseMult {
 		val dc= da % b;
 		ret = dc.equals(c);
 
-		if (ret)
-			Console.OUT.println("CSR * Dense test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("---------CSR * Dense test failed!---------");
 		return ret;
 	}
@@ -176,9 +154,7 @@ class SparseMult {
 		val dc= a % db;
 		val ret = dc.equals(c);
 
-		if (ret)
-			Console.OUT.println("Dense * CSC test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("---------Dense * CSC test failed!---------");
 		return ret;
 	}
@@ -195,10 +171,12 @@ class SparseMult {
 		val dc= a % db;
 		val ret = dc.equals(c);
 
-		if (ret)
-			Console.OUT.println("Dense * CSR test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("---------Dense * CSR test failed!---------");
 		return ret;
+	}
+
+    public static def main(args:Rail[String]) {
+		new TestSparseMult(args).execute();
 	}
 }

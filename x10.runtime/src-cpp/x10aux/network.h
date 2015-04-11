@@ -18,10 +18,10 @@
 #include <x10rt_cpp.h>
 
 namespace x10 { namespace lang { class VoidFun_0_0; } }
-namespace x10 { namespace lang { class FinishState; } }
+namespace x10 { namespace xrx { class FinishState; } }
 namespace x10 { namespace lang { class Reference; } }
 namespace x10 { namespace lang { class String; } }
-namespace x10 { namespace lang { class Runtime__Profile; } }
+namespace x10 { namespace xrx { class Runtime__Profile; } }
 
 namespace x10aux {
 
@@ -103,6 +103,7 @@ namespace x10aux {
     void blocks_threads (place p, msg_type t, int shm, x10_ulong &bs, x10_ulong &ts, const int *cfgs=cuda_cfgs);
     void blocks_threads (place p, msg_type t, int shm, x10_long &bs, x10_long &ts, const int *cfgs=cuda_cfgs);
 
+    void device_sync (place p);
 
     inline x10_ulong remote_alloc (place p, size_t sz) {
         _X_(ANSI_BOLD<<ANSI_X10RT<<"Remote alloc: "<<ANSI_RESET
@@ -185,11 +186,11 @@ namespace x10aux {
 namespace x10aux {
 
     void run_closure_at(place p, ::x10::lang::VoidFun_0_0* body,
-                        ::x10::lang::Runtime__Profile *prof,
+                        ::x10::xrx::Runtime__Profile *prof,
                         ::x10::lang::VoidFun_0_0* preSendAction);
     void run_async_at(place p, ::x10::lang::VoidFun_0_0* body,
-                      ::x10::lang::FinishState* fs,
-                      ::x10::lang::Runtime__Profile *prof,
+                      ::x10::xrx::FinishState* fs,
+                      ::x10::xrx::Runtime__Profile *prof,
                       ::x10::lang::VoidFun_0_0* preSendAction);
 
     class serialization_buffer;

@@ -5,7 +5,7 @@
  */
 
 
-import x10.matrix.Debug;
+import x10.matrix.util.Debug;
 import x10.matrix.block.Grid;
 import x10.matrix.block.SparseBlockMatrix;
 
@@ -31,7 +31,7 @@ public class DistSparseExample {
 		public val g:Grid;
 		public val grow:Grid;
 		
-		public def this(m:Long, n:Long, k:Int, p:Double) {
+		public def this(m:Long, n:Long, k:Long, p:Double) {
 			property(m, n, k, p);
 
 			//Partition matrix in MxN into blocks same as the number of places
@@ -39,7 +39,7 @@ public class DistSparseExample {
 			g   = Grid.make(M,N); 
 			
 			//Partition matrix in MxN into 1 row blocks
-			grow= new Grid(M, N, 1, Place.MAX_PLACES);  
+			grow= new Grid(M, N, 1, Place.numPlaces());  
 		}
  
 

@@ -257,7 +257,7 @@ public class MatVecMult {
     static def child2(n:Long) = 2*n+2;
 
     static def launchTree[T](p:Long, plh:PlaceLocalHandle[T], cl:()=>void) { T <: Task, T isref } {
-        if (p >= Place.MAX_PLACES) return;
+        if (p >= Place.numPlaces()) return;
         if (plh().isPlaceActive(Place(p))) {
             at (Place(p)) async {
                 launchTree[T](child1(p), plh, cl);
@@ -319,7 +319,7 @@ public class MatVecMult {
                     }
                     v_dst_block.multiplyIn(g_block, v_src_block);
                     count++;
-                    if (count%30 == 0) Runtime.probe();
+                    if (count%30 == 0) x10.xrx.Runtime.probe();
                 }
             }
             after = System.nanoTime();
@@ -381,17 +381,17 @@ public class MatVecMult {
 
         var before:Long=0, after:Long=0; // for timings
 
-        val plh = PlaceLocalHandle.make[PerPlaceState](PlaceGroup.WORLD, ()=>new PerPlaceState(cfg));
+        val plh = PlaceLocalHandle.make[PerPlaceState](Place.places(), ()=>new PerPlaceState(cfg));
 
         var need_set_splits : Boolean = true;
 
         // initial task assignment -- assumes no places are dead yet
-        val splits_assignments = new Rail[ArrayList[Long]](Place.MAX_PLACES, new ArrayList[Long]());
-        val active_places = new Rail[Boolean](Place.MAX_PLACES, true);
+        val splits_assignments = new Rail[ArrayList[Long]](Place.numPlaces(), new ArrayList[Long]());
+        val active_places = new Rail[Boolean](Place.numPlaces(), true);
         var last_end : Long = 0L;
         for (i in active_places.range()) {
             val splits = new ArrayList[Long]();
-            val num_assigned_splits = (cfg.numSplits+i)/Place.MAX_PLACES;
+            val num_assigned_splits = (cfg.numSplits+i)/Place.numPlaces();
             val start = last_end;
             val end = last_end + num_assigned_splits;
             for (split in start..(end-1)) splits.add(split);
@@ -454,11 +454,11 @@ public class MatVecMult {
                 Console.OUT.println("Iteration ("+iter+") time: "+(after-before)/1E9+" seconds");
                 vector_blocks = dst_vector_blocks_gr();
             } catch (e:MultipleExceptions) {
-                for (e2 in e.exceptions) {
-                    if (!(e2 instanceof DeadPlaceException)) {
-                        throw e2;
-                    }
-                    val dead_place = (e2 as DeadPlaceException).place;
+                val filtered = e.filterExceptionsOfType[DeadPlaceException]();
+                if (filtered != null) throw filtered;
+                val deadPlaceExceptions = e.getExceptionsOfType[DeadPlaceException]();
+                for (dpe in deadPlaceExceptions) {
+                    val dead_place = dpe.place;
                     if (!active_places(dead_place.id)) continue; // this can happen if we get more than one DPE for a given place
                     active_places(dead_place.id) = false;
                     Console.OUT.println("Place died: "+dead_place+", reassigning work to the remaining places...");
@@ -468,12 +468,12 @@ public class MatVecMult {
                     // reassign lost splits
                     for (split in lost_splits) {
                         // find next place with
-                        while (!active_places(recover_place)) recover_place = (recover_place+1) % Place.MAX_PLACES;
+                        while (!active_places(recover_place)) recover_place = (recover_place+1) % Place.numPlaces();
                         if (cfg.verbose) {
                             Console.OUT.println("Place "+recover_place+" now gets split: "+split);
                         }
                         splits_assignments(recover_place).add(split);
-                        recover_place = (recover_place+1) % Place.MAX_PLACES;
+                        recover_place = (recover_place+1) % Place.numPlaces();
                     }
 
                     need_set_splits = true;
@@ -505,7 +505,7 @@ public class MatVecMult {
                 if (magic2 != 0xdcdcdcdcn) throw new Exception("File corrupted midway through: "+name);
             } catch (e:EOFException) { break; }
             r.add(new MatrixBlockCSC(fr));
-            if (r.size() % 10 == 0) Runtime.probe();
+            if (r.size() % 10 == 0) x10.xrx.Runtime.probe();
         }
         return r.toRail();
     }

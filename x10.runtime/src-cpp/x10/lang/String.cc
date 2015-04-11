@@ -29,10 +29,12 @@ using namespace std;
 using namespace x10::lang;
 using namespace x10aux;
 
+#ifndef NO_BOUNDS_CHECKS
 static void throwStringIndexOutOfBoundsException(x10_int index, x10_int length) {
     char *msg = alloc_printf("index = %ld; length = %ld", (long)index, ((long)length));
     throwException(x10::lang::StringIndexOutOfBoundsException::_make(String::Lit(msg)));
 }
+#endif
 
 static inline void checkStringBounds(x10_int index, x10_int length) {
 #ifndef NO_BOUNDS_CHECKS
@@ -336,6 +338,7 @@ class MyBuf {
     }
 };    
 
+/* FIXME: positional arguments support */
 String* String::format(String* format, x10::lang::Rail<Any*>* parms) {
     nullCheck(format);
     nullCheck(parms);
@@ -508,6 +511,8 @@ x10_boolean String::endsWith(String* s) {
 
 
 String* String::__plus(String* p1, String* p2) {
+    if (NULL == p1) { p1 = makeStringLit("null"); }
+    if (NULL == p2) { p2 = makeStringLit("null"); }
     std::size_t newLength = p1->FMGL(content_length) + p2->FMGL(content_length);
     char *newChars = x10aux::alloc<char>(newLength+1, false);
     memcpy(newChars, p1->FMGL(content), p1->FMGL(content_length));
@@ -531,6 +536,7 @@ String* String::__plus(x10_boolean p1, String* p2) {
 String* String::__plus(String* p1, T p2) { \
     char buf[SZ]; \
     size_t used = (size_t)(::snprintf(buf, SZ, FMT, (C)p2)); \
+    if (NULL == p1) { p1 = makeStringLit("null"); } \
     std::size_t newLength = p1->FMGL(content_length) + used; \
     char *newChars = x10aux::alloc<char>(newLength+1, false); \
     memcpy(newChars, p1->FMGL(content), p1->FMGL(content_length)); \
@@ -541,6 +547,7 @@ String* String::__plus(String* p1, T p2) { \
 String* String::__plus(T p1, String* p2) { \
     char buf[SZ]; \
     size_t used = (size_t)(::snprintf(buf, SZ, FMT, (C)p1)); \
+    if (NULL == p2) { p2 = makeStringLit("null"); } \
     std::size_t newLength = used + p2->FMGL(content_length); \
     char *newChars = x10aux::alloc<char>(newLength+1, false); \
     memcpy(newChars, buf, used);                              \

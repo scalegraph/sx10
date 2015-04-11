@@ -10,6 +10,7 @@
  */
 
 import harness.x10Test;
+import x10.xrx.Runtime;
 
 // SKIP_MANAGED_X10: Congruent memory not supported by Managed X10
 
@@ -23,7 +24,7 @@ public class Congruent extends x10Test {
     public def run () {
         val allocator = Runtime.MemoryAllocator.requestAllocator(false, true);
         val elements = (probsize * 1024/8) as long;
-        val plh = PlaceLocalHandle.make[Rail[Long]](PlaceGroup.WORLD, ()=>new Rail[Long](elements, allocator));
+        val plh = PlaceLocalHandle.make[Rail[Long]](Place.places(), ()=>new Rail[Long](elements, allocator));
         Console.OUT.println("Construction complete.");
         val str0 = plh().toString();
         for (p in Place.places()) {
@@ -40,7 +41,7 @@ public class Congruent extends x10Test {
         // do some remote ops
         finish for (p in Place.places()) async at (p) {
             val rail = plh() as Rail[Long]{self!=null};
-	    val gr = Unsafe.getCongruentSibling(rail, p.next());
+	    val gr = Unsafe.getCongruentSibling(rail, Place.places().next(p));
             for (i in 0L..(elements-1)) {
                 val oracle = Math.sqrt(i as Double) as Long;
                 GlobalRail.remoteAdd(gr, i, oracle);
@@ -76,6 +77,6 @@ public class Congruent extends x10Test {
         if (args.size>0) {
             kBytes = Long.parseLong(args(0));
         } 
-        new Congruent(kBytes*1024/(Place.MAX_PLACES as int)).execute();
+        new Congruent(kBytes*1024/(Place.numPlaces() as int)).execute();
     }
 }

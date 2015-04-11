@@ -19,10 +19,10 @@ import x10.compiler.*;
  * 
  * For Managed X10:
  *   $ x10 ResilientKMeans.x10
- *   $ X10_RESILIENT_MODE=1 X10_NPLACES=4 x10 ResilientKMeans [num_points] [num_clusters]
+ *   $ X10_RESILIENT_MODE=11 X10_NPLACES=4 x10 ResilientKMeans [num_points] [num_clusters]
  * For Native X10:
  *   $ x10c++ ResilientKMeans.x10 -o ResilientKMeans
- *   $ X10_RESILIENT_MODE=1 X10_NPLACES=4 runx10 ResilientKMeans [num_points] [num_clusters]
+ *   $ X10_RESILIENT_MODE=11 X10_NPLACES=4 runx10 ResilientKMeans [num_points] [num_clusters]
  */
 class ResilientKMeans {
     
@@ -35,10 +35,10 @@ class ResilientKMeans {
         val POINTS = (args.size>=1) ? Long.parseLong(args(0)) : 1000000L;
         val CLUSTERS = (args.size>=2) ? Long.parseLong(args(1)): 4L;
         Console.OUT.println("KMeans: Divide " + DIM + " dim " + POINTS + " points into "
-                            + CLUSTERS + " clusters, using " + Place.MAX_PLACES + " places");
+                            + CLUSTERS + " clusters, using " + Place.numPlaces() + " places");
         
         finish for (p in Place.places()) at (p) {
-            Console.OUT.println(here+" running in "+Runtime.getName());
+            Console.OUT.println(here+" running in "+x10.xrx.Runtime.getName());
         }
 
         val place0 = here;
@@ -52,7 +52,7 @@ class ResilientKMeans {
         val rnd = new Random(0); // new Random(System.nanoTime());
         val points_region = Region.make(0..(POINTS-1), 0..(DIM-1));
         val points_master = new Array[Float](points_region, (p:Point)=>rnd.nextFloat());
-        val points_local = PlaceLocalHandle.make[Array[Float]{region==points_region}](PlaceGroup.WORLD, ()=>points_master);
+        val points_local = PlaceLocalHandle.make[Array[Float]{region==points_region}](Place.places(), ()=>points_master);
         val creation_after = System.nanoTime();
         Console.OUT.println("Took "+(creation_after-creation_before)/1E9+" seconds");
         
@@ -70,9 +70,9 @@ class ResilientKMeans {
         val central_cluster_counts_gr = GlobalRef(central_cluster_counts);
         val processed_points_gr = GlobalRef(processed_points);
         /* For local calculation */
-        val local_curr_clusters = PlaceLocalHandle.make[Rail[Float]](PlaceGroup.WORLD, ()=>new Rail[Float](CLUSTERS*DIM));
-        val local_new_clusters = PlaceLocalHandle.make[Rail[Float]](PlaceGroup.WORLD, ()=>new Rail[Float](CLUSTERS*DIM));
-        val local_cluster_counts = PlaceLocalHandle.make[Rail[Long]](PlaceGroup.WORLD, ()=>new Rail[Long](CLUSTERS));
+        val local_curr_clusters = PlaceLocalHandle.make[Rail[Float]](Place.places(), ()=>new Rail[Float](CLUSTERS*DIM));
+        val local_new_clusters = PlaceLocalHandle.make[Rail[Float]](Place.places(), ()=>new Rail[Float](CLUSTERS*DIM));
+        val local_cluster_counts = PlaceLocalHandle.make[Rail[Long]](Place.places(), ()=>new Rail[Long](CLUSTERS));
         
         /*
          * Calculate KMeans using multiple places
@@ -101,14 +101,13 @@ class ResilientKMeans {
                     }
                 }
             } catch (es:MultipleExceptions) {
-                for (e in es.exceptions()) {
-                    if (e instanceof DeadPlaceException) {
-                        Console.OUT.println("DeadPlaceException thrown from " + (e as DeadPlaceException).place);
-                        // No recovery is necessary, values should be delivered to live places
-                    } else {
-                        Console.OUT.println("Unmanagable exception " + e); throw e;
-                    }
+                val deadPlaceExceptions = es.getExceptionsOfType[DeadPlaceException]();
+                for (dpe in deadPlaceExceptions) {
+                    Console.OUT.println("DeadPlaceException thrown from " + dpe.place);
+                    // No recovery is necessary, completeness will be checked by the value of processed_points
                 }
+                val filtered = es.filterExceptionsOfType[DeadPlaceException]();
+                if (filtered != null) throw filtered;
             }
             //val dist_clusters_after = System.nanoTime();
             //Console.OUT.println("Took "+(dist_clusters_after-dist_clusters_before)/1E9+" seconds");
@@ -128,7 +127,7 @@ class ResilientKMeans {
              */
             //Console.OUT.println("Computing new clusters...  ");
             //val compute_clusters_before = System.nanoTime();
-            val numAvail = Place.MAX_PLACES - Place.numDead(); // number of available places
+            val numAvail = Place.numPlaces() - Place.numDead(); // number of available places
             val div = POINTS/numAvail; // share for each place
             val rem = POINTS%numAvail; // extra share for Place0
             var places_used : Long = 0L;
@@ -172,7 +171,6 @@ class ResilientKMeans {
                                     }
                                     local_cluster_counts()(closest)++;
                                 //}
-                                //Runtime.probe(); // probably not necessary since load is statically balanced
                             }
                         } /* for (j) */
                         //val actual_work_after = System.nanoTime();
@@ -183,7 +181,7 @@ class ResilientKMeans {
                         val tmp_new_clusters = local_new_clusters();
                         val tmp_cluster_counts = local_cluster_counts();
                         val tmp_processed_points = e - s;
-                        /*val prof = new Runtime.Profile();
+                        /*val prof = new x10.xrx.Runtime.Profile();
                         @Profile(prof) */ at (place0) async atomic {
                             for (var j:Long=0L ; j<CLUSTERS*DIM; ++j) {
                                 central_clusters_gr()(j) += tmp_new_clusters(j);
@@ -200,14 +198,13 @@ class ResilientKMeans {
                     start = end; // point to be processed at the next place
                 } /* finish for (pl) */
             } catch (es:MultipleExceptions) {
-                for (e in es.exceptions()) {
-                    if (e instanceof DeadPlaceException) {
-                        Console.OUT.println("DeadPlaceException thrown from " + (e as DeadPlaceException).place);
-                        // No recovery is necessary, completeness will be checked by the value of processed_points
-                    } else {
-                        Console.OUT.println("Unmanagable exception " + e); throw e;
-                    }
+                val deadPlaceExceptions = es.getExceptionsOfType[DeadPlaceException]();
+                for (dpe in deadPlaceExceptions) {
+                    Console.OUT.println("DeadPlaceException thrown from " + dpe.place);
+                    // No recovery is necessary, completeness will be checked by the value of processed_points
                 }
+                val filtered = es.filterExceptionsOfType[DeadPlaceException]();
+                if (filtered != null) throw filtered;
             }
             //val compute_clusters_after = System.nanoTime();
             //Console.OUT.println("Took "+(compute_clusters_after-compute_clusters_before)/1E9+" seconds");

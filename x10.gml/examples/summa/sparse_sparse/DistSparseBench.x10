@@ -7,7 +7,7 @@
 import x10.util.Timer;
 
 import x10.matrix.Matrix;
-import x10.matrix.Debug;
+import x10.matrix.util.Debug;
 import x10.matrix.DenseMatrix;
 import x10.matrix.block.Grid;
 import x10.matrix.dist.DistDenseMatrix;
@@ -20,17 +20,17 @@ public class DistSparseBench {
 		val K = args.size > 1 ? Long.parse(args(1)):1000;
 		val N = args.size > 2 ? Long.parse(args(2)):1000;
 		val nzD = args.size > 3 ?Double.parse(args(3)):0.1;
-		val iter = args.size > 4 ? Int.parse(args(4)):1;
-		val ps = args.size > 5 ? Int.parse(args(5)):0;
+		val iter = args.size > 4 ? Long.parse(args(4)):1;
+		val ps = args.size > 5 ? Long.parse(args(5)):0;
 		val tc = new RunDistSparseBench(M, K, N, nzD, iter, ps);
 		tc.run();
 	}
 }
 
 class RunDistSparseBench{
-	public val M:Long, N:Long, K:Long, iter:Int, nzD:Double, pCmp:Double;
+	public val M:Long, N:Long, K:Long, iter:Long, nzD:Double, pCmp:Double;
 	public val testps:Long; lastps:Long;
-	public val nplace = Place.MAX_PLACES;
+	public val nplace = Place.numPlaces();
 
 	public val aPart:Grid;
 	public val bPart:Grid;
@@ -42,7 +42,7 @@ class RunDistSparseBench{
 	val tB:DistSparseMatrix(btPart.M, btPart.N);
 	val C:DistDenseMatrix(cPart.M, cPart.N);
 	
-	public def this(m:Long, k:Long, n:Long, nzd:Double, it:Int, p:Long) {
+	public def this(m:Long, k:Long, n:Long, nzd:Double, it:Long, p:Long) {
 		M = m; N = n; K=k; iter=it; nzD =nzd; pCmp=nzD*nzD;
 		aPart = Grid.make(M, K);
 		bPart = Grid.make(K, N);

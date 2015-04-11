@@ -16,11 +16,10 @@ import x10.matrix.Matrix;
 import x10.matrix.DenseMatrix;
 import x10.matrix.Vector;
 import x10.matrix.VectorMult;
-import x10.matrix.Debug;
 import x10.matrix.block.Grid;
 
 /**
- * This class defines list of matrix blocks which live in the same place
+ * This class performs matrix-vector multiplication for block-partitioned matrices.
  */
 public class BlockVectorMult  { 
 
@@ -46,8 +45,6 @@ public class BlockVectorMult  {
 			//val rowCnt = grid.rowBs(ablk.myRowId);
 			//val colCnt = grid.colBs(ablk.myColId);
 			val mA = ablk.getMatrix();
-			//Debug.flushln("Col partition:"+grid.colBs.toString());
-			//Debug.flushln("Compute blk:"+ablk.myRowId+","+ablk.myColId+" rowOff:"+rowOff+" colOff:"+colOff+" Starting colOff:"+grid.startCol(ablk.myColId)+" offsetB:"+offsetB);
 			VectorMult.comp(mA, bV, colOff, cV, rowOff, true);
 		}
 		return cV;
@@ -74,7 +71,6 @@ public class BlockVectorMult  {
 			//val rowCnt = grid.rowBs(ablk.myRowId);
 			//val colCnt = grid.colBs(ablk.myColId);
 			val mA = ablk.getMatrix();
-			//Debug.flushln("Vector:"+rowOff+" * block:"+ablk.myRowId+","+ablk.myColId+"=>Vector:"+colOff);
 			VectorMult.comp(bV, rowOff, mA, cV, colOff, true);
 		}
 		return cV;

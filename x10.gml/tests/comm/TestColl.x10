@@ -1,14 +1,16 @@
 /*
  *  This file is part of the X10 Applications project.
  *
- *  (C) Copyright IBM Corporation 2011.
+ *  (C) Copyright IBM Corporation 2011-2014.
  */
+
+import harness.x10Test;
 
 import x10.regionarray.DistArray;
 import x10.compiler.Ifndef;
 
 import x10.matrix.Matrix;
-import x10.matrix.Debug;
+import x10.matrix.util.Debug;
 import x10.matrix.DenseMatrix;
 import x10.matrix.block.Grid;
 import x10.matrix.block.DenseBlockMatrix;
@@ -22,17 +24,7 @@ import x10.matrix.dist.DupDenseMatrix;
 /**
    This class contains test cases for dense and sparse matrix broadcast and other collective functions.
  */
-public class TestColl{
-    public static def main(args:Rail[String]) {
-		val m = args.size > 0 ? Long.parse(args(0)):30;
-		val n = args.size > 1 ? Long.parse(args(1)):m+1;
-
-		val testcase = new RunDenseCollTest(m, n);
-		testcase.run();
-	}
-}
-
-class RunDenseCollTest {
+public class TestColl extends x10Test {
 	public val M:Long;
 	public val N:Long;
 
@@ -53,10 +45,9 @@ class RunDenseCollTest {
 		gpartRow =  new Grid(M, N, 1, numplace); //Single row block partition
 	}
 	
-	public def run(): void {
+    public def run():Boolean {
 		var ret:Boolean = true;
 	@Ifndef("MPI_COMMU") { // TODO Deadlocks!
- 		// Set the matrix function
  		ret &= (testBcast());
  		//ret &= (testRingCast());
  		ret &= (testGather());
@@ -66,12 +57,8 @@ class RunDenseCollTest {
 		//ret &= (testAllgather());
  		ret &= (testReduce());
  		ret &= (testAllReduce());
-
-		if (ret)
-			Console.OUT.println("Test Matrix collective communication passed!");
-		else
-			Console.OUT.println("--------Test of Matrix collective communication failed!--------");
 	}
+        return ret;
     }
 
 	public def testBcast():Boolean {
@@ -85,9 +72,7 @@ class RunDenseCollTest {
 		MatrixBcast.bcast(dupDA.dupMs);
 	
 		ret =dupDA.syncCheck();
-		if (ret)
-			Console.OUT.println("Dense matrix.bcast for dup matrix test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("-----Test dense matrix bcast failed!-----");
 		return ret;
 	}
@@ -103,12 +88,8 @@ class RunDenseCollTest {
 
 		MatrixRingCast.rcast(dupmat.dupMs);
 		
-		//dupDA.printAll("All copies:");
-
 		ret =dupmat.syncCheck();
-		if (ret)
-			Console.OUT.println("Dense matrix ring rast test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("-----Test dense matrix ring cast failed!-----");
 		return ret;
  	}
@@ -121,23 +102,16 @@ class RunDenseCollTest {
  		dstDM.initRandom();
 		val blkDM = DenseBlockMatrix.make(gpart);
 
-		Debug.flushln("Start gathering "+numplace+" places");
 		MatrixGather.gather(dstDM.distBs, blkDM.listBs);
-		Debug.flushln("Done");
 		
 		ret = dstDM.equals(blkDM as Matrix(gpart.M, gpart.N));
-		Debug.flushln("Done with verify");
 
 		if (ret) {
 			val dm = DenseMatrix.make(gpart.M, gpart.N);
-			Debug.flushln("Start copy from block matrix to dense matrix locally");
 			blkDM.copyTo(dm);
-			Debug.flushln("Done");
 			ret &= dm.equals(blkDM as Matrix(gpart.M, gpart.N));
 		}
- 		if (ret)
- 			Console.OUT.println("Test gather for dist dense matrix test passed!");
- 		else
+ 		if (!ret)
  			Console.OUT.println("-----Test gather for dist dense matrix failed!-----");
  		return ret;
  	}
@@ -152,16 +126,11 @@ class RunDenseCollTest {
 
 		val DM = DenseMatrix.make(gpartRow.M, gpartRow.N);
 
-		Debug.flushln("Start single-row gather for matrix blocks");
 		MatrixGather.gatherRowBs(gpartRow, distDM.distBs, DM);
-		Debug.flushln("Done");
 
 		ret = distDM.equals(DM);
-		Debug.flushln("Done verification");
 
-		if (ret)
-			Console.OUT.println("Test single-row blocks gather for dist dense matrix test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("-----Test single-row block gather for dist dense matrix failed!-----");
 		return ret;
 	}
@@ -174,16 +143,11 @@ class RunDenseCollTest {
 		val blkDM = DenseBlockMatrix.make(gpart);
  		blkDM.initRandom();
 
-		Debug.flushln("Start scattering data to "+numplace+" places");
 		MatrixScatter.scatter(blkDM.listBs, dstDM.distBs);
-		Debug.flushln("Done");
 		
 		ret = dstDM.equals(blkDM as Matrix(gpart.M, gpart.N));
-		Debug.flushln("Done with verify");
 
- 		if (ret)
- 			Console.OUT.println("Test scatter for dist dense matrix test passed!");
- 		else
+ 		if (!ret)
  			Console.OUT.println("-----Test scatter for dist dense matrix failed!-----");
  		return ret;
  	}
@@ -197,16 +161,11 @@ class RunDenseCollTest {
 		val distDM = DistDenseMatrix.make(gpartRow);
 		DM.initRandom();
 
-		Debug.flushln("Start single-row block scatter dense matrix");
 		MatrixScatter.scatterRowBs(gpartRow, DM, distDM.distBs);
-		Debug.flushln("Done");
 
 		ret = distDM.equals(DM);
-		Debug.flushln("Done verification");
 
-		if (ret)
-			Console.OUT.println("Test single-row blocks scatter for dense matrix test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("-----Test single-row block scatter for dense matrix failed!-----");
 		return ret;
 	}
@@ -224,9 +183,7 @@ class RunDenseCollTest {
 	
 // 		val da = dupDA.local();
 // 		ret = dupDA.syncCheck() && distDA.equals(da);
-// 		if (ret)
-// 			Console.OUT.println("Test allgather for dist matrix test passed!");
-// 		else
+// 		if (!ret)
 // 			Console.OUT.println("-----Test allgather for dist matrix failed!-----");
 // 		return ret;
 
@@ -248,10 +205,8 @@ class RunDenseCollTest {
 		denDA.scale(numplace as Double);
 		ret = denDA.equals(dupDA.local() as Matrix(denDA.M, denDA.N));
 
-		if (ret)
-				Console.OUT.println("Test reduce for dup matrix test passed!");
-			else
-				Console.OUT.println("-----Test reduce for dup matrix failed!-----");
+		if (!ret)
+    		Console.OUT.println("-----Test reduce for dup matrix failed!-----");
 		return ret;
 	}
 
@@ -267,13 +222,10 @@ class RunDenseCollTest {
 		val tmpDA = DupDenseMatrix.make(M,N);
 		dupDA.allReduceSum();
 		//MatrixReduce.allReduceSum(dupDA.dupMs, tmpDA.dupMs);
-		//dupDA.printAll("Result");
 		denDA.scale(numplace);
 		
 		ret = denDA.equals(dupDA.local() as Matrix(denDA.M, denDA.N));
-		if (ret && dupDA.syncCheck())
-			Console.OUT.println("Test reduce for dup matrix test passed!");
-		else
+		if (!ret || !dupDA.syncCheck())
 			Console.OUT.println("-----Test reduce for dup matrix failed!-----");
 	
 		return ret;
@@ -308,10 +260,15 @@ class RunDenseCollTest {
 
   		
 // 		ret = dupDA.syncCheck();
-// 		if (ret)
-// 			Console.OUT.println("Test ring cast for dup matrix test passed!");
-// 		else
+// 		if (!ret)
 // 			Console.OUT.println("-----Test ring cast for dup matrix failed!-----");
 // 		return ret;
 // 	}
+
+    public static def main(args:Rail[String]) {
+		val m = args.size > 0 ? Long.parse(args(0)):30;
+		val n = args.size > 1 ? Long.parse(args(1)):m+1;
+
+		new TestColl(m, n).execute();
+	}
 }

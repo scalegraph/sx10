@@ -7,143 +7,183 @@
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
  *  (C) Copyright IBM Corporation 2011-2014.
+ *  (C) Copyright Sara Salem Hamouda 2014.
  */
 package linreg;
 
 import x10.util.Timer;
 
-import x10.matrix.Debug;
-import x10.matrix.Matrix;
+import x10.matrix.util.Debug;
 import x10.matrix.Vector;
-import x10.matrix.blas.DenseMatrixBLAS;
 
-import x10.matrix.block.Grid;
-import x10.matrix.sparse.SparseCSC;
-import x10.matrix.sparse.SparseMultDenseToDense;
-
-import x10.matrix.distblock.DistGrid;
-import x10.matrix.distblock.DistMap;
 import x10.matrix.distblock.DistBlockMatrix;
 import x10.matrix.distblock.DupVector;
 import x10.matrix.distblock.DistVector;
 
+import x10.matrix.util.PlaceGroupBuilder;
+import x10.util.resilient.ResilientIterativeApp;
+import x10.util.resilient.ResilientExecutor;
+import x10.util.resilient.ResilientStoreForApp;
+
 /**
- * Parallel linear regression based on GML distributed 
+ * Parallel linear regression based on GML distributed
  * dense/sparse matrix
  */
-public class LinearRegression{
+public class LinearRegression implements ResilientIterativeApp {
+    public static val MAX_SPARSE_DENSITY = 0.1;
+    static val lambda = 1e-6; // regularization parameter
 
-	//Input matrix
-	public val V:DistBlockMatrix;
-	public val b:Vector(V.N);
-	//Parammeters
-	public val iteration:Long;
-	static val lambda:Double = 0.000001;
-	
-	public val w:Vector(V.N);
+    /** Matrix of training examples */
+    public val V:DistBlockMatrix;
+    /** Vector of training regression targets */
+    public val y:DistVector(V.M);
+    /** Learned model weight vector, used for future predictions */
+    public val w:Vector(V.N);
 
-	val d_p:DupVector(V.N);
-	val p:Vector(V.N);
-	val Vp:DistVector(V.M);
+    public val maxIterations:Long;
 
-	val r:Vector(V.N);
-	val d_q:DupVector(V.N);
-	val q:Vector(V.N);
-	
-	//----Profiling-----
-	public var parCompT:Long=0;
-	public var seqCompT:Long=0;
-	public var commT:Long;
-	
-	public def this(v:DistBlockMatrix, b_:Vector(v.N), it:Long) {
-		iteration = it;
-		V =v;
-		b =b_ as Vector(V.N);
+    val d_p:DupVector(V.N);
+    val Vp:DistVector(V.M);
 
-		Vp = DistVector.make(V.M, V.getAggRowBs());
-				
-		r  = Vector.make(V.N);
-		d_p= DupVector.make(V.N);
-		p  = d_p.local();
-		
-		d_q= DupVector.make(V.N);
-		q  = d_q.local();
+    val r:Vector(V.N);
+    val d_q:DupVector(V.N);
 
-		w  = Vector.make(V.N);
-	}
-	
-	public static def make(mV:Long, nV:Long, nRowBs:Long, nColBs:Long, nzd:Double, it:Long) {
-		//grid = new Grid(mV, nV, Place.MAX_PLACES, 1);
-		val V = DistBlockMatrix.makeSparse(mV, nV, nRowBs, nColBs, Place.MAX_PLACES, 1, nzd);
-		val b = Vector.make(nV);
+    private val checkpointFreq:Long;
 
-		Console.OUT.printf("Start init sparse matrix V(%d,%d) blocks(%dx%d) ", mV, nV, nRowBs, nColBs);
-		Console.OUT.printf("dist(%dx%d) nzd:%f\n", Place.MAX_PLACES, 1, nzd);
-		V.initRandom();
+    var norm_r2:Double;
+    var lastCheckpointNorm:Double;
+    var iter:Long;
 
-		Debug.flushln("Done. Start init other matrices, b, r, p, q, and w");		
-		b.initRandom();
+    //----Profiling-----
+    public var parCompT:Long=0;
+    public var seqCompT:Long=0;
+    public var commT:Long;
+    private val nzd:Double;
+    private var places:PlaceGroup;
 
-		return new LinearRegression(V, b, it);
-	}
+    public def this(v:DistBlockMatrix, y:DistVector(v.M), it:Long, chkpntIter:Long, sparseDensity:Double, places:PlaceGroup) {
+        maxIterations = it;
+        this.V = v;
+        this.y = y;
 
-	public def run():Vector {
-		var ct:Long;
-		var alpha:Double=0.0;
-		var beta:Double =0.0;
-					  
-					  
-	    b.copyTo(r);
-		b.copyTo(p);
-		r.scale(-1.0);
+        Vp = DistVector.make(V.M, V.getAggRowBs(), places);
 
-		var norm_r2:Double = r.norm();
-		var old_norm_r2:Double;
+        r  = Vector.make(V.N);
+        d_p= DupVector.make(V.N, places);
 
-		for (1..iteration) {
-			
-			d_p.sync();
+        d_q= DupVector.make(V.N, places);
 
-			// Parallel computing
+        w  = Vector.make(V.N);
 
-			ct = Timer.milliTime();
-			// 10: q=((t(V) %*% (V %*% p)) )
-			d_q.mult(Vp.mult(V, d_p), V);
+        this.checkpointFreq = chkpntIter;
 
-			parCompT += Timer.milliTime() - ct;
-			
+        nzd = sparseDensity;
+        this.places = places;        
+    }
 
-			// Sequential computing
+    public def isFinished() {
+        return iter >= maxIterations;
+    }
 
-			ct = Timer.milliTime();
-			//q = q + lambda*p
-			q.scaleAdd(lambda, p);
-			
-			// 11: alpha= norm_r2/(t(p)%*%q);
-			alpha = norm_r2 / p.dotProd(q);
-			
-			// 12: w=w+alpha*p;
-			w.scaleAdd(alpha, p);
-			
-			// 13: old norm r2=norm r2;
-			old_norm_r2 = norm_r2;
+    public def run() {
+        val dupR = DupVector.make(V.N, Vp.places());
+        // 4: r=-(t(V) %*% y)
+        dupR.mult(y, V);
+        dupR.local().copyTo(r);
+        // 5: p=-r
+        r.copyTo(d_p.local());
+        // 4: r=-(t(V) %*% y)
+        r.scale(-1.0);
+        // 6: norm_r2=sum(r*r)
+        norm_r2 = r.norm();
 
-			// 14: r=r+alpha*q;
-			r.scaleAdd(alpha, q);
-			norm_r2 = r.norm(r);
+        new ResilientExecutor(checkpointFreq, places).run(this);
 
-			// 15: beta=norm r2/old norm r2;
-			beta = norm_r2/old_norm_r2;
+        return w;
+    }
 
-			// 16: p=-r+beta*p;
-			p.scale(beta).cellSub(r);
-			
-			seqCompT += Timer.milliTime() - ct;
-			// 17: i=i+1;
-		}
-		commT = d_q.getCommTime() + d_p.getCommTime();
-		//w.print("Parallel result");
-		return w;
-	}
-		
+    public def step() {
+        d_p.sync();
+
+        // Parallel computing
+
+        var ct:Long = Timer.milliTime();
+        // 10: q=((t(V) %*% (V %*% p)) )
+
+        d_q.mult(Vp.mult(V, d_p), V);
+
+        parCompT += Timer.milliTime() - ct;
+
+        // Sequential computing
+
+        ct = Timer.milliTime();
+        //q = q + lambda*p
+        val p = d_p.local();
+        val q = d_q.local();
+        q.scaleAdd(lambda, p);
+
+        // 11: alpha= norm_r2/(t(p)%*%q);
+        val alpha = norm_r2 / p.dotProd(q);
+
+        // 12: w=w+alpha*p;
+        w.scaleAdd(alpha, p);
+
+        // 13: old norm r2=norm r2;
+        val old_norm_r2 = norm_r2;
+
+        // 14: r=r+alpha*q;
+        r.scaleAdd(alpha, q);
+        norm_r2 = r.norm();
+
+        // 15: beta=norm r2/old norm r2;
+        val beta = norm_r2/old_norm_r2;
+
+        // 16: p=-r+beta*p;
+        p.scale(beta).cellSub(r);
+
+        seqCompT += Timer.milliTime() - ct;
+        // 17: i=i+1;
+
+        commT = d_q.getCommTime() + d_p.getCommTime();
+        //w.print("Parallel result");
+
+        iter++;
+    }
+
+    public def checkpoint(resilientStore:ResilientStoreForApp) {       
+        resilientStore.startNewSnapshot();
+        resilientStore.saveReadOnly(V);
+        resilientStore.save(d_p);
+        resilientStore.save(d_q);
+        resilientStore.save(r);
+        resilientStore.save(w);
+        resilientStore.commit();
+        lastCheckpointNorm = norm_r2;
+    }
+
+    /**
+     * Restore from the snapshot with new PlaceGroup
+     */
+    public def restore(newPg:PlaceGroup, store:ResilientStoreForApp, lastCheckpointIter:Long) {
+        val newRowPs = newPg.size();
+        val newColPs = 1;
+        //remake all the distributed data structures
+        if (nzd < MAX_SPARSE_DENSITY) {
+            V.remakeSparse(newRowPs, newColPs, nzd, newPg, true);
+        } else {
+            V.remakeDense(newRowPs, newColPs, newPg, true);
+        }
+        d_p.remake(newPg);
+        Vp.remake(V.getAggRowBs(), newPg);
+        d_q.remake(newPg);
+        store.restore();
+
+        //adjust the iteration number and the norm value
+        iter = lastCheckpointIter;
+        norm_r2 = lastCheckpointNorm;
+        places = newPg;        
+        Console.OUT.println("Restore succeeded. Restarting from iteration["+iter+"] norm["+norm_r2+"] ...");
+        Console.OUT.println("Load Balance After Restore: ");
+        V.printLoadStatistics();
+    }
 }

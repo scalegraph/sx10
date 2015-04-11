@@ -14,8 +14,8 @@ package x10.matrix.builder;
 import x10.matrix.Matrix;
 import x10.matrix.DenseMatrix;
 import x10.matrix.SymDense;
-import x10.matrix.Debug;
-import x10.matrix.RandTool;
+import x10.matrix.util.Debug;
+import x10.matrix.util.RandTool;
 
 public type SymDenseBuilder(blder:SymDenseBuilder)=SymDenseBuilder{self==blder};
 public type SymDenseBuilder(m:Long)=SymDenseBuilder{self.M==m,self.N==m};
@@ -56,6 +56,17 @@ public class SymDenseBuilder extends DenseBuilder{self.M==self.N} implements Mat
 			for (var r:Long=c+1; r<this.M; r++, i++, j += dense.M) 
 				dense.d(i) = dense.d(j) = initFunc(r, c);
 		}
+		return this;
+	}
+
+    // replicated from superclass to workaround xlC bug with using & itables
+	public def init(srcden:DenseMatrix) = init(0, 0, srcden);
+	public def init(rowOff:Long, colOff:Long, srcden:DenseMatrix) : DenseBuilder(this) {
+		Debug.assure(rowOff+srcden.M<=dense.M, "Dense builder cannot using given matrix to initialize. Row overflow");
+		Debug.assure(colOff+srcden.N<=dense.N, "Dense builder cannot using given matrix to initialize. Column overflow");
+		var stt:Long = rowOff;
+		for (var c:Long=colOff; c<colOff+srcden.N; c++, stt+= dense.M)
+			Rail.copy[Double](srcden.d, 0, dense.d, stt, srcden.M);
 		return this;
 	}
 	

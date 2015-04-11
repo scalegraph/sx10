@@ -25,7 +25,6 @@ import x10.serialization.X10JavaSerializer;
  * an Float value to type Any, parameter type T or superinterfaces such
  * as Comparable<Float>.
  */
-@SuppressWarnings("serial")
 final public class Float extends java.lang.Number implements StructI, java.lang.Comparable<Float>,
 // for X10PrettyPrinterVisitor.exposeSpecialDispatcherThroughSpecialInterface
 //    x10.lang.Arithmetic<Float>, x10.util.Ordered<Float>
@@ -141,6 +140,10 @@ final public class Float extends java.lang.Number implements StructI, java.lang.
     @Override
     public double doubleValue() {
         return (double)$value;
+    }
+
+    private Object writeReplace() throws java.io.ObjectStreamException {
+        return new x10.serialization.SerializationProxy(this);
     }
 
     public void $_serialize(X10JavaSerializer $serializer) throws IOException {

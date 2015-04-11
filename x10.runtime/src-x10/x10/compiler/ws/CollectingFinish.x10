@@ -11,6 +11,7 @@
 
 package x10.compiler.ws;
 
+import x10.xrx.*;
 import x10.compiler.Abort;
 import x10.compiler.Ifdef;
 import x10.compiler.Ifndef;
@@ -58,7 +59,7 @@ abstract public class CollectingFinish[T] extends FinishFrame {
         val tmp = remap();
         tmp.redirect = tmp;
         if (null != exceptions) {
-            tmp.exceptions = new GrowableRail[Exception]();
+            tmp.exceptions = new GrowableRail[CheckedThrowable]();
             Runtime.atomicMonitor.lock();
             while (!exceptions.isEmpty()) tmp.exceptions.add(exceptions.removeLast());
             exceptions = null;

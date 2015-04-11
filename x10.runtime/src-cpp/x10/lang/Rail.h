@@ -33,8 +33,10 @@ namespace x10 {
         template<class T> class GlobalRef;
         template<class T> class GlobalRail;
         class String;
-        class Runtime__MemoryAllocator;
     }
+    namespace xrx {
+        class Runtime__MemoryAllocator;
+    }        
 }
 
 namespace x10 {
@@ -114,8 +116,8 @@ namespace x10 {
             static ::x10::lang::Rail<T>* _make(x10_long size, ::x10::lang::Fun_0_1<x10_long, T>* init);
             void _constructor(x10_long size, ::x10::lang::Fun_0_1<x10_long, T>* init);
 
-            static ::x10::lang::Rail<T>* _make(x10_long size, ::x10::lang::Runtime__MemoryAllocator* alloc);
-            void _constructor(x10_long size,  ::x10::lang::Runtime__MemoryAllocator* alloc);
+            static ::x10::lang::Rail<T>* _make(x10_long size, ::x10::xrx::Runtime__MemoryAllocator* alloc);
+            void _constructor(x10_long size,  ::x10::xrx::Runtime__MemoryAllocator* alloc);
             
             ::x10::lang::LongRange range();
 
@@ -241,7 +243,7 @@ namespace x10 {
 #include <x10/lang/Place.h>
 #include <x10/lang/String.h>
 #include <x10/lang/IllegalArgumentException.h>
-#include <x10/lang/Runtime__MemoryAllocator.h>
+#include <x10/xrx/Runtime__MemoryAllocator.h>
 #ifndef X10_LANG_RAIL_H_GENERICS
 #define X10_LANG_RAIL_H_GENERICS
 #endif // X10_LANG_RAIL_H_GENERICS
@@ -356,7 +358,7 @@ template<class T> void x10::lang::Rail<T>::_constructor(x10_long size, ::x10::la
 }
 
 
-template<class T> ::x10::lang::Rail<T>* x10::lang::Rail<T>::_make(x10_long size, ::x10::lang::Runtime__MemoryAllocator* alloc) {
+template<class T> ::x10::lang::Rail<T>* x10::lang::Rail<T>::_make(x10_long size, ::x10::xrx::Runtime__MemoryAllocator* alloc) {
     if (size < 0) throwNegativeArraySizeException();
     bool containsPtrs = ::x10aux::getRTT<T>()->containsPtrs;
     x10_long numElems = size;
@@ -379,7 +381,7 @@ template<class T> ::x10::lang::Rail<T>* x10::lang::Rail<T>::_make(x10_long size,
     
     return this_;
 }
-template<class T> void x10::lang::Rail<T>::_constructor(x10_long size, ::x10::lang::Runtime__MemoryAllocator* alloc) {
+template<class T> void x10::lang::Rail<T>::_constructor(x10_long size, ::x10::xrx::Runtime__MemoryAllocator* alloc) {
     // NOT ZEROING HUGE PAGE ALLOCATION; OS WILL ZERO ON ALLOCATE
     if (!alloc->FMGL(hugePages)) memset(&(this->raw), 0, size*sizeof(T));
 }
@@ -480,40 +482,48 @@ template<class T> void x10::lang::Rail<void>::uncountedCopy(::x10::lang::Rail<T>
                                                             ::x10::lang::GlobalRail<T> dst, x10_long dstIndex,
                                                             x10_long numElems,
                                                             ::x10::lang::VoidFun_0_0* notif) {
-    if (numElems <= 0) return;
+    if (numElems <= 0) {
+        if (notif == NULL) return;
+    } else {
+        checkBounds(srcIndex, src->FMGL(size));
+        checkBounds(srcIndex+numElems, src->FMGL(size)+1);
+        checkBounds(dstIndex, dst->FMGL(size));
+        checkBounds(dstIndex+numElems, dst->FMGL(size)+1);
+    }
+
     void* srcAddr = (void*)(&src->raw[srcIndex]);
     void* dstAddr;
-    if (::x10::lang::Place::place(dst->FMGL(rail)->location)->isCUDA()) {
+    if (::x10::lang::Place::_make(dst->FMGL(rail)->location)->isCUDA()) {
         dstAddr = &((T*)(dst->FMGL(rail)->__apply()))[dstIndex];
     } else {
         dstAddr = (void*)(&dst->FMGL(rail)->__apply()->raw[dstIndex]);
     }
     size_t numBytes = numElems * sizeof(T);
-    checkBounds(srcIndex, src->FMGL(size));
-    checkBounds(srcIndex+numElems, src->FMGL(size)+1);
-    checkBounds(dstIndex, dst->FMGL(size));
-    checkBounds(dstIndex+numElems, dst->FMGL(size)+1);
-    ::x10::lang::Rail_copyToBody(srcAddr, dstAddr, numBytes, ::x10::lang::Place::place(dst->FMGL(rail)->location), src->raw == dst->FMGL(rail)->__apply()->raw, notif);
+    ::x10::lang::Rail_copyToBody(srcAddr, dstAddr, numBytes, ::x10::lang::Place::_make(dst->FMGL(rail)->location), src->raw == dst->FMGL(rail)->__apply()->raw, notif);
 }
 
 template<class T> void x10::lang::Rail<void>::uncountedCopy(::x10::lang::GlobalRail<T> src, x10_long srcIndex,
                                                             ::x10::lang::Rail<T>* dst, x10_long dstIndex,
                                                             x10_long numElems,
                                                             ::x10::lang::VoidFun_0_0* notif) {
-    if (numElems <= 0) return;
+    if (numElems <= 0) {
+        if (notif == NULL) return;
+    } else {
+        checkBounds(srcIndex, src->FMGL(size));
+        checkBounds(srcIndex+numElems, src->FMGL(size)+1);
+        checkBounds(dstIndex, dst->FMGL(size));
+        checkBounds(dstIndex+numElems, dst->FMGL(size)+1);
+    }
+
     void* srcAddr;
-    if (::x10::lang::Place::place(src->FMGL(rail)->location)->isCUDA()) {
+    if (::x10::lang::Place::_make(src->FMGL(rail)->location)->isCUDA()) {
         srcAddr = &((T*)(src->FMGL(rail)->__apply()))[srcIndex];
     } else {
         srcAddr = (void*)(&src->FMGL(rail)->__apply()->raw[srcIndex]);
     }
     void* dstAddr = (void*)(&dst->raw[dstIndex]);
     size_t numBytes = numElems * sizeof(T);
-    checkBounds(srcIndex, src->FMGL(size));
-    checkBounds(srcIndex+numElems, src->FMGL(size)+1);
-    checkBounds(dstIndex, dst->FMGL(size));
-    checkBounds(dstIndex+numElems, dst->FMGL(size)+1);
-    ::x10::lang::Rail_copyFromBody(srcAddr, dstAddr, numBytes, ::x10::lang::Place::place(src->FMGL(rail)->location), src->FMGL(rail)->__apply()->raw == dst->raw, notif);
+    ::x10::lang::Rail_copyFromBody(srcAddr, dstAddr, numBytes, ::x10::lang::Place::_make(src->FMGL(rail)->location), src->FMGL(rail)->__apply()->raw == dst->raw, notif);
 }
 
 /*

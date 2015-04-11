@@ -1,9 +1,22 @@
+/*
+ *  This file is part of the X10 project (http://x10-lang.org).
+ *
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2006-2014.
+ */
+
 package x10.glb;
 
 import x10.compiler.*;
 import x10.util.Option;
 import x10.util.OptionsParser;
 import x10.util.Random;
+import x10.xrx.Runtime;
+
 /**
  * The local runner for the GLB framework. An instance of this class runs at each
  * place and provides the context within which user-specified tasks execute and
@@ -12,7 +25,7 @@ import x10.util.Random;
  * @param <R> Result type.
  */
 final class Worker[Queue, R]{Queue<:TaskQueue[Queue, R]} {
-	/** TaskQueue, responsible for crunching numbers */
+    /** TaskQueue, responsible for crunching numbers */
     val queue:Queue;
     
     /** Read as I am the "lifeline buddy" of my "lifelineThieves" */
@@ -59,7 +72,7 @@ final class Worker[Queue, R]{Queue<:TaskQueue[Queue, R]} {
     @x10.compiler.Volatile transient var waiting:Boolean = false;
     
     /* Number of places.*/
-    val P = Place.MAX_PLACES;
+    val P = Place.numPlaces();
     
     /*Context object accessible to user code, which can be used to yield.*/
     var context:Context[Queue, R];
@@ -362,7 +375,7 @@ final class Worker[Queue, R]{Queue<:TaskQueue[Queue, R]} {
     
     
     // static def stats[Queue, R](st:PlaceLocalHandle[Worker[Queue, R]], verbose:Boolean){Queue<:TaskQueue[Queue, R]} {
-    //     val P = Place.MAX_PLACES;
+    //     val P = Place.numPlaces();
     //     val logs:Rail[Logger];
     //     if (P >= 1024) {
     //         logs = new Rail[Logger](P/32, (i:Long)=>at (Place(i*32)) {
@@ -388,7 +401,7 @@ final class Worker[Queue, R]{Queue<:TaskQueue[Queue, R]} {
      * @param st PLH of Worker
      */
     static def broadcast[Queue, R](st:PlaceLocalHandle[Worker[Queue, R]]){Queue<:TaskQueue[Queue, R]} {
-        val P = Place.MAX_PLACES;
+        val P = Place.numPlaces();
         @Pragma(Pragma.FINISH_DENSE) finish {
             if (P < 256) {
                 for(var i:Long=0; i<P; i++) {
@@ -412,31 +425,31 @@ final class Worker[Queue, R]{Queue<:TaskQueue[Queue, R]} {
      * @param st: PLH of Worker
      */
     static def initContexts[Queue,R](st:PlaceLocalHandle[Worker[Queue, R]]){Queue<:TaskQueue[Queue, R]}{
-    	val P = Place.MAX_PLACES;
-    	@Pragma(Pragma.FINISH_DENSE) finish {
-    		if (P < 256) {
-    			for(var i:Long=0; i<P; i++) {
-    				at (Place(i)) async st().setContext(st);
-    			}
-    		} else {
-    			for(var i:Long=P-1; i>=0; i-=32) {
-    				at (Place(i)) async {
-    					val max = Runtime.hereLong();
-    					val min = Math.max(max-31, 0);
-    					for (var j:Long=min; j<=max; ++j) {
-    						at (Place(j)) async st().setContext(st);
-    					}
-    				}
-    			}
-    		}
-    	}
+        val P = Place.numPlaces();
+        @Pragma(Pragma.FINISH_DENSE) finish {
+            if (P < 256) {
+                for(var i:Long=0; i<P; i++) {
+                    at (Place(i)) async st().setContext(st);
+                }
+            } else {
+                for(var i:Long=P-1; i>=0; i-=32) {
+                    at (Place(i)) async {
+                        val max = Runtime.hereLong();
+                        val min = Math.max(max-31, 0);
+                        for (var j:Long=min; j<=max; ++j) {
+                            at (Place(j)) async st().setContext(st);
+                        }
+                    }
+                }
+            }
+        }
     }
     
     /**
      * Returns yield point
      */
     @Inline public def getYieldPoint(){
-    	return (st:PlaceLocalHandle[Worker[Queue, R]])=>{Runtime.probe();distribute(st);reject(st);};
+        return (st:PlaceLocalHandle[Worker[Queue, R]])=>{Runtime.probe();distribute(st);reject(st);};
     }
     
     /**
@@ -445,6 +458,6 @@ final class Worker[Queue, R]{Queue<:TaskQueue[Queue, R]} {
      */
     protected def setContext(st:PlaceLocalHandle[Worker[Queue, R]]){Queue<:TaskQueue[Queue, R]}{
     
-    	this.context = new Context(st);
+        this.context = new Context(st);
     }
 }

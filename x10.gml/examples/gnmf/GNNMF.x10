@@ -13,7 +13,7 @@ package gnmf;
 
 import x10.util.Timer;
 
-import x10.matrix.Debug;
+import x10.matrix.util.Debug;
 import x10.matrix.block.Grid;
 import x10.matrix.distblock.DistGrid;
 import x10.matrix.distblock.DistMap;
@@ -34,7 +34,7 @@ import x10.matrix.distblock.DupBlockMatrix;
  * <p>......
  * <p>[v_(rowBsV-1,0), v_(rowBsV-1,1), ..., v(rowBsV-1,colBsV-1)]
  * <p>
- * All rowBsV &#42 colBsV blocks are distributed to (Place.MAX_PLACES &#42 1) 
+ * All rowBsV &#42 colBsV blocks are distributed to (Place.numPlaces() &#42 1) 
  * places, or in vertical distribution.
  * 
  * <p>
@@ -46,7 +46,7 @@ import x10.matrix.distblock.DupBlockMatrix;
  * <p>[w_(rowBsV-1,0), w_(rowBsV,1), ..., w(rowBsV-1,colBsW-1)]
  * <p>
  * <p>Matrix W is partitioned in the same way as V row-wise. 
- * All numRowBsV &#42 numColBsW blocks in W are distributed to (Place.MAX_PLACES &#42 1) places, 
+ * All numRowBsV &#42 numColBsW blocks in W are distributed to (Place.numPlaces() &#42 1) places, 
  * or vertical distribution.
  * 
  * <p>
@@ -56,7 +56,7 @@ import x10.matrix.distblock.DupBlockMatrix;
 public class GNNMF {
 	static val wN = 10;
 	// ------GNNMF execution parameters------
-	public val iteration:Int;
+	public val iterations:Int;
 	// ------Input and output matrix------
 	public val V:DistBlockMatrix;
 	public val W:DistBlockMatrix(V.M, wN);
@@ -80,7 +80,7 @@ public class GNNMF {
 		V = v; 
 		W = w as DistBlockMatrix(V.M, wN); 
 		H = h as DupBlockMatrix(W.N,V.N);
-		iteration = it;
+		iterations = it;
 
 		Debug.assure(DistGrid.isVertical(v.getGrid(), v.getMap()), 
 		"Input distributed block matrix V does not have vertical distribution");
@@ -90,7 +90,7 @@ public class GNNMF {
 		val gV = V.getGrid();
 		val gW = W.getGrid();
 		val gH = h.getGrid();
-		val rowPls = Place.MAX_PLACES;
+		val rowPls = Place.numPlaces();
 		val colPls = 1;
 
 		//This has least overhead in creating matrix, but not compatible if W, V,and H are created in a different way
@@ -131,7 +131,7 @@ public class GNNMF {
 		//Preset parameters
 		val wColBs = 1;
 		//Vertical distribution
-		val rowPls = Place.MAX_PLACES;
+		val rowPls = Place.numPlaces();
 		val colPls = 1;
 		//------Input matrix data allocation------
 		Debug.flushln("Start creating input-output matrix and memory allocation");		
@@ -144,7 +144,7 @@ public class GNNMF {
 	public def init():void {
 		Debug.flushln("Start initialize input data");		
 		V.initRandom();
-		Debug.flushln("Dist block matrix in sparse blocks initialization completes");		
+		Debug.flushln("Dist block matrix in sparse blocks initialization completes");
 		W.initRandom();
 		Debug.flushln("Dist block matrix in dense blocks initialization completes");
 		H.initRandom();
@@ -176,19 +176,19 @@ public class GNNMF {
 	public def comp_WV_WWH() : void {
 		/* H . (W^t * V / (W^t * W) * H) -> H */
 		WtV.transMult(W, V); // W^t * V  -> WV
+        //Console.OUT.println("Parallel W^t * V =" + WtV);
 
-		//WtV.print("Parallel W^t * V =");
 		WtW.transMult(W, W); // W^t * W  -> WW
-		
-		//WtW.print("Parallel W^t * W = ");
+		//Console.OUT.println("Parallel W^t * W =" + WtW);
+
 		WtWH.mult(WtW, H);
+		//Console.OUT.println("Parallel dup WW * H = " + WtWH);
 
-		//WtWH.print("Parallel dup WW * H = ");
 		WtV.cellDiv(WtWH);                     // WV / WWH -> WV
+		//Console.OUT.println("Parallel WV ./ WWH = " + WtV);
 
-		//WtV.print("Parallel WV ./ WWH = ");
 		H.cellMult(WtV);                      // H . WV   -> H		
-		//H.print("Parallel H update:");
+		//Console.OUT.println("Parallel H update:" + H);
 	}
 
 	public def comp_VH_WHH() : void {
@@ -214,7 +214,7 @@ public class GNNMF {
 	public def run() : void {
 		tt += H.getCommTime();
 		/* Timing */ st = Timer.milliTime();
-		for (var i:Long =0; i<iteration; i++) {
+		for (i in 1..iterations) {
 			comp_WV_WWH();
 			/* Timing */ t1 += Timer.milliTime() - st;
 			comp_VH_WHH();
@@ -227,9 +227,9 @@ public class GNNMF {
 		//V.print("Input V:");
 		//H.print("Input H:");
 		//W.print("Input W:");
-		val seq = new SeqGNNMF(V, H, W, iteration);
+		val seq = new SeqGNNMF(V, H, W, iterations);
 
-		for (var i:Long =0; i<iteration; i++) {
+		for (i in 1..iterations) {
 			Debug.flushln("Iteration "+i+" start parallel computing H");
 			comp_WV_WWH();
 			seq.comp_WV_WWH();

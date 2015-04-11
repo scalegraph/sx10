@@ -1,23 +1,22 @@
 /*
- *  This file is part of the X10 Applications project.
+ *  This file is part of the X10 project (http://x10-lang.org).
  *
- *  (C) Copyright IBM Corporation 2011.
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2011-2014.
  */
+
+import harness.x10Test;
 
 import x10.compiler.Ifndef;
 
-import x10.matrix.Debug;
 import x10.matrix.block.Grid;
 import x10.matrix.distblock.DupBlockMatrix;
 
-public class TestDupBlock {
-    public static def main(args:Rail[String]) {
-		val testcase = new TestDupBlk(args);
-		testcase.run();
-	}
-}
-
-class TestDupBlk {
+public class TestDupBlock extends x10Test {
 	public val nzp:Double;
 	public val M:Long;
 	public val N:Long;
@@ -37,11 +36,11 @@ class TestDupBlk {
 
 		grid = new Grid(M, N, bM, bN);
 		//dmap = DistGrid.make(grid).dmap; 
-		Console.OUT.printf("DupMatrix M:%d K:%d N:%d, blocks(%d, %d) \n", M, N, K, bM, bN);
+		Console.OUT.printf("DupBlockMatrix M:%d K:%d N:%d, blocks(%d, %d) \n", M, N, K, bM, bN);
 		
 	}
 
-    public def run (): void {
+    public def run():Boolean {
 		Console.OUT.println("Starting Duplicated block matrix clone/add/sub/scaling tests");
 
 		var ret:Boolean = true;
@@ -56,25 +55,17 @@ class TestDupBlk {
 		ret &= (testCellMult());
 		ret &= (testCellDiv());
     }
-		if (ret)
-			Console.OUT.println("Test passed!");
-		else
-			Console.OUT.println("----------------Test failed!----------------");
+        return ret;
 	}
 	public def testClone():Boolean{
 		var ret:Boolean = true;
 		Console.OUT.println("Starting dup block matrix clone test on dense blocks");
 		val ddm = DupBlockMatrix.makeDense(M, N, bM, bN).init((r:Long, c:Long)=>(1.0+r+c));
-		Debug.flushln("Initialization done");
 		
 		val ddm1 = ddm.clone();
-		Debug.flushln("Clone done");
 		ret = ddm.equals(ddm1);
-		Debug.flushln("Equal test done");
 		ret &= ddm.checkSync();
-		if (ret)
-			Console.OUT.println("DupBlockMatrix Clone test passed!");
-		else
+		if (!ret)
 		 	Console.OUT.println("--------DupBlockMatrix Clone test failed!--------");
 		return ret;
 	}
@@ -85,11 +76,8 @@ class TestDupBlk {
 		val dupblk = DupBlockMatrix.makeDense(grid);
 		dupblk.init((r:Long,c:Long)=>(1.0*(r+c)%2*(r+c)));
 		ret &= dupblk.checkSync();
-		if (! ret) return ret;
 	
-		if (ret)
-			Console.OUT.println("Dup dense block matrix copyTo and Sync test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Dup dense block matrix copyTo and sync test failed!--------");	
 		return ret;
 	}
@@ -103,9 +91,7 @@ class TestDupBlk {
  		val m1 = m * 2.5;
  		val ret = dm1.equals(m1);
  		dm1.checkSync();
- 		if (ret)
- 			Console.OUT.println("Dup block Matrix scaling test passed!");
- 		else
+ 		if (!ret)
  			Console.OUT.println("--------Dup block matrix Scaling test failed!--------");	
  		return ret;
  	}
@@ -119,9 +105,7 @@ class TestDupBlk {
 		var ret:Boolean = dm0.equals(0.0);
 		ret &= dm1.checkSync();
 		ret &= dm0.checkSync();
-		if (ret)
-			Console.OUT.println("DistBlockMatrix Add: dm + dm*-1 test passed");
-		else
+		if (!ret)
 			Console.OUT.println("--------DistBlockMatrix Add: dm + dm*-1 test failed--------");
 		return ret;
 	}
@@ -133,10 +117,8 @@ class TestDupBlk {
 		val dm2   = dm  + dm1;
 		val dm_c  = dm2 - dm1;
 		
-		val ret   = dm.equals(dm_c as Matrix(dm.M, dm.N));
-		if (ret)
-			Console.OUT.println("DupBlockMatrix Add-sub test passed!");
-		else
+		val ret = dm.equals(dm_c as Matrix(dm.M, dm.N));
+		if (!ret)
 			Console.OUT.println("--------DupBlockMatrix Add-sub test failed!--------");
 		return ret;
 	}
@@ -153,9 +135,7 @@ class TestDupBlk {
 		val c2 = a + (b + c);
 		ret &= c2.checkSync();
 		ret &= c1.equals(c2);
-		if (ret)
-			Console.OUT.println("DupBlockMatrix Add associative test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------DupBlockMatrix Add associative test failed!--------");
 		return ret;
 	}
@@ -171,9 +151,7 @@ class TestDupBlk {
 		ret &= a.equals(a1+a2);
 		ret &= a.equals(m);
 
-		if (ret)
-			Console.OUT.println("DupBlockMatrix scaling-add test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------DupBlockeMatrix scaling-add test failed!--------");
 		return ret;
 	}
@@ -195,9 +173,7 @@ class TestDupBlk {
 		val dc= (da + db) * da;
 		ret &= dc.equals(c);
 
-		if (ret)
-			Console.OUT.println("Duuplicated block Matrix cellwise mult passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Duuplicated block matrix cellwise mult test failed!--------");
 		return ret;
 	}
@@ -213,10 +189,12 @@ class TestDupBlk {
 		var ret:Boolean = d.equals(a);
 		ret &= d.checkSync();
 
-		if (ret)
-			Console.OUT.println("Duplicated block Matrix cellwise mult-div passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Duplicated block matrix cellwise mult-div test failed!--------");
 		return ret;
 	}
-} 
+
+    public static def main(args:Rail[String]) {
+		new TestDupBlock(args).execute();
+	}
+}

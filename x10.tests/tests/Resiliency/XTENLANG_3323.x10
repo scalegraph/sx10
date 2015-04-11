@@ -23,13 +23,13 @@ import harness.x10Test;
  */
 public class XTENLANG_3323 extends x10Test  {
 	public def run() {
-	    if (Place.MAX_PLACES < 3) {
+	    if (Place.numPlaces() < 3) {
 		    Console.OUT.println("3 places are necessary for this test");
 		    return false;
 	    }
 	    val place0 = here;
-	    val place1 = place0.next();
-	    val place2 = place1.next();
+	    val place1 = Place.places().next(place0);
+	    val place2 = Place.places().next(place1);
 	    var ret:Boolean = true;
 	    try {
 		    finish at (place1) async {
@@ -45,24 +45,28 @@ public class XTENLANG_3323 extends x10Test  {
 			    }
 		    }
 	    } catch (e:Exception) {
-		   ret = processDPE(e);
+		   ret = processException(e);
 	    }
 	    Console.OUT.println("Test finished"); Console.OUT.flush();
 	    return ret;
     }
 
-    private static def processDPE(e:Exception):Boolean {
+    private static def processException(e:Exception):Boolean {
 	    if (e instanceof DeadPlaceException) {
 		    val deadPlace = (e as DeadPlaceException).place;
 		    Console.OUT.println("DeadPlaceException from " + deadPlace);
 	    } else if (e instanceof MultipleExceptions) {
-		    val exceptions = (e as MultipleExceptions).exceptions();
-		    Console.OUT.println("MultipleExceptions size=" + exceptions.size);
-		    for (ec in exceptions) processDPE(ec);
-	    } else {
-		    Console.OUT.println("Unexpected exception!!!!");
-		    //throw e;
-		    return false;
+            val exceptions = (e as MultipleExceptions).exceptions();
+ 		    Console.OUT.println("MultipleExceptions size=" + exceptions.size);
+            val deadPlaceExceptions = (e as MultipleExceptions).getExceptionsOfType[DeadPlaceException]();
+            for (dpe in deadPlaceExceptions) {
+                processException(dpe);
+            }
+            val filtered = (e as MultipleExceptions).filterExceptionsOfType[DeadPlaceException]();
+            if (filtered != null) {
+                Console.OUT.println("Unexpected exception!!!!");
+                return false;
+            }
 	    }
 	    return true;
     }

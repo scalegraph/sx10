@@ -648,6 +648,18 @@ public class X10PrettyPrinterVisitor extends X10DelegatingVisitor {
         // XTENLANG-1102
         er.generateRTTInstance(def);
 
+        // Redirect java serialization to x10 serialization.
+        if (!flags.isInterface() && !flags.isAbstract()) {
+            w.write("private Object writeReplace() throws java.io.ObjectStreamException {");
+            w.newline(4);
+            w.begin(0);
+            w.write("return new x10.serialization.SerializationProxy(this);");
+            w.end();
+            w.newline();
+            w.writeln("}");
+            w.newline();
+        }
+
         // print the custom serializer
         if (subtypeOfCustomSerializer(def)) {
             er.generateCustomSerializer(def, n);            
@@ -2768,6 +2780,10 @@ public class X10PrettyPrinterVisitor extends X10DelegatingVisitor {
                 }
                 w.write(".");
             }
+            else {
+                tr.print(n, target, w);
+                w.write(".");
+            }
             tr.print(n, n.name(), w);
             if (closeParen) w.write(")");
             w.end();
@@ -3215,7 +3231,7 @@ public class X10PrettyPrinterVisitor extends X10DelegatingVisitor {
         boolean runAsync = false;
         MethodInstance_c mi = (MethodInstance_c) n.methodContainer();
         if (mi != null && mi.container().isClass()
-                && mi.container().toClass().fullName().toString().equals("x10.lang.Runtime")
+                && mi.container().toClass().fullName().toString().equals("x10.xrx.Runtime")
                 && mi.signature().startsWith("runAsync")) {
             runAsync = true;
         }
@@ -3346,7 +3362,7 @@ public class X10PrettyPrinterVisitor extends X10DelegatingVisitor {
 //        if (runAsync) {
 //            tryCatchExpander.addCatchBlock(X10_IMPL_UNKNOWN_JAVA_THROWABLE, "ex", new Expander(er) {
 //                public void expand(Translator tr) {
-//                    w.write("x10.lang.Runtime.pushException(ex);");
+//                    w.write("x10.xrx.Runtime.pushException(ex);");
 //                }
 //            });
 //        }
@@ -3368,7 +3384,7 @@ public class X10PrettyPrinterVisitor extends X10DelegatingVisitor {
         // tryCatchExpander.addCatchBlock("java.lang.Throwable", "t", new
         // Expander(er) {
         // public void expand(Translator tr) {
-        // w.write("x10.lang.Runtime.pushException(new " + X10_IMPL_UNKNOWN_JAVA_THROWABLE + "(t));");
+        // w.write("x10.xrx.Runtime.pushException(new " + X10_IMPL_UNKNOWN_JAVA_THROWABLE + "(t));");
         // }
         // });
         // } else {
@@ -3394,7 +3410,7 @@ public class X10PrettyPrinterVisitor extends X10DelegatingVisitor {
         // tryCatchExpander.addCatchBlock("java.lang.Exception", "ex", new
         // Expander(er) {
         // public void expand(Translator tr) {
-        // w.write("x10.lang.Runtime.pushException(new " + X10_IMPL_UNKNOWN_JAVA_THROWABLE + "(ex));");
+        // w.write("x10.xrx.Runtime.pushException(new " + X10_IMPL_UNKNOWN_JAVA_THROWABLE + "(ex));");
         // }
         // });
         // } else {

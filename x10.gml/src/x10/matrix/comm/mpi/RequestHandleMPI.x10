@@ -15,12 +15,11 @@ import x10.compiler.Native;
 import x10.compiler.NativeCPPInclude;
 import x10.compiler.NativeCPPCompilationUnit;
 
-@NativeCPPInclude("mpi_api.h")		
-@NativeCPPCompilationUnit("mpi_api.c")
-
 /**
- * This class provides handle for nonblocking MPI communication.
+ * This class provides a request handle for nonblocking MPI communication.
  */
+@NativeCPPInclude("mpi_api.h")
+@NativeCPPCompilationUnit("mpi_api.cc")
 public class RequestHandleMPI {
 
     @Native("c++","mpi_get_request_memsize((#1)->raw)")
@@ -39,19 +38,19 @@ public class RequestHandleMPI {
 
 	public def this() {
 		valid = true;
-		val size_int = new Rail[Int](1, 0n);
+		val size_int = new Rail[Int](1);
 
 		get_request_memsize(size_int);
 		
-		handle = new Rail[Int](size_int(0), 0n);
+		handle = new Rail[Int](size_int(0));
 	}
 
 	public def this(vld:Boolean) {
 		valid = vld;
-		val size_int = new Rail[Int](1, 0n);
+		val size_int = new Rail[Int](1);
 		get_request_memsize(size_int);
 		
-		handle = new Rail[Int](size_int(0), 0n);
+		handle = new Rail[Int](size_int(0));
 	}
 
 	// stop until the requested communication is complete
@@ -61,7 +60,7 @@ public class RequestHandleMPI {
 	}
 
 	public def test():Boolean {
-		val flag = new Rail[Int](1, 0n);
+		val flag = new Rail[Int](1);
 		if (valid) {
 			this.test_request(this.handle, flag);
 			if (flag(0) >0) 

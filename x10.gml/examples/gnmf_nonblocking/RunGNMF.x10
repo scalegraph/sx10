@@ -9,8 +9,8 @@
  *  (C) Copyright IBM Corporation 2011-2014.
  */
 
-import x10.matrix.Debug;
-import x10.matrix.VerifyTools;
+import x10.matrix.util.Debug;
+import x10.matrix.util.VerifyTool;
 
 /**
  * 	Gaussian non-negative matrix factorization demo run
@@ -23,7 +23,7 @@ public class RunGNMF {
 		val tV = args.size > 3 ? Long.parse(args(3)):0;
 		val nV = args.size > 4 ? Long.parse(args(4)):100000;
 
-		Console.OUT.println("Set d:"+mD+" density:"+nZ+" iteration:"+iT);
+		Console.OUT.println("Set d:"+mD+" density:"+nZ+" iterations:"+iT);
 		if ((mD<=0) || (iT<1) || (tV<0))
 			Console.OUT.println("Error in settings");
 		else {
@@ -34,23 +34,23 @@ public class RunGNMF {
 				t.run();
 				t.printTiming();
 			} else if (tV == 1) { /* Sequential run */
-				val seq = new SeqGNNMF(t.V, t.H, t.W, t.iteration);
+				val seq = new SeqGNNMF(t.V, t.H, t.W, t.iterations);
 				seq.run();
 				seq.printTiming();
 			} else if (tV == 2) { /* Verification of whole matrices*/
 				t.verifyRun();
 			} else { /* Random sampling verification */
 				Debug.flushln("Prepare sequential run");
-				val seq = new SeqGNNMF(t.V, t.H, t.W, t.iteration);
+				val seq = new SeqGNNMF(t.V, t.H, t.W, t.iterations);
 				Debug.flushln("Start parallel run");
 				t.run();
 				Debug.flushln("Start sequential run");
 				seq.run();
 				Debug.flushln("Verify W");
 				t.W.equals(seq.W);
-				VerifyTools.testSame(t.W, seq.W, tV);
+				VerifyTool.testSame(t.W, seq.W, tV);
 				Debug.flushln("Verify H");
-				VerifyTools.testSame(t.H, seq.H, tV);
+				VerifyTool.testSame(t.H, seq.H, tV);
 			}
 		}
 	}

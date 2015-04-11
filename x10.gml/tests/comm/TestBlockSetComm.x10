@@ -1,8 +1,10 @@
 /*
  *  This file is part of the X10 Applications project.
  *
- *  (C) Copyright IBM Corporation 2011.
+ *  (C) Copyright IBM Corporation 2011-2014.
  */
+
+import harness.x10Test;
 
 import x10.compiler.Ifndef;
 import x10.util.Timer;
@@ -22,19 +24,7 @@ import x10.matrix.comm.BlockSetReduce;
 /**
    This class contains test cases P2P communication for matrix over different places.
  */
-public class TestBlockSetComm{
-    public static def main(args:Rail[String]) {
-		val m = args.size > 0 ? Long.parse(args(0)):40;
-		val n = args.size > 1 ? Long.parse(args(1)):40;
-		val bm= args.size > 2 ? Long.parse(args(2)):3;
-		val bn= args.size > 3 ? Long.parse(args(3)):7;
-		val d = args.size > 4 ? Double.parse(args(4)):0.99;
-		val testcase = new BlockSetCommTest(m, n, bm, bn, d);
-		testcase.run();
-	}
-}
-
-class BlockSetCommTest {
+public class TestBlockSetComm extends x10Test {
 	public val M:Long;
 	public val N:Long;
 	public val nzdensity:Double;
@@ -67,8 +57,7 @@ class BlockSetCommTest {
 		numplace = Place.numPlaces();
 	}
 	
-	public def run(): void {
- 		// Set the matrix function
+    public def run():Boolean {
 		var retval:Boolean = true;
 	@Ifndef("MPI_COMMU") { // TODO Deadlocks!
 
@@ -87,11 +76,8 @@ class BlockSetCommTest {
  		retval &= testCopyTo(dupspa);
  		retval &= testCopyFrom(dupspa);
  		retval &= testBcast(dupspa);
-		if (retval) 
-			Console.OUT.println("BlockSet P2P and collective commu test passed!");
-		else
-			Console.OUT.println("------------BlockSet P2P and collective commu test failed!-----------");
     }
+        return retval;
 	}
 
 	
@@ -114,9 +100,7 @@ class BlockSetCommTest {
 				ds*8, avgt, 8000.0*ds/avgt/1024/1024);
 		
 		ret = dst.checkSync();
-		if (ret)
-			Console.OUT.println("P2P CopyTo dup blockset matrix passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------P2P CopyTo dup blockset matrix test failed!--------");
 		
 		return ret;
@@ -141,15 +125,12 @@ class BlockSetCommTest {
 			};
 			tt += Timer.milliTime() - st;
 		}
-		//src.printAllCopies();		
 		ret = src.checkSync();
 		val avgt = 1.0*tt/(numplace-1);
 		Console.OUT.printf("P2P copyFrom %d bytes: %.3f ms, thput: %2.2f MB/s per iteration\n", 
 				ds*8, avgt, 8000.0*ds/avgt/1024/1024);
 
-		if (ret) 
-			Console.OUT.println("P2P CopyFrom dup blockset matrix check passed!");
-		else
+		if (!ret) 
 			Console.OUT.println("--------P2P CopyFrom dup block set matrix test failed!--------");
 		
 		return ret;
@@ -172,7 +153,6 @@ class BlockSetCommTest {
 			val st:Long =  Timer.milliTime();
 			BlockSetBcast.bcast(bmat.handleDB, p);
 			avgt += (Timer.milliTime() - st);
-			//bmat.printAllMatrixCopies();
 			ret &= bmat.checkSync();
 		}
 	
@@ -180,9 +160,7 @@ class BlockSetCommTest {
 						   ds*8, avgt/numplace);
 		
 		//ret = dbmat.syncCheck();
-		if (ret)
-			Console.OUT.println("Bcast dist block matrix passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Bcast block matrix test failed!--------");
 		
 		return ret;
@@ -205,10 +183,17 @@ class BlockSetCommTest {
 				dmat.local().equals(numplace as Double)
 			};
 		}
-		if (ret)
-			Console.OUT.println("Test reduceSum for dist block set matrix test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("-----Test reduceSum for dist block set matrix failed!-----");
 		return ret;
+	}
+
+    public static def main(args:Rail[String]) {
+		val m = args.size > 0 ? Long.parse(args(0)):40;
+		val n = args.size > 1 ? Long.parse(args(1)):40;
+		val bm= args.size > 2 ? Long.parse(args(2)):3;
+		val bn= args.size > 3 ? Long.parse(args(3)):7;
+		val d = args.size > 4 ? Double.parse(args(4)):0.99;
+		new TestBlockSetComm(m, n, bm, bn, d).execute();
 	}
 }

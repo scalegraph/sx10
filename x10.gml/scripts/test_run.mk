@@ -1,11 +1,3 @@
-###################################################
-###################################################
-## Name:  	X10 application test
-## Created by: 	Juemin Zhang
-## Contact:   	zhangj@us.ibm.com
-###################################################
-###################################################
-
 ##---------------
 #Input settings
 ##---------------
@@ -20,6 +12,8 @@
 #$(test_args)   ## test run arges
 #$(numplaces)   ## Number of places used in testing
 #$(runtime_list)## backend and runtime transport
+
+X10_FLAG += -sourcepath $(X10_HOME)/x10.tests/tests/x10lib
 
 ###################################################
 ## execution settings
@@ -52,11 +46,18 @@ run_mpi		: mpi
 run_sock	: sock
 			X10_NPLACES=$(numplaces) ./$(target)_sock $(test_args)
 
-run_lapi	: lapi
-			$(Srsv) -n $(numplaces) $(Xrun) ./$(target)_lapi $(test_args)
-
 run_pami	: pami
 			MP_PROCS=$(numplaces) MP_EUILIB=ip ./$(target)_pami $(test_args)
+
+## resilience tests
+HAMMER_FILE ?= 
+
+# run with two spare places, replace any failed place with a spare
+run_redundant	: java
+		X10_RESILIENT_MODE=1 X10_PLACE_GROUP_RESTORE_MODE=1 X10_GML_HAMMER_FILE=$(HAMMER_FILE) X10_NPLACES=$(numplaces) $(Xjvm) -classpath $(build_path):$(gml_lib)/managed_gml.jar -libpath $(build_path):$(gml_lib) $(target) $(test_args) --skip 2 --checkpointFreq 2
+
+run_elastic	: java
+		X10_RESILIENT_MODE=12 X10_PLACE_GROUP_RESTORE_MODE=2 X10_GML_HAMMER_FILE=$(HAMMER_FILE) X10_NPLACES=$(numplaces) $(Xjvm) -DX10RT_DATASTORE=Hazelcast -classpath $(build_path):$(gml_lib)/managed_gml.jar -libpath $(build_path):$(gml_lib) $(target) $(test_args) --checkpointFreq 2
 
 
 ##----- Run all tests in one transport or java backend
@@ -70,10 +71,6 @@ runall_mpi	:
 runall_sock	:
 			$(foreach src, $(target_list), $(MAKE) target=$(src) run_sock; )
 
-runall_lapi	:
-			$(foreach src, $(target_list), $(MAKE) target=$(src) run_lapi; )
-
-
 ##---- Run all tests in all transports and java backend
 
 runall		:
@@ -82,18 +79,16 @@ runall		:
 ###----
 
 ################################################
-#.PHONY	: run_java run_mpi run_sock run_lapi runalltrans runalltests
+#.PHONY	: run_java run_mpi run_sock runalltrans runalltests
 ###########################################
 
 help	::
 	@echo "-------------------------- launch test run -----------------------";
 	@echo " make run_mpi      : run $(target) test built for MPI transport";
 	@echo " make run_sock     : run $(target) test built for socket transport" ;
-	@echo " make run_lapi     : run $(target) test built for lapi transport";
 	@echo " make run_java     : run $(target) test built for managed backend";
 	@echo " make runall_mpi   : run all tests built for MPI transport";
 	@echo " make runall_sock  : run all tests built for socket transport";
-	@echo " make runall_lapi  : run all tests built for lapi transport";
 	@echo " make runall_java  : run all tests built for managed backend";
 	@echo " make runall       : run all tests built for all backends: $(runtime_list)";
 	@echo "";

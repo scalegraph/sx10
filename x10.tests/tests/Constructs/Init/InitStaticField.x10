@@ -47,8 +47,8 @@ public class InitStaticField extends x10Test {
             ok = false;
         }
         
-        if (Place.MAX_PLACES >= 2) {
-            val timea2 = at (here.next()) { return InitStaticField.timea; };
+        if (Place.numPlaces() >= 2) {
+            val timea2 = at (Place.places().next(here)) { return InitStaticField.timea; };
             Console.OUT.println(timea2);
             if (timea2 == timea) {
                 Console.OUT.println("Per-place initialization check failed.");

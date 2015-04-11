@@ -14,9 +14,9 @@ package x10.matrix.dist.summa;
 import x10.regionarray.DistArray;
 import x10.util.Timer;
 
-import x10.matrix.Debug;
+import x10.matrix.util.Debug;
 import x10.matrix.Matrix;
-import x10.matrix.MathTool;
+import x10.matrix.util.MathTool;
 import x10.matrix.DenseMatrix;
 import x10.matrix.sparse.SparseCSC;
 import x10.matrix.sparse.DenseMultSparseToDense;
@@ -184,7 +184,7 @@ public class SummaDenseMultSparse {
 
 			//
 		    /* TIMING */ st = Timer.milliTime();
-            finish for (var p:Long=0; p<Place.MAX_PLACES; p++) {
+            finish for (var p:Long=0; p<Place.numPlaces(); p++) {
                 //finish ateach(val [p]:Point in C.dist) { 
                 val pid  = p;
                 at(C.distBs.dist(pid)) async {

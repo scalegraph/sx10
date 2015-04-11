@@ -12,6 +12,8 @@
 
 package x10.util;
 
+import x10.xrx.Runtime;
+
 /**
  * A handle to place-local lazy-initialised worker-local storage.
  * At each place, a worker-local instance of type T is created using the init
@@ -32,7 +34,7 @@ public class WorkerLocalHandle[T]{T isref, T haszero} implements ()=>T,(T)=>void
     public def this() = this(null);
 
     public def this(init:() => T) {
-        val state = PlaceLocalHandle.make[State[T]](PlaceGroup.WORLD, ()=>new State[T](init));
+        val state = PlaceLocalHandle.make[State[T]](Place.places(), ()=>new State[T](init));
         this.state = state;
     }
 
@@ -82,11 +84,12 @@ public class WorkerLocalHandle[T]{T isref, T haszero} implements ()=>T,(T)=>void
     public def reduceLocal(op:(a:T,b:T)=>T):T {
         val localState = state();
         val localStore = localState.store;
-        var result:T = localState.init();
+        var result:T = null;
         for (i in 0..(localStore.size-1)) {
             val t = localStore(i);
             if (t != null) {
-                result = op(result, t);
+                if (result == null) result = t;
+                else result = op(result, t);
             }
         }
         return result;

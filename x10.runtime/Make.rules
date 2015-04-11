@@ -88,26 +88,33 @@ ifndef JAVA_HOME
 endif
 
 ifdef JAVA_HOME
+  jarch=$(shell uname -p)
+  ifeq ($(jarch),unknown)
+    jarch=$(shell uname -m)
+  endif
+
   ifeq ($(shell uname -s),AIX)
     JNI_INCLUDES = -I"$(JAVA_HOME)"/include -I"$(JAVA_HOME)"/include/aix
-    jarch=$(shell uname -p)
-    JNI_LIBS = -L"$(JAVA_HOME)"/jre/lib/$(jarch)/j9vm
+# -L"$(JAVA_HOME)"/jre/lib/$(jarch) is needed for IBM JVM to use -ljsig, which is needed for Oracle JVM but use the same option for IBM JVM as well for simplicity.
+    JNI_LIBS = -L"$(JAVA_HOME)"/jre/lib/$(jarch)/j9vm -L"$(JAVA_HOME)"/jre/lib/$(jarch)
   else
   ifeq ($(shell uname -s),Linux)
     JNI_INCLUDES = -I"$(JAVA_HOME)"/include -I"$(JAVA_HOME)"/include/linux
-    jarch=$(shell uname -p)
     ifeq ($(jarch),x86_64)
       jarch=amd64
     endif
-    JNI_LIBS = -L"$(JAVA_HOME)"/jre/lib/$(jarch)/j9vm -L"$(JAVA_HOME)"/jre/lib/$(jarch)/server -L"$(JAVA_HOME)"/jre/lib/$(jarch)/client
+# -L"$(JAVA_HOME)"/jre/lib/$(jarch) is needed for IBM JVM to use -ljsig, which is needed for Oracle JVM but use the same option for IBM JVM as well for simplicity.
+    JNI_LIBS = -L"$(JAVA_HOME)"/jre/lib/$(jarch)/j9vm -L"$(JAVA_HOME)"/jre/lib/$(jarch)/server -L"$(JAVA_HOME)"/jre/lib/$(jarch)/client -L"$(JAVA_HOME)"/jre/lib/$(jarch)
   else
   ifeq ($(firstword $(subst _, ,$(shell uname -s))),CYGWIN)
     # Intentionally not setting JNI_INCLUDES and JNI_LIBS
     # We don't want to build the jni-bindings for x10rt on cygwin
   else
   ifeq ($(shell uname -s),Darwin)
+    override CXXFLAGS += -mmacosx-version-min=10.6
+    override X10RT_PROPS_CXXFLAGS += -mmacosx-version-min=10.6
+    override XRX_PROPS_CXXFLAGS += -mmacosx-version-min=10.6
     JNI_INCLUDES = -I"$(JAVA_HOME)"/include -I"$(JAVA_HOME)"/include/darwin
-    jarch=$(shell uname -p)
     ifeq ($(jarch),x86_64)
       jarch=amd64
     endif
@@ -115,7 +122,6 @@ ifdef JAVA_HOME
   else
   ifeq ($(shell uname -s),SunOS)
     JNI_INCLUDES = -I"$(JAVA_HOME)"/include -I"$(JAVA_HOME)"/include/solaris
-    jarch=$(shell uname -p)
     ifeq ($(jarch),x86_64)
       jarch=amd64
     endif
@@ -123,7 +129,6 @@ ifdef JAVA_HOME
   else
   ifeq ($(shell uname -s),FreeBSD)
     JNI_INCLUDES = -I"$(JAVA_HOME)"/include -I"$(JAVA_HOME)"/include/freebsd
-    jarch=$(shell uname -p)
     ifeq ($(jarch),x86_64)
       jarch=amd64
     endif
@@ -144,6 +149,8 @@ ifdef ENABLE_CROSS_COMPILE_BGQ
   export CROSS_COMPILE_ANY=true
   export BGQ_FLOOR ?= /bgsys/driver/ppcfloor
   export X10_STATIC_LIB=1
+  export DISABLE_JAVA_RUNTIME=1
+  
   ifdef USE_GCC
     export X10RT_PLATFORM=bgq_gcc
     override MPICXX=/bgsys/drivers/ppcfloor/comm/bin/gcc/mpicxx
@@ -382,17 +389,22 @@ ifdef ENABLE_CROSS_COMPILE_FX10
   export X10RT_PLATFORM=fx10
   export CROSS_COMPILE_FX10=true
   export CROSS_COMPILE_ANY=true
-  export X10_STATIC_LIB=1
+  ifndef TARGET_JAVA_HOME
+    export X10_STATIC_LIB=1
+    export DISABLE_JAVA_RUNTIME=1
+    LIBSUFFIX := .a
+  endif
 
   override CXX = FCCpx
   override CC = fccpx
   override CFLAGS = -Xg -w
   override CXXFLAGS = -Xg -w -Wp,--special_module_id 
+  override LD = fccpx
   override CXX_NO_WARNING=true
   override CXX_WARNING_FLAGS = 
   override MPICXX= mpiFCCpx -Xg
   ifndef X10_STATIC_LIB
-    override CXXFLAGS_SHARED += -shared -fPIC
+    override CXXFLAGS_SHARED = -shared -fPIC
     export X10RT_TEST_LDFLAGS = -dynamic -Wl,--rpath -Wl,"$(X10_HOME)"/x10.runtime/x10rt/lib
   endif
   ifdef OPTIMIZE

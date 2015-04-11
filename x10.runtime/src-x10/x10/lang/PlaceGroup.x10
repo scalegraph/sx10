@@ -15,25 +15,19 @@ package x10.lang;
 import x10.compiler.Pragma;
 import x10.io.Serializer;
 import x10.io.Deserializer;
+import x10.util.ArrayList;
 
 /**
  * <p> A PlaceGroup represents an ordered set of Places.
  * PlaceGroups are represented by a specialized set of classes (instead of using
  * arbitrary collection types) because it is necessary for performance/scalability
  * to have optimized representations of specific special cases.  The API is also 
- * designed specifically to efficiently support the operations needed by Team
- * and DistArray.<p>
+ * designed to efficiently support the operations needed by Team and DistArray.
  *
  * @see Place
  * @see x10.util.Team
  */
 public abstract class PlaceGroup implements Iterable[Place] {
-
-  /**
-   * A PlaceGroup that represents exactly Place.places().
-   * All places, in order of increasing Place.id.
-   */
-  public static val WORLD = new SimplePlaceGroup(Place.MAX_PLACES);
 
   /**
    * The size of the PlaceGroup is equal to the value returned by numPlaces()
@@ -79,7 +73,7 @@ public abstract class PlaceGroup implements Iterable[Place] {
    *
    * <p>If the PlaceGroup pg contains the argument Place, 
    * then the invariant
-   * <code>pg(indexOf(id)).equals(Place.place(id)) == true</code> holds.</p>
+   * <code>pg(indexOf(id)).equals(Place(id)) == true</code> holds.</p>
    * 
    * @return the index of the Place encoded by id
    */
@@ -93,6 +87,31 @@ public abstract class PlaceGroup implements Iterable[Place] {
    */
   public abstract operator this(i:Long):Place;
 
+  /**
+   * Return the next Place in iteration order from
+   * the argument Place, with a wrap around to the 
+   * first Place in iteration order if the argument 
+   * Place is the last Place in iteration order.
+   */
+  public def next(p:Place):Place {
+      val idx = indexOf(p);
+      if (idx == -1) return Place.INVALID_PLACE;
+      val nIdx = (idx + 1 == numPlaces()) ? 0 : idx+1;
+      return this(nIdx);
+  }
+
+  /**
+   * Return the previous Place in iteration order from
+   * the argument Place, with a wrap around to the 
+   * last Place in iteration order if the argument 
+   * Place is the first Place in iteration order.
+   */
+  public def prev(p:Place):Place {
+      val idx = indexOf(p);
+      if (idx == -1) return Place.INVALID_PLACE;
+      val pIdx = (idx == 0) ? numPlaces()-1 : idx-1;
+      return this(pIdx);    
+  }
 
   /**
    * Two place groups are equal iff they contain the same places
@@ -164,6 +183,20 @@ public abstract class PlaceGroup implements Iterable[Place] {
     }
   }
 
+    /** 
+     * Return a new PlaceGroup which contains all places from this group
+     * that are not dead places.
+     */
+    public def filterDeadPlaces():PlaceGroup {
+        val livePlaces = new ArrayList[Place]();
+
+        for (pl in this) {
+            if (!pl.isDead()) livePlaces.add(pl);
+        }
+
+        return new SparsePlaceGroup(livePlaces.toRail());
+    }
+
   public static class SimplePlaceGroup extends PlaceGroup {
     private val numPlaces:Long;
     def this(numPlaces:Long) { this.numPlaces = numPlaces; }
@@ -178,7 +211,7 @@ public abstract class PlaceGroup implements Iterable[Place] {
     };
     public def equals(thatObj:Any):Boolean {
         if (thatObj instanceof SimplePlaceGroup) {
-            return numPlaces() == (thatObj as PlaceGroup).numPlaces();
+            return numPlaces() == (thatObj as SimplePlaceGroup).numPlaces();
         } else {
             return super.equals(thatObj);
         }
@@ -192,7 +225,7 @@ public abstract class PlaceGroup implements Iterable[Place] {
             val message = ser.toRail();
             @Pragma(Pragma.FINISH_SPMD) finish for(var i:Long=numPlaces()-1; i>=0; i-=32) {
                 at (Place(i)) async {
-                    val max = Runtime.hereLong();
+                    val max = here.id;
                     val min = Math.max(max-31, 0);
                     @Pragma(Pragma.FINISH_SPMD) finish for (var j:Long=min; j<=max; ++j) {
                         at (Place(j)) async {

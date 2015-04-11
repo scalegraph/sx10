@@ -20,6 +20,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintStream;
 //import java.lang.ProcessBuilder.Redirect;  // Java 7.  Sigh.
+import java.util.ArrayList;
 
 public class Launcher {
 	
@@ -28,7 +29,7 @@ public class Launcher {
 	 */
 	public static void main(String[] args) {
 		if (args.length < 1) {
-			System.out.println("Example Usage: java -cp .:../stdlib/x10.jar x10.x10rt.Launcher HelloWholeWorld hi");
+			System.out.println("Example Usage: java -cp .:../stdlib/x10.jar x10.x10rt.Launcher [-debug] HelloWholeWorld hi");
 			return;
 		}
 		
@@ -44,35 +45,24 @@ public class Launcher {
 		String[] connectionDebugInfo = new String[numPlaces];
 		
 		// gather up the class and arguments to run
+		boolean isDebug = args[0].equals("-debug") ? true : false;
+		int firstarg = isDebug ? 1 : 0; // skip the first -debug flag
 		
-		boolean isDebug = args[0].equals("-debug")? true : false;
+		ArrayList<String> newArgs = new ArrayList<String>();
 		
-		String[] newArgs;
-		
-		if (isDebug){
-			newArgs = new String[args.length+8];
-			newArgs[0] = System.getProperty("java.home").concat("/bin/java");
-			newArgs[1] = "-XX:+UseParallelGC";
-			newArgs[2] = "-Xdebug";
-			newArgs[3] = "-Xrunjdwp:transport=dt_socket,server=y,suspend=y";
-			newArgs[4] = "-ea";
-			newArgs[5] = "-Djava.library.path="+System.getProperty("java.library.path");
-			newArgs[6] = "-Djava.class.path="+System.getProperty("java.class.path");
-			newArgs[7] = "-Djava.util.logging.config.file="+System.getProperty("java.util.logging.config.file");
-			newArgs[8] = SlaveLauncher.class.getName();
-			for (int i=1; i<args.length; i++)
-				newArgs[i+8] = args[i];
-		} else {
-			newArgs = new String[args.length+6];
-			newArgs[0] = System.getProperty("java.home").concat("/bin/java");
-			newArgs[1] = "-ea";
-			newArgs[2] = "-Djava.library.path="+System.getProperty("java.library.path");
-			newArgs[3] = "-Djava.class.path="+System.getProperty("java.class.path");
-			newArgs[4] = "-Djava.util.logging.config.file="+System.getProperty("java.util.logging.config.file");
-			newArgs[5] = SlaveLauncher.class.getName();
-			for (int i=0; i<args.length; i++)
-				newArgs[i+6] = args[i];
+		newArgs.add(System.getProperty("java.home").concat("/bin/java"));
+		if (isDebug) {
+			newArgs.add("-XX:+UseParallelGC");
+			newArgs.add("-Xdebug");
+			newArgs.add("-Xrunjdwp:transport=dt_socket,server=y,suspend=y");
 		}
+		newArgs.add("-ea");
+		newArgs.add("-Djava.library.path="+System.getProperty("java.library.path"));
+		newArgs.add("-Djava.class.path="+System.getProperty("java.class.path"));
+		newArgs.add("-Djava.util.logging.config.file="+System.getProperty("java.util.logging.config.file"));
+		newArgs.add(SlaveLauncher.class.getName());
+		for (int i=firstarg; i<args.length; i++)
+			newArgs.add(args[i]);
 		
 		// launch the places
 		ProcessBuilder pb = new ProcessBuilder(newArgs);
@@ -115,32 +105,32 @@ public class Launcher {
 		}
 		
 		// gather up the connection info from each place
-				for (int i=0; i<numPlaces; i++) {
-					try {
-						BufferedReader reader = new BufferedReader(new InputStreamReader(inFrom[i]), 1024);
-						connectionInfo[i] = reader.readLine();
-						while (connectionInfo[i] == null) {
-							Thread.yield();
-							connectionInfo[i] = reader.readLine();
-						} 
-					}
-					catch (Exception e) {
-						e.printStackTrace();
-					}
-				}
+		for (int i=0; i<numPlaces; i++) {
+			try {
+				BufferedReader reader = new BufferedReader(new InputStreamReader(inFrom[i]), 1024);
+				connectionInfo[i] = reader.readLine();
+				while (connectionInfo[i] == null) {
+					Thread.yield();
+					connectionInfo[i] = reader.readLine();
+				} 
+			}
+			catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
 		
 		// tell each place its ID, and where to find the others
 		for (int i=0; i<numPlaces; i++) {
 			try {
 				PrintStream writer = new PrintStream(outTo[i]);
 				//System.err.println("sending placecount of "+numPlaces+" to place "+i);
-			    writer.println(numPlaces);
-			    writer.flush();
-			    for (int j=0; j<numPlaces; j++) {
-		    		writer.println(connectionInfo[j]);
-			    	writer.flush();
-			    }
-			    //System.err.println("finished sending connection information to place "+i);
+				writer.println(numPlaces);
+				writer.flush();
+				for (int j=0; j<numPlaces; j++) {
+					writer.println(connectionInfo[j]);
+					writer.flush();
+				}
+				//System.err.println("finished sending connection information to place "+i);
 			}
 			catch (Exception e) {
 				e.printStackTrace();
@@ -161,8 +151,11 @@ public class Launcher {
 			t.setName("pipe stdout for place "+i);
 			t.start();
 		}
-		
-		// TODO: send stdin to place 0
+
+		// send stdin to place 0
+		Thread t = new Thread(new Piper(System.in, new PrintStream(outTo[0])));
+		t.setName("pipe stdin to place 0");
+		t.start();
 		
 		// places have exited.  Pass the exit code of place 0 on
 		while (true) {
@@ -206,9 +199,7 @@ public class Launcher {
 				// start up X10RT
 				System.setProperty("x10.NO_PRELOAD_CLASSES", "false");
 				System.setProperty("X10RT_IMPL", "JavaSockets"); // use java communication library
-				//x10.runtime.impl.java.Runtime userClass = (x10.runtime.impl.java.Runtime) Class.forName(args[0]).newInstance();
-				//String connectionInfo = X10RT.init_library(userClass, false);
-				String connectionInfo = X10RT.init_library(null);
+				String connectionInfo = X10RT.init_library();
 
 				// write connection string to the parent
 				System.out.println(connectionInfo);
@@ -255,7 +246,7 @@ public class Launcher {
 				} catch (Throwable e) {
 					e.printStackTrace();
 				}				
-        	}
+			}
 			catch (Exception e){
 				e.printStackTrace();
 			}

@@ -25,7 +25,7 @@ import x10.serialization.X10JavaSerializer;
  * an Char value to type Any, parameter type T or superinterfaces such
  * as Comparable<Char>.
  */
-final public class Char extends Struct implements java.lang.Comparable<Char>, x10.util.Ordered<Char>
+final public class Char implements StructI, java.lang.Comparable<Char>, x10.util.Ordered<Char>
 {
     public static final RuntimeType<?> $RTT = Types.CHAR;
     public RuntimeType<?> $getRTT() {return $RTT;}
@@ -110,6 +110,10 @@ final public class Char extends Struct implements java.lang.Comparable<Char>, x1
         if ($value > o.$value) return 1;
         else if ($value < o.$value) return -1;
         return 0;
+    }
+
+    private Object writeReplace() throws java.io.ObjectStreamException {
+        return new x10.serialization.SerializationProxy(this);
     }
 
     public void $_serialize(X10JavaSerializer $serializer) throws IOException {

@@ -14,6 +14,7 @@ package x10.matrix;
 import x10.util.StringBuilder;
 
 import x10.matrix.blas.DenseMatrixBLAS;
+import x10.matrix.util.RandTool;
 
 public type TriDense(m:Long, n:Long)=TriDense{m==n, self.M==m, m==n};
 public type TriDense(m:Long)=TriDense{self.M==m,self.N==m};
@@ -21,28 +22,27 @@ public type TriDense(C:TriDense)=TriDense{self==C};
 public type TriDense(C:Matrix)=TriDense{self==C};
 
 /**
- * Triangular dense matrix is derived from dense matrix. In default,  it uses the lower 
- * part to store matrix data. Therefore, it uses the same amount of memory 
- * space as dense matrix of the same dimension.  This memory layout complies with
- * symmetric matrix specification of BLAS, so the memory space can be passed to
- * BLAS routinges.
+ * A triangular dense matrix only stores data in one triangular half of the
+ * matrix (by default, the lower half). Therefore, it uses the same amount of  
+ * memory space as dense matrix of the same dimension.  This memory layout 
+ * complies with the symmetric matrix specification of BLAS, so the memory space
+ * can be passed to BLAS routines.
  * <p>
  * By default, the lower part is accessed. 
- * Results of cell-wise operations on triangular matrix is stored in dense instance.
- * 
+ * Result of cell-wise operations on triangular matrix is stored in DenseMatrix.
  */
 public class TriDense extends DenseMatrix{self.M==self.N} {
-	/*
+	/**
 	 * Upper or lower triangular matrix flag. If true, upper triangular.
 	 * Default is false, lower triangular.
 	 */
 	public var upper:Boolean = false; 
 	
-    public def this(n:Long, x:Rail[Double]):TriDense(n){
+    public def this(n:Long, x:Rail[Double]{self!=null}):TriDense(n){
 		super(n, n, x);
 	}
 	
-	public def this(up:Boolean, n:Long, x:Rail[Double]) : TriDense(n){
+	public def this(up:Boolean, n:Long, x:Rail[Double]{self!=null}) : TriDense(n){
 		super(n, n, x);
 		upper = up;
 	}	
@@ -78,7 +78,7 @@ public class TriDense extends DenseMatrix{self.M==self.N} {
 	}
 	
 	public  def alloc(m:Long, n:Long):TriDense(m,n) {
-		Debug.assure(m==n);
+		assert m==n;
 		val x = new Rail[Double](m*n);
 		val nm = new TriDense(m, x);
 		return nm as TriDense(m,n);
@@ -109,7 +109,7 @@ public class TriDense extends DenseMatrix{self.M==self.N} {
 		else if (mat instanceof TriDense)
 			copyTo(mat as TriDense(N));
 		else
-			Debug.exit("CopyTo: matrix type does not compatible");
+			throw new UnsupportedOperationException("CopyTo: matrix type does not compatible");
 	}
 	
     /**
@@ -209,26 +209,7 @@ public class TriDense extends DenseMatrix{self.M==self.N} {
 		
 	}
 
-	// Data access and set
-    public operator this(x:Long, y:Long):Double {
-		if (upper && x<=y)
-			return this.d(y*M+x);
-		if (upper==false && x >= y)
-			return this.d(y*M+x);
-		return 0;
-	}
-	
-    public operator this(x:Long,y:Long) = (v:Double):Double {
-		if (upper && x<=y)
-			this.d(y*M +x) = v;
-		if (upper==false && x>=y)
-			this.d(y*M +x) = v;
-		return v;
-	}	
-	
-
-	// Transpose
-
+    /** Return the transpose of this matrix. */
 	public def selfT():TriDense(this) {
 		var src_idx:Long =0;
 		var dst_idx:Long =0;
@@ -250,14 +231,12 @@ public class TriDense extends DenseMatrix{self.M==self.N} {
 	public  def scale(a:Double):TriDense(this)  {
 		var colstt:Long=0;
 		if (upper==false) {
-			// Lower part
-			for (var len:Long=M; len>0; len--, colstt+=M+1)
-				for (var i:Long=colstt; i<colstt+len; i++)		
+		    for (var c:Long=0; c < N; c++, colstt+=M+1)
+			    for (var i:Long=colstt; i<colstt+M-c; i++)
 					this.d(i) = this.d(i) * a;
 		} else {
-			// Upper part
-			for (var len:Long=1; len <=len; len++, colstt+=M)
-				for (var i:Long=colstt; i<len; i++)
+		    for (var c:Long=0; c < N; c++, colstt+=M)
+			    for (var i:Long=colstt; i<colstt+c+1; i++)
 					this.d(i) = this.d(i) * a;
 		}
 		return this;
@@ -267,13 +246,12 @@ public class TriDense extends DenseMatrix{self.M==self.N} {
 		var tt:Double = 0.0;
 		var colstt:Long=0;
 		if (upper==false) {
-			// lower part
-			for (var len:Long=M; len>0; len--, colstt+=M+1) 
-				for (var i:Long=colstt; i<colstt+len; i++)
+		    for (var c:Long=0; c < N; c++, colstt+=M+1)
+			    for (var i:Long=colstt; i<colstt+M-c; i++)
 					tt += this.d(i);
 		} else {
-			for (var len:Long=1; len <=len; len++, colstt+=M)
-				for (var i:Long=colstt; i<len; i++)
+		    for (var c:Long=0; c < N; c++, colstt+=M)
+			    for (var i:Long=colstt; i<colstt+c+1; i++)
 					tt += this.d(i);			
 		}
 		return tt;
@@ -287,47 +265,29 @@ public class TriDense extends DenseMatrix{self.M==self.N} {
 	public def cellAddTo(x:DenseMatrix(M,N)):DenseMatrix(x) {
 		var colstt:Long=0;
 		if (upper==false) {
-			for (var len:Long=M; len>0; len--, colstt+=M+1) 
-				for (var i:Long=colstt; i<colstt+len; i++) 		
+		    for (var c:Long=0; c < N; c++, colstt+=M+1)
+			    for (var i:Long=colstt; i<colstt+M-c; i++)
 					x.d(i) += this.d(i);
 		} else {
-			for (var len:Long=1; len <=len; len++, colstt+=M)
-				for (var i:Long=colstt; i<len; i++)
+		    for (var c:Long=0; c < N; c++, colstt+=M)
+			    for (var i:Long=colstt; i<colstt+c+1; i++)
 					x.d(i) += this.d(i);
 		}
 		return x;
 	}
 
-	// Cell-wise matrix multiplication
-
-	public def cellSubFrom(v:Double):TriDense(this) {
-		var colstt:Long=0;
-		if (upper==false) {
-			for (var len:Long=M; len>0; len--, colstt+=M+1)
-				for (var i:Long=colstt; i<colstt+len; i++)		
-					this.d(i) = v-this.d(i);
-		} else {
-			for (var len:Long=1; len <=len; len++, colstt+=M)
-				for (var i:Long=colstt; i<len; i++)
-					this.d(i) = v-this.d(i);
-		}
-		return this;
-	}
-	
-	//public def cellSub(x:TriDense(M)): DenseMatrix(this) = cellSub(x as DenseMatrix(M,N));
-	
 	/**
 	 * x = x - this;
 	 */
 	public def cellSubFrom(x:DenseMatrix(M,N)):DenseMatrix(x) {
 		var colstt:Long=0;
 		if (upper==false) {
-			for (var len:Long=M; len>0; len--, colstt+=M+1) 
-				for (var i:Long=colstt; i<colstt+len; i++) 		
+		    for (var c:Long=0; c < N; c++, colstt+=M+1)
+			    for (var i:Long=colstt; i<colstt+M-c; i++)
 					x.d(i) -= this.d(i);
 		} else {
-			for (var len:Long=1; len <=len; len++, colstt+=M)
-				for (var i:Long=colstt; i<len; i++)
+		    for (var c:Long=0; c < N; c++, colstt+=M)
+			    for (var i:Long=colstt; i<colstt+c+1; i++)
 					x.d(i) -= this.d(i);
 		}
 		return x;
@@ -335,21 +295,6 @@ public class TriDense extends DenseMatrix{self.M==self.N} {
 	
 
 	// Cell-wise matrix multiplication
-
-	public def cellMult(v:Double):TriDense(this) {
-		var colstt:Long=0;
-		if (upper==false) {
-			for (var len:Long=M; len>0; len--, colstt+=M+1)
-				for (var i:Long=colstt; i<colstt+len; i++)		
-					this.d(i) *= v;
-		} else {
-			for (var len:Long=1; len <=len; len++, colstt+=M)
-				for (var i:Long=colstt; i<len; i++)
-					this.d(i) *= v;
-		}
-		return this;
-	}
-
 	public def cellMult(x:TriDense(M,N)):TriDense(this) {
 		if (x.upper != this.upper) {
 			reset();
@@ -357,12 +302,12 @@ public class TriDense extends DenseMatrix{self.M==self.N} {
 		}
 		var colstt:Long=0;
 		if (upper==false) {
-			for (var len:Long=M; len>0; len--, colstt+=M+1)
-				for (var i:Long=colstt; i<colstt+len; i++)		
+		    for (var c:Long=0; c < N; c++, colstt+=M+1)
+			    for (var i:Long=colstt; i<colstt+M-c; i++)	
 					this.d(i) *= x.d(i);
 		} else {
-			for (var len:Long=1; len <=len; len++, colstt+=M)
-				for (var i:Long=colstt; i<len; i++)
+		    for (var c:Long=0; c < N; c++, colstt+=M)
+			    for (var i:Long=colstt; i<colstt+c+1; i++)
 					this.d(i) *= x.d(i);			
 		}
 		return this;
@@ -371,12 +316,12 @@ public class TriDense extends DenseMatrix{self.M==self.N} {
 	public def cellMult(x:DenseMatrix(M,N)):TriDense(this) {
 		var colstt:Long=0;
 		if (upper==false) {
-			for (var len:Long=M; len>0; len--, colstt+=M+1)
-				for (var i:Long=colstt; i<colstt+len; i++)		
+		    for (var c:Long=0; c < N; c++, colstt+=M+1)
+			    for (var i:Long=colstt; i<colstt+M-c; i++)
 					this.d(i) *= x.d(i);
 		} else {
-			for (var len:Long=1; len <=len; len++, colstt+=M)
-				for (var i:Long=colstt; i<len; i++)
+		    for (var c:Long=0; c < N; c++, colstt+=M)
+			    for (var i:Long=colstt; i<colstt+c+1; i++)
 					this.d(i) *= x.d(i);			
 		}
 		return this;
@@ -406,29 +351,29 @@ public class TriDense extends DenseMatrix{self.M==self.N} {
 	public def cellDiv(v:Double):TriDense(this) {
 		var colstt:Long=0;
 		if (upper==false) {
-			for (var len:Long=N; len>0; len--, colstt+=M+1)
-			for (var i:Long=colstt; i<colstt+len; i++)	
-				this.d(i) /= v;
+		    for (var c:Long=0; c < N; c++, colstt+=M+1)
+			    for (var i:Long=colstt+1; i<colstt+M-c; i++)
+				    this.d(i) /= v;
 		} else {
-			for (var len:Long=1; len <=len; len++, colstt+=M)
-				for (var i:Long=colstt; i<len; i++)
+		    for (var c:Long=0; c < N; c++, colstt+=M)
+			    for (var i:Long=colstt; i<colstt+c+1; i++)
 					this.d(i) /= v;			
 		}
 		return this;
 	}
 	
 	//public def cellDivBy(v:Double):TriDense(this) {
-	//	Debug.exit("Divide by 0 error");
+	//	throw new UnsupportedOperationException("Divide by 0 error");
 	//	return this;
 	//}	
 	
 	//public def cellDiv(x:TriDense(M)):TriDense(this) {
-	//	Debug.exit("Divide by 0 error");
+	//	throw new UnsupportedOperationException("Divide by 0 error");
 	//	return this;
 	//}	
 	
 	//public def cellDivBy(x:DenseMatrix(M,N)):DenseMatrix(x) {
-	//	Debug.exit("Divide by 0 error");
+	//	throw new UnsupportedOperationException("Divide by 0 error");
 	//	return x;
 	//}
 	
@@ -467,7 +412,6 @@ public class TriDense extends DenseMatrix{self.M==self.N} {
 	public operator (v:Double) + this = this + v;
 
 	public operator this - (v:Double) = this.clone().cellSub(v)     as TriDense(M,N);
-	public operator (v:Double) - this = this.clone().cellSubFrom(v) as TriDense(M,N);
 	
 	public operator this / (v:Double) = this.clone().cellDiv(v)   as TriDense(M,N);
 	public operator (v:Double) / this = this.clone().cellDivBy(v) as TriDense(M,N);
@@ -480,7 +424,7 @@ public class TriDense extends DenseMatrix{self.M==self.N} {
 	public operator this - (that:TriDense(M)) = this.toDense().cellSub(that)  as DenseMatrix(M,N);
 	public operator this * (that:TriDense(M)) = this.toDense().cellMult(that) as DenseMatrix(M,N);
 	public operator this / (that:TriDense(M)) {
-		Debug.exit("Divide 0 error");
+		throw new UnsupportedOperationException("Divide 0 error");
 	}
 
 	/**
@@ -495,7 +439,7 @@ public class TriDense extends DenseMatrix{self.M==self.N} {
 	// public operator (that:DenseMatrix(M,N)) - this = this.cellSubFrom(that.clone());
 	// public operator (that:DenseMatrix(M,N)) * this = this * that;
 	public operator (that:DenseMatrix(M,N)) / this { 
-		Debug.exit("Divide by 0 error");
+		throw new UnsupportedOperationException("Divide by 0 error");
 	}
 	
 	/**
@@ -525,15 +469,24 @@ public class TriDense extends DenseMatrix{self.M==self.N} {
 		var idx:Long=0;
 		val outstr=new StringBuilder();
 		outstr.add("--------- Triangular Matrix "+M+" x "+N);
-		if (upper)
+		if (upper) {
 			outstr.add(" upper part data ---------\n");
-		else
+		    for (var r:Long=0; r<M; r++) {
+			    outstr.add(r+"\t[ ");
+                for (var c:Long=0; c<r; c++)
+                    outstr.add("         ");
+			    for (var c:Long=r; c<M; c++)
+				    outstr.add(String.format("%8.3f ",[this(r,c) as Any]));
+			    outstr.add("]\n");
+            }
+		} else {
 			outstr.add(" lower part data ---------\n");
-		for (var r:Long=0; r<M; r++) {
-			outstr.add(r+"\t[ ");
-			for (var c:Long=0; c<=r; c++)
-				outstr.add(this(r,c).toString()+" ");
-			outstr.add("]\n");
+		    for (var r:Long=0; r<M; r++) {
+			    outstr.add(r+"\t[ ");
+			    for (var c:Long=0; c<=r; c++)
+				    outstr.add(String.format("%8.3f ",[this(r,c) as Any]));
+			    outstr.add("]\n");
+            }
 		}
 		outstr.add("---------------------------------------\n");
 		return outstr.toString();	

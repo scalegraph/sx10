@@ -30,7 +30,7 @@ public class DistArray_Block_1[T] extends DistArray[T]{this.rank()==1} implement
     protected transient val localIndices:DenseIterationSpace_1{self!=null};
     @NonEscaping protected final def reloadLocalIndices():DenseIterationSpace_1{self!=null} {
         val ls = localHandle() as LocalState_B1[T];
-        return ls != null ? ls.localIndices : new DenseIterationSpace_1(0,-1);
+        return ls != null ? ls.dist.localIndices : new DenseIterationSpace_1(0,-1);
     }
     
     @TransientInitExpr(reloadMinLocalIndex())
@@ -43,7 +43,7 @@ public class DistArray_Block_1[T] extends DistArray[T]{this.rank()==1} implement
 
     /**
      * Construct a n-element block distributed DistArray
-     * whose data is distrbuted over pg and initialized using
+     * whose data is distributed over pg and initialized using
      * the init function.
      *
      * @param n number of elements 
@@ -61,20 +61,20 @@ public class DistArray_Block_1[T] extends DistArray[T]{this.rank()==1} implement
 
     /**
      * Construct a n-element block distributed DistArray
-     * whose data is distrbuted over PlaceGroup.WORLD and 
+     * whose data is distributed over Place.places() and 
      * initialized using the provided init closure.
      *
      * @param n number of elements
      * @param init the element initialization function
      */
     public def this(n:Long, init:(Long)=>T) {
-        this(n, PlaceGroup.WORLD, init);
+        this(n, Place.places(), init);
     }
 
 
     /**
      * Construct a n-elmenent block distributed DistArray
-     * whose data is distrbuted over pg and zero-initialized.
+     * whose data is distributed over pg and zero-initialized.
      *
      * @param n number of elements 
      * @param pg the PlaceGroup to use to distibute the elements.
@@ -86,13 +86,13 @@ public class DistArray_Block_1[T] extends DistArray[T]{this.rank()==1} implement
 
     /**
      * Construct a n-element block distributed DistArray
-     * whose data is distrbuted over PlaceGroup.WORLD and 
+     * whose data is distributed over Place.places() and 
      * zero-initialized.
      *
      * @param n number of elements
      */
     public def this(n:Long){T haszero} {
-        this(n, PlaceGroup.WORLD, (Long)=>Zero.get[T]());
+        this(n, Place.places(), (Long)=>Zero.get[T]());
     }
 
 
@@ -199,6 +199,28 @@ public class DistArray_Block_1[T] extends DistArray[T]{this.rank()==1} implement
      */
     public final @Inline operator this(p:Point(1))=(v:T):T{self==v} = this(p(0)) = v;
 
+    /**
+     * Returns the specified rectangular patch of this Array as a Rail.
+     * 
+     * @param space the DenseIterationSpace representing the portion of this array to copy
+     * @throws ArrayIndexOutOfBoundsException if the specified region is not
+     *        contained in this array
+     */
+    public def getPatch(space:IterationSpace(1){rect}):Rail[T] {
+        val r = space as DenseIterationSpace_1;
+        if (CompilerFlags.checkBounds() && 
+          !(localIndices.min <= r.min && r.max <= localIndices.max)) {
+            throw new ArrayIndexOutOfBoundsException("patch to copy: " + r + " not contained in local indices: " + localIndices);
+        }
+
+        val min = localIndices.min(0);
+        val patch = Unsafe.allocRailUninitialized[T](r.size());
+        var patchIndex:Long = 0;
+        for ([i] in r) {
+            patch(patchIndex++) = raw(i - min);
+        }
+        return patch;
+    }
 
     private @Inline static def validateSize(n:Long):Long {
         if (n < 0) raiseNegativeArraySizeException();
@@ -210,26 +232,24 @@ public class DistArray_Block_1[T] extends DistArray[T]{this.rank()==1} implement
 // TODO:  Would prefer this to be a protected static nested class, but 
 //        when written that way we non-deterministically fail compilation.
 class LocalState_B1[S] extends LocalState[S] {
-    val globalIndices:DenseIterationSpace_1{self!=null};
-    val localIndices:DenseIterationSpace_1{self!=null};
+    val dist:Dist_Block_1{self!=null};
 
     def this(pg:PlaceGroup{self!=null}, data:Rail[S]{self!=null}, size:Long, 
-             gs:DenseIterationSpace_1{self!=null}, ls:DenseIterationSpace_1{self!=null}) {
+             d:Dist_Block_1{self!=null}) {
         super(pg, data, size);
-        globalIndices = gs;
-        localIndices = ls;
+        dist = d;
     }
 
     static def make[S](pg:PlaceGroup{self!=null}, n:Long, init:(Long)=>S):LocalState_B1[S] {
         val globalSpace = new DenseIterationSpace_1(0, n-1);
-        val localSpace = BlockingUtils.partitionBlock(globalSpace, pg.numPlaces(), pg.indexOf(here));
+        val dist = new Dist_Block_1(pg, globalSpace);
 
 	val data:Rail[S]{self!=null};
-	if (localSpace.isEmpty()) { 
+	if (dist.localIndices.isEmpty()) { 
             data = new Rail[S]();
         } else {            
-            val low = localSpace.min(0);
-            val hi = localSpace.max(0);
+            val low = dist.localIndices.min(0);
+            val hi = dist.localIndices.max(0);
             val dataSize = hi - low + 1;
             data = Unsafe.allocRailUninitialized[S](dataSize);
             for (i in low..hi) {
@@ -237,7 +257,7 @@ class LocalState_B1[S] extends LocalState[S] {
                 data(offset) = init(i);
             }
         }
-        return new LocalState_B1[S](pg, data, n, globalSpace, localSpace);
+        return new LocalState_B1[S](pg, data, n, dist);
     }
 }
 

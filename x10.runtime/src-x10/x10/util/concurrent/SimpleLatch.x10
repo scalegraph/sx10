@@ -1,4 +1,4 @@
- /*
+/*
  *  This file is part of the X10 project (http://x10-lang.org).
  *
  *  This file is licensed to You under the Eclipse Public License (EPL);
@@ -12,17 +12,19 @@
 package x10.util.concurrent;
 
 import x10.compiler.Pinned;
+import x10.xrx.Runtime;
+import x10.xrx.Worker;
 
 @Pinned public class SimpleLatch extends Lock {
     public def this() { super(); }
-
-    static type Worker = Runtime.Worker;
 
     private var worker:Worker = null;
     private var state:Boolean = false;
 
     // can only be called once
     public def await():void {
+        val activity = Runtime.activity();
+        if (activity.epoch < Runtime.epoch()) throw new DeadPlaceException("Cancelled");
         if (state) return;
         lock();
         if (state) {
@@ -32,6 +34,11 @@ import x10.compiler.Pinned;
         Runtime.increaseParallelism(); // likely to be blocked for a while
         worker = Runtime.worker();
         while (!state) {
+            if (activity.epoch < Runtime.epoch()) {
+                unlock();
+                release();
+                throw new DeadPlaceException("Cancelled");
+            }
             unlock();
             Worker.park();
             lock();

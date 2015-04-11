@@ -13,11 +13,11 @@ package x10.matrix.sparse;
 
 import x10.util.Pair;
 
-import x10.matrix.Debug;
+import x10.matrix.util.Debug;
 import x10.matrix.Matrix;
-import x10.matrix.MathTool;
+import x10.matrix.util.MathTool;
 import x10.matrix.DenseMatrix;
-import x10.matrix.VerifyTools;
+import x10.matrix.util.VerifyTool;
 import x10.matrix.builder.SparseCSCBuilder;
 
 public type SparseCSC(M:Long)=SparseCSC{self.M==M};
@@ -60,9 +60,8 @@ public class SparseCSC extends Matrix {
 	 *              the compressed array data storage
 	 */
 	public def this(m:Long, n:Long, cd:Compress2D):SparseCSC(m,n) {
-
 		super(m, n);
-		Debug.assure(n<=cd.size());
+		assert n <= cd.size();
 
 		ccdata = cd;
 		//No memory allocation for temp space
@@ -135,9 +134,9 @@ public class SparseCSC extends Matrix {
 	 *              to its surface index at the same position in ja.
 	 */
 	public static def make(m:Long,n:Long,	
-						   ia:Rail[Long],
-						   ja:Rail[Long],
-						   av:Rail[Double]{self.size==ja.size}
+						   ia:Rail[Long]{self!=null},
+						   ja:Rail[Long]{self!=null},
+						   av:Rail[Double]{self!=null,self.size==ja.size}
 						   ):SparseCSC{
 		val ccd = Compress2D.make(ia, ja, av);
 		return new SparseCSC(m, n, ccd);
@@ -563,7 +562,7 @@ public class SparseCSC extends Matrix {
 
 	public def getTempCol() : Rail[Double] {
 		if (tmpcol.size == 0L)
-			tmpcol = new Rail[Double](this.M, 0.0);
+			tmpcol = new Rail[Double](this.M);
 		else {
 			for (var i:Long=0; i<this.M; i++) tmpcol(i)=0.0;
 		}
@@ -572,7 +571,7 @@ public class SparseCSC extends Matrix {
 
 	public def getTempRow() : Rail[Double] {
 		if (tmprow.size == 0L) 
-			tmprow = new Rail[Double](this.N, 0.0);
+			tmprow = new Rail[Double](this.N);
 		else {
 			// reset the temp Rail
 			for (var i:Long=0; i<this.N; i++) tmprow(i) = 0.0;
@@ -581,7 +580,7 @@ public class SparseCSC extends Matrix {
 	}
 
 	public def getTemp(n:Long) : Rail[Double] {
-		if (n > tmpcol.size) tmpcol = new Rail[Double](n, 0.0);
+		if (n > tmpcol.size) tmpcol = new Rail[Double](n);
 		return tmpcol;
 	}
 
@@ -636,7 +635,7 @@ public class SparseCSC extends Matrix {
 								cnt:Long,        //Number of columns to copy
 								csc:SparseCSC   //Target sparse matrix
 								):Long {         //Return number of data copied
-		Debug.assure(cnt == csc.N&& this.M==csc.M);
+		assert (cnt == csc.N && this.M==csc.M);
 		csc.reset();
 		return ccdata.copyLinesToC2D(col, cnt, csc.ccdata);
 	}
@@ -646,7 +645,7 @@ public class SparseCSC extends Matrix {
 								cnt:Long,            //Number of rows
 								csc:SparseCSC       //Target sparse matrix CSC
 								):Long{              //Return number of data copied
-		Debug.assure(this.N==csc.N && cnt == csc.M);
+		assert (this.N==csc.N && cnt == csc.M);
 		csc.reset();
 	    return ccdata.copySectionToC2D(row, cnt, csc.ccdata);
 	}
@@ -734,8 +733,8 @@ public class SparseCSC extends Matrix {
 						   num_col:Long, 
 						   dm:DenseMatrix{self.M==this.M,self.N==num_col}
 						   ) : void {
-		Debug.assure(this.M<=dm.M&&num_col<=dm.N);
-		//
+		assert (this.M <= dm.M && num_col <= dm.N);
+
 		var dstoff:Long = 0;//offset
 		for (var y:Long=start_col; y<start_col+num_col; y++) {
 			ccdata.cLine(y).extract(dstoff, dm.d);
@@ -763,7 +762,7 @@ public class SparseCSC extends Matrix {
 						   num_row:Long, 
 						   dm:DenseMatrix{self.M==num_row,self.N==this.N}
 						   ):void {
-		Debug.assure(num_row<=dm.M&&this.N<=dm.N);
+		assert (num_row <= dm.M && this.N <= dm.N);
 		var colst:Long = 0;//offset
 		for (var y:Long=0; y<this.M; y++, colst+=dm.M) {
 			val cl = ccdata.getLine(y);
@@ -821,7 +820,7 @@ public class SparseCSC extends Matrix {
 	/**
 	 * Get the nonzero count from storage compress array.
 	 */
-	public def getNonZeroCount():Long = getStorage().count(); 
+	public def getNonZeroCount():Long = getStorage().count; 
 
 	/**
 	 * Get storage size.
@@ -845,7 +844,7 @@ public class SparseCSC extends Matrix {
 	 * This operation is expensive
 	 */	
 	public def toCSR(sm:SparseCSR(M,N)):void {
-		Debug.assure(this.M==sm.M&&this.N==sm.N);
+		assert (this.M == sm.M && this.N == sm.N);
 		var off:Long=0;
 		val tr = getTempRow();
 		for (var r:Long=0; r<this.M; r++) {
@@ -877,7 +876,7 @@ public class SparseCSC extends Matrix {
 		else if (that instanceof SparseCSC)
 			copyTo(that as SparseCSC);
 		else
-			Debug.exit("CopyTo: target matrix type not supported");	
+			throw new UnsupportedOperationException("copyTo: target matrix type not supported");	
 	}
 	
 	/**
@@ -932,7 +931,7 @@ public class SparseCSC extends Matrix {
 	 * The original (this) instance is not changed. 
 	 */
 	public def T():SparseCSC(N,M) {
-		val nspa = SparseCSC.make(N,M, this.getStorage().count());
+		val nspa = SparseCSC.make(N,M, this.getStorage().count);
 		T(nspa);
 		return nspa;
 	}
@@ -1004,15 +1003,11 @@ public class SparseCSC extends Matrix {
 		return x;
 	}
 
-
-	// Subtract operation
-
     /**
      * Return this = this - x, not supported
      */
-    public def cellSub(x:Matrix(M,N)) {
-		Debug.exit("Cell-wise subtraction does not support using SparseCSC as output matrix");
-		return this;
+    public def cellSub(x:Matrix(M,N)):Matrix(this) {
+		throw new UnsupportedOperationException("Cell-wise subtraction does not support using SparseCSC as output matrix");
     }
     
 	/**
@@ -1025,21 +1020,12 @@ public class SparseCSC extends Matrix {
 		SparseSubToDense.comp(x, this);
 		return x;
 	}
-	
-	public def cellSubFrom(dv:Double): SparseCSC(this) {
-		throw new UnsupportedOperationException("Cell-wise addition does not support using SparseCSC as output matrix");		
-	}
-	
-
-	// Cellwise multiplication
-
 
     /**
      * Return this = this &#42 x, not supported
      */
-    public def cellMult(x:Matrix(M,N)) {
-		Debug.exit("Cell-wise multiplication does not support using SparseCSC to store result");
-		return this;
+    public def cellMult(x:Matrix(M,N)):Matrix(this) {
+		throw new UnsupportedOperationException("Cell-wise multiplication does not support using SparseCSC to store result");
     }
 
 	/**
@@ -1058,16 +1044,11 @@ public class SparseCSC extends Matrix {
 		return x;
 	}
 
-
-
-	// Cellwise divison
-
     /**
      * Return this = this / x, not supported
      */
-    public def cellDiv(x:Matrix(M,N)) {
-		Debug.exit("Cell-wise division does not support using SparseCSC to store result");
-		return this;
+    public def cellDiv(x:Matrix(M,N)):Matrix(this) {
+		throw new UnsupportedOperationException("Cell-wise division does not support using SparseCSC to store result");
     }
 
 	/**
@@ -1089,34 +1070,25 @@ public class SparseCSC extends Matrix {
 			B:Matrix(A.N,this.N), 
 			plus:Boolean):SparseCSC(this) {
 		
-		Debug.exit("Not supported. Use SparseMultSparseToDense,"+
+		throw new UnsupportedOperationException("Not supported. Use SparseMultSparseToDense,"+
 				   "or SparseMultDenseToDense or DenseMultSparseToDense " +
 				   "corresponding multiplication method");
-		return this;
 	}
 	
-	/** 
-	 * Not support. 
-	 */
 	public def transMult(
 			A:Matrix{self.N==this.M}, 
 			B:Matrix(A.M,this.N), 
 			plus:Boolean):SparseCSC(this) {
 	
-	   Debug.exit("Not support");			 
-	   return this;
+	   throw new UnsupportedOperationException("SparseCSC.transMult not supported");			 
 	}
     
-	/** 
-	 * Not support.
-	 */
 	public def multTrans(
 			A:Matrix(this.M), 
 			B:Matrix(this.N, A.N), 
 			plus:Boolean):SparseCSC(this) {
 		
-       Debug.exit("Not support");			 
-	   return this;
+       throw new UnsupportedOperationException("SparseCSC.multTrans not supported");			 
     }
 
 	// Operator overloaded
@@ -1217,7 +1189,6 @@ public class SparseCSC extends Matrix {
 	}
 	
 	public operator this - (dv:Double)  :DenseMatrix(M,N) = this.toDense().cellSub(dv);
-	public operator (dv:Double) - this  :DenseMatrix(M,N) = this.toDense().cellSubFrom(dv);
 	
 
 	// Cellwise mult method
@@ -1295,10 +1266,10 @@ public class SparseCSC extends Matrix {
 	}
 
 	public def equals(m:SparseCSC(M,N)) = 
-		VerifyTools.testSame(this as Matrix(M,N), m as Matrix(M,N));
+		VerifyTool.testSame(this as Matrix(M,N), m as Matrix(M,N));
 
 	public def equals(m:SparseCSR(M,N)) = 
-		VerifyTools.testSame(this as Matrix(M,N), m as Matrix(M,N));
+		VerifyTool.testSame(this as Matrix(M,N), m as Matrix(M,N));
 
 	public def toString():String {
 		val outstr:String =  

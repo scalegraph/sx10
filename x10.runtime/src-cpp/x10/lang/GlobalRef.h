@@ -18,6 +18,8 @@
 
 namespace x10 {
     namespace lang { 
+        extern x10_long globalref_getInitialEpoch();
+
         template<class T> class GlobalRef  {
             
           public:
@@ -32,10 +34,11 @@ namespace x10 {
             ::x10aux::itable_entry* _getIBoxITables() { return _iboxitables; }
     
             x10_ulong value; 
+            x10_long epoch;
             ::x10aux::place location;	
 
-            GlobalRef(T obj = NULL) : value((size_t)(obj)), location(::x10aux::here) { }
-            GlobalRef(::x10aux::place p, x10_ulong obj = 0) : value(obj), location(p) { }
+            GlobalRef(T obj = NULL) : value((size_t)(obj)), epoch(globalref_getInitialEpoch()), location(::x10aux::here) { }
+            GlobalRef(::x10aux::place p, x10_ulong obj = 0) : value(obj), epoch(globalref_getInitialEpoch()), location(p) { }
 	
             static inline GlobalRef<T> _make(T obj) { return GlobalRef<T>(obj); }
 
@@ -49,7 +52,9 @@ namespace x10 {
             inline T __apply() { return (T)(size_t)value; }
 
             GlobalRef<T>* operator->() { return this; }
-        
+
+            void forget();
+            
             static void _serialize(GlobalRef<T> this_, ::x10aux::serialization_buffer& buf);
     
             static GlobalRef<T> _deserialize(::x10aux::deserialization_buffer& buf) {
@@ -137,13 +142,20 @@ namespace x10 {
 namespace x10 {
     namespace lang {
         extern void logGlobalReference(::x10::lang::Reference* obj);
+        extern void forgetGlobalReference(::x10::lang::Reference* obj);
     }
 }
 
+template<class T> void x10::lang::GlobalRef<T>::forget() {
+    if (NULL != __apply()) {
+        forgetGlobalReference(reinterpret_cast< ::x10::lang::Reference*>(__apply()));
+    }
+}
 
 template<class T> void x10::lang::GlobalRef<T>::_serialize(::x10::lang::GlobalRef<T> this_,
                                                            ::x10aux::serialization_buffer& buf) {
     buf.write(this_->location);
+    buf.write(this_->epoch);
     buf.write(this_->value);
     #if defined(X10_USE_BDWGC) || defined(X10_DEBUG_REFERENCE_LOGGER)
     if (this_->location == ::x10aux::here) {
@@ -154,6 +166,7 @@ template<class T> void x10::lang::GlobalRef<T>::_serialize(::x10::lang::GlobalRe
 
 template<class T> void x10::lang::GlobalRef<T>::_deserialize_body(::x10aux::deserialization_buffer& buf) {
     location = buf.read< ::x10aux::place>();
+    epoch = buf.read<x10_long>();
     value = buf.read<x10_ulong>();
 }
 

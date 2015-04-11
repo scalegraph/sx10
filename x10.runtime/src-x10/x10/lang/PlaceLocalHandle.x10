@@ -34,8 +34,8 @@ import x10.compiler.NativeClass;
 @NativeClass("java", "x10.core", "PlaceLocalHandle")
 public final struct PlaceLocalHandle[T]{T isref, T haszero} {
 
-    // Only to be used by make method and Runtime class
-    native def this();
+    // Only to be used by make method
+    private native def this();
 
     /**
      * @return the object mapped to the handle at the current place
@@ -61,7 +61,7 @@ public final struct PlaceLocalHandle[T]{T isref, T haszero} {
      * @return a PlaceLocalHandle that can be used to access the local objects.
      */
     public static def make[T](pg:PlaceGroup, init:()=>T){T isref, T haszero}:PlaceLocalHandle[T] {
-        val handle = at(Place.FIRST_PLACE) PlaceLocalHandle[T]();
+        val handle = PlaceLocalHandle[T]();
         finish for (p in pg) {
             at (p) async handle.set(init());
         }
@@ -83,8 +83,12 @@ public final struct PlaceLocalHandle[T]{T isref, T haszero} {
      */
     public static def make[T](pg:PlaceGroup, init:()=>T, 
                               ignoreIfDead:(Place)=>Boolean){T isref, T haszero}:PlaceLocalHandle[T] {
-        val handle:PlaceLocalHandle[T];
-        @Pragma(Pragma.FINISH_NONE) finish handle = at(Place.FIRST_PLACE) PlaceLocalHandle[T]();
+//<<<<<<< HEAD
+//        val handle:PlaceLocalHandle[T];
+//        @Pragma(Pragma.FINISH_NONE) finish handle = at(Place.FIRST_PLACE) PlaceLocalHandle[T]();
+//=======
+        val handle = PlaceLocalHandle[T]();
+//>>>>>>> git_svn_x10
         finish for (p in pg) {
             if (!p.isDead() || !ignoreIfDead(p)) {
                 at (p) async handle.set(init());
@@ -108,8 +112,12 @@ public final struct PlaceLocalHandle[T]{T isref, T haszero} {
      * @return a PlaceLocalHandle that can be used to access the local objects.
      */
     public static def make[T,U](pg:PlaceGroup, init_here:(Place)=>U, init_there:(U)=>T){T isref, T haszero}:PlaceLocalHandle[T] {
-        val handle:PlaceLocalHandle[T];
-        @Pragma(Pragma.FINISH_NONE) finish handle = at(Place.FIRST_PLACE) PlaceLocalHandle[T]();
+//<<<<<<< HEAD
+//        val handle:PlaceLocalHandle[T];
+//        @Pragma(Pragma.FINISH_NONE) finish handle = at(Place.FIRST_PLACE) PlaceLocalHandle[T]();
+//=======
+        val handle = PlaceLocalHandle[T]();
+//>>>>>>> git_svn_x10
         finish for (p in pg) {
             val v:U = init_here(p);
             at (p) async handle.set(init_there(v));
@@ -159,7 +167,7 @@ public final struct PlaceLocalHandle[T]{T isref, T haszero} {
      */
     public static def make[T,U](pg:PlaceGroup, init_here:(Place)=>U, init_there:(U)=>T,
                                 ignoreIfDead:(Place)=>Boolean){T isref, T haszero}:PlaceLocalHandle[T] {
-        val handle = at(Place.FIRST_PLACE) PlaceLocalHandle[T]();
+        val handle = PlaceLocalHandle[T]();
         finish for (p in pg) {
             val v:U = init_here(p);
             if (!p.isDead() || !ignoreIfDead(p)) {
@@ -188,7 +196,7 @@ public final struct PlaceLocalHandle[T]{T isref, T haszero} {
      * @return a PlaceLocalHandle that can be used to access the local objects.
      */
     public static def makeFlat[T](pg:PlaceGroup, init:()=>T){T isref, T haszero}:PlaceLocalHandle[T] {
-        val handle = at(Place.FIRST_PLACE) PlaceLocalHandle[T]();
+        val handle = PlaceLocalHandle[T]();
         pg.broadcastFlat(()=>{ handle.set(init()); });
         return handle;
     }
@@ -211,8 +219,12 @@ public final struct PlaceLocalHandle[T]{T isref, T haszero} {
      */
     public static def makeFlat[T](pg:PlaceGroup, init:()=>T, 
                                   ignoreIfDead:(Place)=>Boolean){T isref, T haszero}:PlaceLocalHandle[T] {
-        val handle:PlaceLocalHandle[T];
-        @Pragma(Pragma.FINISH_NONE) finish handle = at(Place.FIRST_PLACE) PlaceLocalHandle[T]();
+//<<<<<<< HEAD
+//        val handle:PlaceLocalHandle[T];
+//        @Pragma(Pragma.FINISH_NONE) finish handle = at(Place.FIRST_PLACE) PlaceLocalHandle[T]();
+//=======
+        val handle = PlaceLocalHandle[T]();
+//>>>>>>> git_svn_x10
         pg.broadcastFlat(()=>{ handle.set(init()); }, ignoreIfDead);
         return handle;
     }
@@ -235,8 +247,12 @@ public final struct PlaceLocalHandle[T]{T isref, T haszero} {
      * @return a PlaceLocalHandle that can be used to access the local objects.
      */
     public static def makeFlat[T,U](pg:PlaceGroup, init_here:(Place)=>U, init_there:(U)=>T){T isref, T haszero}:PlaceLocalHandle[T] {
-        val handle:PlaceLocalHandle[T];
-        @Pragma(Pragma.FINISH_NONE) finish handle = at(Place.FIRST_PLACE) PlaceLocalHandle[T]();
+//<<<<<<< HEAD
+//        val handle:PlaceLocalHandle[T];
+//        @Pragma(Pragma.FINISH_NONE) finish handle = at(Place.FIRST_PLACE) PlaceLocalHandle[T]();
+//=======
+        val handle = PlaceLocalHandle[T]();
+//>>>>>>> git_svn_x10
         @Pragma(Pragma.FINISH_SPMD) finish for (p in pg) {
             val v:U = init_here(p);
             at (p) async handle.set(init_there(v));
@@ -277,8 +293,12 @@ public final struct PlaceLocalHandle[T]{T isref, T haszero} {
      */
     public static def makeFlat[T,U](pg:PlaceGroup, init_here:(Place)=>U, init_there:(U)=>T,
                                     ignoreIfDead:(Place)=>Boolean){T isref, T haszero}:PlaceLocalHandle[T] {
-        val handle:PlaceLocalHandle[T];
-        @Pragma(Pragma.FINISH_NONE) finish handle = at(Place.FIRST_PLACE) PlaceLocalHandle[T]();
+//<<<<<<< HEAD
+//        val handle:PlaceLocalHandle[T];
+//        @Pragma(Pragma.FINISH_NONE) finish handle = at(Place.FIRST_PLACE) PlaceLocalHandle[T]();
+//=======
+        val handle = PlaceLocalHandle[T]();
+//>>>>>>> git_svn_x10
         @Pragma(Pragma.FINISH_SPMD) finish for (p in pg) {
             val v:U = init_here(p);
             if (!p.isDead() || !ignoreIfDead(p)) {

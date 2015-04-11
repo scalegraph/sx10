@@ -31,7 +31,7 @@ while [ -n "$1" ]; do
         -t|-time) time="time ";;
         -classpath|-cp) shift; extra_cp="$1";;
         -x10lib) shift; propfile="$(cd $(dirname "$1") && pwd)/$(basename "$1")"
-                 [[ "$UNAME" = CYGWIN* ]] && propfile="$(cygpath -am "$propfile")"
+                 [ -n "$IS_CYGWIN" ] && propfile="$(cygpath -am "$propfile")"
                  args="$args -x10lib '$propfile'";;
         -profile) profile="-Xrunhprof:cpu=samples";;
         -config) shift; config="$1.cfg";;
@@ -106,6 +106,7 @@ fi
 
 classpath="${classpath}${LIB_DIR}${FILE_SEP}x10c.jar${PATH_SEP}${LIB_DIR}${FILE_SEP}${LPG_JAR}${PATH_SEP}${WALA_JARS}"
 classpath="${classpath}${PATH_SEP}${LIB_DIR}${FILE_SEP}${MATH_JAR}${PATH_SEP}${LIB_DIR}${FILE_SEP}${LOG_JAR}"
+classpath="${classpath}${PATH_SEP}${LIB_DIR}${FILE_SEP}${HAZELCAST_JAR}"
 
 # Set flags to flatten expressions if we've been asked to do so.
 [ "$CROSS_COMPILE_FX10" = "true" ] && flatexprs="true"
@@ -129,7 +130,7 @@ export X10RT_IMPL=$x10rt_impl
 
 [ -z "$MAIN" ] && MAIN="polyglot.main.Main"
 
-command="\"$JAVA\" -Xmx1024m -Dfile.encoding=UTF-8 -Dx10.dist=\"$TOP\" $config $profile -classpath \"$classpath\" ${java_args} $MAIN -extclass $ext $args"
+command="\"$JAVA\" -Xmx1024m -Xss1m -Dfile.encoding=UTF-8 -Dx10.dist=\"$TOP\" $config $profile -classpath \"$classpath\" ${java_args} $MAIN -extclass $ext $args"
 
 [ -n "$verbose" ] && echo "$command"
 

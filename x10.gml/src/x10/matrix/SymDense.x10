@@ -11,11 +11,10 @@
 
 package x10.matrix;
 
-import x10.util.Random;
-import x10.util.Timer;
 import x10.util.StringBuilder;
 
 import x10.matrix.blas.DenseMatrixBLAS;
+import x10.matrix.util.RandTool;
 
 public type SymDense(m:Long, n:Long)=SymDense{m==n, self.M==m, self.N==n};
 public type SymDense(m:Long)=SymDense{self.M==m,self.N==m};
@@ -23,8 +22,8 @@ public type SymDense(C:SymDense)=SymDense{self==C};
 public type SymDense(C:Matrix)=SymDense{self==C};
 
 /**
- * The symmetric dense matrix is derived from dense matrix. It inherits the memory layout of the
- * dense matrix instance.  Therefore, it complies with
+ * The symmetric dense matrix is derived from dense matrix. It inherits the 
+ * memory layout of the dense matrix instance.  Therefore, it complies with
  * BLAS symmetric matrix. Only the lower part of matrix data is referenced.
  * <p>
  * Result of cell-wise operations on symmetric matrix is stored in dense instances.
@@ -33,7 +32,7 @@ public type SymDense(C:Matrix)=SymDense{self==C};
  */
 public class SymDense extends DenseMatrix{self.M==self.N} {
 	
-	public def this(n:Long, x:Rail[Double]) : SymDense(n){
+	public def this(n:Long, x:Rail[Double]{self!=null}) : SymDense(n){
 		super(n, n, x);
 	}
 	
@@ -43,13 +42,13 @@ public class SymDense extends DenseMatrix{self.M==self.N} {
 	}
 
 	public def clone():SymDense(M){
-		val nd = new Rail[Double](this.d) as Rail[Double];
+		val nd = new Rail[Double](this.d);
 		val nm = new SymDense(M, nd);
 		return nm as SymDense(M);
 	}
 	
 	public  def alloc(m:Long, n:Long):SymDense(m,n) {
-		Debug.assure(m==n);
+		assert m==n;
 		val x = new Rail[Double](m*m);
 		val nm = new SymDense(m, x);
 		return nm as SymDense(m,n);
@@ -81,7 +80,7 @@ public class SymDense extends DenseMatrix{self.M==self.N} {
 		} else if (likeMe(mat)) {
 			copyTo(mat as SymDense(N));
 		} else {
-			Debug.exit("CopyTo: Target matrix type is not compatible");
+			throw new UnsupportedOperationException("CopyTo: Target matrix type is not compatible");
 		}
 	}
 
@@ -175,24 +174,6 @@ public class SymDense extends DenseMatrix{self.M==self.N} {
 		mirrorToUpper(this);
 		return this;
 	}
-	
-
-	// Data access and set
-
-	public  operator this(x:Long, y:Long):Double {
-		if (y < x)
-			return this.d(y*M+x);
-		else
-			return this.d(x*M+y);
-	}
-	
-	public  operator this(x:Long,y:Long) = (v:Double):Double {
-		if (y < x) 
-			this.d(y*M +x) = v;
-		else
-			this.d(x*M +y) = v;
-		return v;
-	}	
 
 	// Transpose
 
@@ -258,9 +239,6 @@ public class SymDense extends DenseMatrix{self.M==self.N} {
 	// }
 	public def cellSub(v:Double):SymDense(this) = 
 		super.cellSub(v) as SymDense(this);
-
-	public def cellSubFrom(v:Double):SymDense(this) =
-		super.cellSubFrom(v) as SymDense(this);
 	
 	public def cellSub(x:SymDense(M,N)):SymDense(this) =
 		super.cellSub(x as DenseMatrix(M,N)) as SymDense(this);
@@ -291,8 +269,6 @@ public class SymDense extends DenseMatrix{self.M==self.N} {
 	// 			this.d(i) *= v;
 	// 	return this;
 	// }
-	public def cellMult(v:Double):SymDense(this) =
-		super.cellMult(v) as SymDense(this);
 	
 	public def cellMult(x:SymDense(M,N)):SymDense(this) =
 		super.cellMult(x as DenseMatrix(M,N)) as SymDense(this);
@@ -360,7 +336,6 @@ public class SymDense extends DenseMatrix{self.M==self.N} {
 	public operator (v:Double) + this = (this + v) as SymDense(M,N);
 
 	public operator this - (v:Double) = this.clone().cellSub(v)       as SymDense(M,N);
-	public operator (v:Double) - this = this.clone().cellSubFrom(v)   as SymDense(M,N);
 	public operator this / (v:Double) = this.clone().cellDiv(v)       as SymDense(M,N);
 	public operator (v:Double) / this = this.clone().cellDivBy(v)     as SymDense(M,N);
 	public operator this * (alpha:Double) = this.clone().scale(alpha) as SymDense(M,N);
@@ -392,13 +367,17 @@ public class SymDense extends DenseMatrix{self.M==self.N} {
 	 */
 	public operator this % (that:DenseMatrix(N)):DenseMatrix(M,that.N) {
 		val ret = DenseMatrix.make(this.M, that.N);
-		DenseMatrixBLAS.comp(this, that, ret, false);
+		val alpha = 1.0;
+		val beta = 0.0;
+		DenseMatrixBLAS.comp(alpha, this, that, beta, ret);
 		return ret;
 	}
 	
 	public operator (that:DenseMatrix{self.N==this.M}) % this :DenseMatrix(that.M,N) {
 		val ret = DenseMatrix.make(that.M, this.N);
-		DenseMatrixBLAS.comp(that, this, ret, false);
+		val alpha = 1.0;
+		val beta = 0.0;
+		DenseMatrixBLAS.comp(alpha, that, this, beta, ret);
 		return ret;
 	}
 

@@ -19,7 +19,7 @@
 
 namespace x10aux {
     // a specific hashCode method is needed for each concrete instantiation
-    x10_uint simple_hash_code(int id);
+    x10_uint simple_hash_code(x10_long id);
     x10_uint simple_hash_code(const void* id);
 
     template<typename Key, typename T>class simple_hashmap {
@@ -61,7 +61,6 @@ namespace x10aux {
         }
 
         T put(Key id, const T data) {
-            assert(NULL == get(id));
             int bucket = simple_hash_code(id) % NUM_BUCKETS;
             // First, search to see if we are replacing an existing key
             Bucket *cur = _buckets[bucket];

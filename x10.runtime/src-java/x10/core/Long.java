@@ -25,7 +25,6 @@ import x10.serialization.X10JavaSerializer;
  * an Long value to type Any, parameter type T or superinterfaces such
  * as Comparable<Long>.
  */
-@SuppressWarnings("serial")
 final public class Long extends java.lang.Number implements StructI, java.lang.Comparable<Long>,
 //for X10PrettyPrinterVisitor.exposeSpecialDispatcherThroughSpecialInterface
 //    x10.lang.Arithmetic<Long>, x10.lang.Bitwise<Long>, x10.util.Ordered<Long>
@@ -171,6 +170,10 @@ final public class Long extends java.lang.Number implements StructI, java.lang.C
     @Override
     public double doubleValue() {
         return (double)$value;
+    }
+
+    private Object writeReplace() throws java.io.ObjectStreamException {
+        return new x10.serialization.SerializationProxy(this);
     }
 
     public void $_serialize(X10JavaSerializer $serializer) throws IOException {

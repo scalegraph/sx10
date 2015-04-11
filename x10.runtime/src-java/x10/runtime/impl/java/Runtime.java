@@ -12,21 +12,20 @@
 package x10.runtime.impl.java;
 
 import java.lang.reflect.InvocationTargetException;
-import java.nio.ByteBuffer;
 import java.util.Map;
 
 import x10.core.fun.VoidFun_0_0;
 import x10.io.Reader;
 import x10.io.Writer;
+import x10.lang.DeadPlaceException;
+import x10.xrx.FinishState;
 import x10.lang.Place;
-import x10.lang.FinishState;
 import x10.rtt.RuntimeType;
 import x10.rtt.Type;
 import x10.rtt.Types;
-import x10.serialization.X10JavaDeserializer;
-import x10.serialization.X10JavaSerializable;
 import x10.serialization.X10JavaSerializer;
 import x10.x10rt.SocketTransport;
+import x10.x10rt.SocketTransport.RETURNCODE;
 import x10.x10rt.X10RT;
 
 public abstract class Runtime implements VoidFun_0_0 {
@@ -39,7 +38,7 @@ public abstract class Runtime implements VoidFun_0_0 {
         return null;
     }
 
-    protected x10.core.Rail<String> aargs;
+    protected String[] args;
 
     // not used
 //    // constructor just for allocation
@@ -55,10 +54,11 @@ public abstract class Runtime implements VoidFun_0_0 {
     public Runtime() {}
 
     /**
-     * Body of main java thread
-     * (only called in non-library mode)
+     * Default start method used by the X10 compiler to run the X10 main.
+     * (The current thread is joined the X10 thread pool.)
      */
     protected void start(final String[] args) {
+        this.args = args;
 
         // load libraries
         String property = System.getProperty("x10.LOAD");
@@ -74,34 +74,10 @@ public abstract class Runtime implements VoidFun_0_0 {
             throw new InternalError("Failed to initialize X10RT.");
         }
 
-        x10.lang.Runtime.get$staticMonitor();
-        x10.lang.Runtime.get$STRICT_FINISH();
-        x10.lang.Runtime.get$NTHREADS();
-        x10.lang.Runtime.get$MAX_THREADS();
-        x10.lang.Runtime.get$STATIC_THREADS();
-        x10.lang.Runtime.get$WARN_ON_THREAD_CREATION();
-        x10.lang.Runtime.get$BUSY_WAITING();
-
-        java.lang.Runtime.getRuntime().addShutdownHook(new java.lang.Thread() {
-            public void run() {
-                System.out.flush();
-            }
-        });
-
-        // x10rt-level registration of MessageHandlers
-        X10RT.registerHandlers();
-        X10RT.registration_complete();
-
-        // build up Rail[String] for args
-        aargs = new x10.core.Rail<String>(Types.STRING, (args == null) ? 0 : args.length);
-        if (args != null) {
-            for (int i = 0; i < args.length; i++) {
-                aargs.$set__1x10$lang$Rail$$T$G(i, args[i]);
-            }
-        }
+        commonInit();
 
         // start and join main x10 thread in place 0
-        x10.lang.Runtime.Worker worker = new x10.lang.Runtime.Worker(0);
+        x10.xrx.Worker worker = new x10.xrx.Worker(0);
         worker.body = this;
         worker.start();
         try {
@@ -115,6 +91,90 @@ public abstract class Runtime implements VoidFun_0_0 {
         System.exit(exitCode);
     }
 
+    /**
+     * Initializes X10-level statics that need to be there before we boot the X10 runtime.
+     */
+    public static void commonInit() {
+        x10.xrx.Runtime.get$staticMonitor();
+        x10.xrx.Runtime.get$STRICT_FINISH();
+        x10.xrx.Runtime.get$NTHREADS();
+        x10.xrx.Runtime.get$MAX_THREADS();
+        x10.xrx.Runtime.get$STATIC_THREADS();
+        x10.xrx.Runtime.get$WARN_ON_THREAD_CREATION();
+        x10.xrx.Runtime.get$BUSY_WAITING();
+        if (X10RT.initialEpoch != -1) {
+            // initialize epoch to match other places
+            x10.xrx.Runtime.epoch$O(); 
+            x10.xrx.Runtime.get$pool().workers.epoch = X10RT.initialEpoch;
+        }
+        x10.util.Team.get$WORLD();
+
+        java.lang.Runtime.getRuntime().addShutdownHook(new java.lang.Thread() {
+            public void run() {
+                System.out.flush();
+            }
+        });
+    }
+    
+    /**
+     * Alternate start method used by the X10 compiler to run the X10 runtime as an executor service
+     * and use the main method as a single-threaded client for this service.
+     * (The current thread is not joined the X10 thread pool.)
+     */
+    protected void startExecutor(final String[] args) {
+        startEngine();
+
+        // build up Rail[String] for args
+        final x10.core.Rail<String> aargs = new x10.core.Rail<String>(Types.STRING, (args == null) ? 0 : args.length);
+        if (args != null) {
+            for (int i = 0; i < args.length; i++) {
+                aargs.$set__1x10$lang$Rail$$T$G(i, args[i]);
+            }
+        }
+
+        try {
+            if (X10RT.hereId() == 0) {
+                new $Closure$Main(this, aargs).$apply();
+                x10.xrx.Runtime.terminateAllJob();
+            }
+            x10.xrx.Runtime.join();
+        } catch (java.lang.Throwable t) {
+            // XTENLANG=2686: Unwrap UnknownJavaThrowable to get the original Throwable object
+            if (t instanceof x10.lang.WrappedThrowable) t = t.getCause();
+            t.printStackTrace();
+            setExitCode(1);
+        }
+        X10RT.X10_EXITING_NORMALLY = true;
+        System.exit(exitCode);
+    }
+
+    /**
+     * Starts the X10 runtime engine as a thread pool separate from the calling thread.
+     */
+    public static void startEngine() {
+        // load libraries
+        String property = System.getProperty("x10.LOAD");
+        if (null != property) {
+            String[] libs = property.split(":");
+            for (int i = libs.length - 1; i >= 0; i--)
+                System.loadLibrary(libs[i]);
+        }
+
+        boolean initialized = X10RT.init(); // TODO retry?
+        if (!initialized) {
+            System.err.println("Failed to initialize X10RT.");
+            throw new InternalError("Failed to initialize X10RT.");
+        }
+
+        commonInit();
+
+        x10.xrx.Runtime.start();
+
+        // x10rt-level registration of MessageHandlers
+        X10RT.registerHandlers();
+        X10RT.registration_complete();
+    }
+    
     // body of main activity
     static class $Closure$Main implements VoidFun_0_0 {
         private final Runtime out$;
@@ -154,10 +214,22 @@ public abstract class Runtime implements VoidFun_0_0 {
     }
 
     public void $apply() {
+        // x10rt-level registration of MessageHandlers
+        X10RT.registerHandlers();
+        X10RT.registration_complete();
+
+        // build up Rail[String] for args
+        final x10.core.Rail<String> aargs = new x10.core.Rail<String>(Types.STRING, (args == null) ? 0 : args.length);
+        if (args != null) {
+	        for (int i = 0; i < args.length; i++) {
+	            aargs.$set__1x10$lang$Rail$$T$G(i, args[i]);
+	        }
+        }
+
         // execute root x10 activity
         try {
             // start xrx
-            x10.lang.Runtime.start(
+            x10.xrx.Runtime.start(
             // body of main activity
                                    new $Closure$Main(this, aargs));
         } catch (java.lang.Throwable t) {
@@ -187,15 +259,21 @@ public abstract class Runtime implements VoidFun_0_0 {
     }
 
     /**
-     * The number of places in the system
-     */
-    public static int MAX_PLACES = 0; // updated in initialization
-    
-    /**
      * Disable Assertions
      */
     public static final boolean DISABLE_ASSERTIONS = Boolean.getBoolean("x10.DISABLE_ASSERTIONS");
+    
+    public static boolean sysPropOrElse(String s, boolean b) {
+        if (System.getProperty(s) == null) {
+            return b;
+        } else {
+            return Boolean.getBoolean(s);
+        }
+    }
 
+    public static int sysPropOrElse(String s, int i) {
+        return Integer.getInteger(s, i);
+    }
 
     /**
      * Trace serialization
@@ -232,8 +310,9 @@ public abstract class Runtime implements VoidFun_0_0 {
         System.out.println(ANSI_BOLD + X10RT.here() + ": " + col + type + ": " + ANSI_RESET + message);
     }
 
-    public static void runAsyncAt(int place, VoidFun_0_0 body, FinishState finishState, 
-                                  x10.lang.Runtime.Profile prof, VoidFun_0_0 preSendAction) {
+    // TODO: add epoch to x10rt transports
+    public static void runAsyncAt(long epoch, int place, VoidFun_0_0 body, FinishState finishState, 
+                                  x10.xrx.Runtime.Profile prof, VoidFun_0_0 preSendAction) {
 		// TODO: bherta - all of this serialization needs to be reworked to write directly to the network (when possible), 
 		// skipping the intermediate buffers contained within the X10JavaSerializer class.
         try {
@@ -244,7 +323,8 @@ public abstract class Runtime implements VoidFun_0_0 {
             X10JavaSerializer serializer = new X10JavaSerializer();
             
             serializer.write(finishState);
-            serializer.write(Place.place(X10RT.here()));
+            serializer.write(X10RT.here());
+            if (X10RT.javaSockets != null) serializer.write(epoch);
             long before_bytes = serializer.dataBytesWritten();
             serializer.write(body);
             long ser_bytes = serializer.dataBytesWritten() - before_bytes;
@@ -264,11 +344,13 @@ public abstract class Runtime implements VoidFun_0_0 {
             }
             
             start = prof!=null ? System.nanoTime() : 0;
-            // TODO: these methods return an error code if the communication fails.  Use it.
             if (X10RT.javaSockets != null) {
-                X10RT.javaSockets.sendMessage(place, SocketTransport.CALLBACKID.simpleAsyncMessageID.ordinal(), new ByteBuffer[]{ByteBuffer.wrap(serializer.getDataBytes())});
+            	if (X10RT.javaSockets.sendMessage(place, SocketTransport.CALLBACKID.simpleAsyncMessageID.ordinal(), serializer.getDataBytes()) != RETURNCODE.X10RT_ERR_OK.ordinal()) {
+            		if (x10.xrx.Runtime.get$RESILIENT_MODE() == 0) System.err.println("Unable to send an async to place "+place);
+            		throw new DeadPlaceException(new Place(place), "Unable to send an async to "+place);
+            	}
             } else {
-                x10.x10rt.MessageHandlers.runSimpleAsyncAtSend(place, serializer.getDataBytes());
+            	x10.x10rt.MessageHandlers.runSimpleAsyncAtSend(place, serializer.getDataBytes());
             }
             if (prof!=null) {
                 prof.communicationNanos += System.nanoTime() - start;
@@ -286,11 +368,11 @@ public abstract class Runtime implements VoidFun_0_0 {
     /**
      * Synchronously executes body at place(id)
      */
-    public static void runClosureAt(int place, VoidFun_0_0 body, x10.lang.Runtime.Profile prof, VoidFun_0_0 preSendAction) {
+    public static void runClosureAt(int place, VoidFun_0_0 body, x10.xrx.Runtime.Profile prof, VoidFun_0_0 preSendAction) {
         runAt(place, body, prof, preSendAction);
     }
 
-	public static void runAt(int place, VoidFun_0_0 body, x10.lang.Runtime.Profile prof, VoidFun_0_0 preSendAction) {
+	public static void runAt(int place, VoidFun_0_0 body, x10.xrx.Runtime.Profile prof, VoidFun_0_0 preSendAction) {
 		try {
 			// TODO: bherta - all of this serialization needs to be reworked to write directly to the network (when possible), 
 			// skipping the intermediate buffers contained within the X10JavaSerializer class.
@@ -316,7 +398,10 @@ public abstract class Runtime implements VoidFun_0_0 {
 
 			start = prof!=null ? System.nanoTime() : 0;
 			if (X10RT.javaSockets != null) {
-			    X10RT.javaSockets.sendMessage(place, SocketTransport.CALLBACKID.closureMessageID.ordinal(), new ByteBuffer[]{ByteBuffer.wrap(serializer.getDataBytes())});
+				if (X10RT.javaSockets.sendMessage(place, SocketTransport.CALLBACKID.closureMessageID.ordinal(), serializer.getDataBytes()) != RETURNCODE.X10RT_ERR_OK.ordinal()) {
+					if (x10.xrx.Runtime.get$RESILIENT_MODE() == 0) System.err.println("Unable to send a closure to place "+place);
+            		throw new DeadPlaceException(new Place(place), "Unable to send a closure to "+place);
+				}
 			} else {
 			    x10.x10rt.MessageHandlers.runClosureAtSend(place, serializer.getDataBytes());
 			}
@@ -326,9 +411,9 @@ public abstract class Runtime implements VoidFun_0_0 {
             if (TRACE_SER_DETAIL) {
                 System.out.println("Message sent for runAt " + body.getClass());
             }
-		} catch (java.io.IOException e) {
+		} catch (Throwable e) {
+		    System.out.println("WARNING: Ignoring uncaught exception in sending of @Immediate async.");
 			e.printStackTrace();
-			throw new x10.lang.WrappedThrowable(e);
 		}
 	}
 
@@ -336,7 +421,7 @@ public abstract class Runtime implements VoidFun_0_0 {
      * Return true if place(id) is local to this node
      */
     public static boolean local(int id) {
-        int hereId = X10RT.here();
+        int hereId = X10RT.hereId();
         return (hereId == id);
     }
 
@@ -368,7 +453,7 @@ public abstract class Runtime implements VoidFun_0_0 {
         Map<String, String> env = System.getenv();
         x10.util.HashMap<String, String> map = new x10.util.HashMap<String, String>((java.lang.System[]) null, Types.STRING, Types.STRING).x10$util$HashMap$$init$S();
         for (Map.Entry<String, String> e : env.entrySet()) {
-            map.put__0x10$util$HashMap$$K__1x10$util$HashMap$$V(e.getKey(), e.getValue());
+            map.put__0x10$util$HashMap$$K__1x10$util$HashMap$$V$G(e.getKey(), e.getValue());
         }
         return map;
     }
@@ -458,6 +543,7 @@ public abstract class Runtime implements VoidFun_0_0 {
     /**
      * Enable OSGI framework support.
      */
-    public static final boolean OSGI = Boolean.getBoolean("X10_OSGI");
+    public static enum OSGI_MODES {DISABLED, EXACTVERSION, LATESTVERSION};
+    public static final OSGI_MODES OSGI = OSGI_MODES.valueOf(System.getProperty("X10_OSGI", "DISABLED"));
 
 }

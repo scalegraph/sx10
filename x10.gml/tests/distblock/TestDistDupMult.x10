@@ -9,6 +9,8 @@
  *  (C) Copyright IBM Corporation 2006-2014.
  */
 
+import harness.x10Test;
+
 import x10.compiler.Ifndef;
 
 import x10.matrix.Matrix;
@@ -21,14 +23,7 @@ import x10.matrix.distblock.DistBlockMatrix;
 import x10.matrix.distblock.DupBlockMatrix;
 import x10.matrix.distblock.DistDupMult;
 
-public class TestDistDupMult {
-    public static def main(args:Rail[String]) {
-		val testcase = new RunDistDupMult(args);
-		testcase.run();
-	}
-}
-
-class RunDistDupMult {
+public class TestDistDupMult extends x10Test {
 	public val M:Long;
 	public val K:Long;
 	public val N:Long;
@@ -40,7 +35,6 @@ class RunDistDupMult {
 	val gA:Grid, gTransA:Grid;
 	val gB:Grid, gTransB:Grid;
 	val gC:Grid;
-	//val A:BlockMatrix(M,K), B:BlockMatrix(K,N), C:BlockMatrix(M,N);
 	val dA:DistMap, dTransA:DistMap;
 	val dC:DistMap, dTransC:DistMap;
 	
@@ -54,20 +48,20 @@ class RunDistDupMult {
 		nzd =  args.size > 6 ?Double.parse(args(6)):0.99;
 		
 		gA = new Grid(M, K, bM, bK);
-		dA = (new DistGrid(gA, Place.MAX_PLACES, 1)).dmap;		
+		dA = (new DistGrid(gA, Place.numPlaces(), 1)).dmap;		
 
 		gTransA = new Grid(K, M, bK, bM);
-		dTransA = (new DistGrid(gTransA, 1, Place.MAX_PLACES)).dmap;
+		dTransA = (new DistGrid(gTransA, 1, Place.numPlaces())).dmap;
 		
 		gB = new Grid(K, N, bK, bN);
 		gTransB = new Grid(N, K, bN, bK);
 		
 		gC = new Grid(M, N, bM, bN);
-		dC = (new DistGrid(gC, Place.MAX_PLACES, 1)).dmap;
+		dC = (new DistGrid(gC, Place.numPlaces(), 1)).dmap;
 		dTransC = DistGrid.makeHorizontal(gC).dmap;
 	}
 
-    public def run(): void {
+    public def run():Boolean {
 		Console.OUT.println("Starting Dist-Dup block matrix multiply tests");
 		Console.OUT.printf("Matrix (%d,%d) mult (%d,%d) ", M, K, K, N);
 		Console.OUT.printf(" partitioned in (%dx%d) and (%dx%d) blocks, nzd:%f\n", 
@@ -79,10 +73,7 @@ class RunDistDupMult {
  		ret &= (ret && testTransMult());
  		ret &= (ret && testMultTrans());
     }
-		if (ret)
-			Console.OUT.println("Dist-Dup matrix multiply test passed!");
-		else
-			Console.OUT.println("----------------Dist-Dup block matrix multiply test failed!----------------");
+		return ret;
 	}
 
 	public def testMult():Boolean{
@@ -91,7 +82,7 @@ class RunDistDupMult {
 		//This is not best way to create dist block matrix. 
 		//Partition gA and distribution dA are remotely captured to all places
 		val A = DistBlockMatrix.makeDense(gA, dA) as DistBlockMatrix(M,K);
-		//val A = DistBlockMatrix.make(M, K, bM, bK, 1, Place.MAX_PLACES);
+		//val A = DistBlockMatrix.make(M, K, bM, bK, 1, Place.numPlaces());
 
 		//val B = DistBlockMatrix.makeSparse(gB, dB, nzd) as DistBlockMatrix(K,N);
 		val B = DupBlockMatrix.makeDense(gB) as DupBlockMatrix(K,N);
@@ -109,9 +100,7 @@ class RunDistDupMult {
 		
 		ret &= dC.equals(C as Matrix(dC.M,dC.N));
 
-		if (ret)
-			Console.OUT.println("Dist-Dup Block matrix multiply test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Dist-Dup Block matrix multiply test failed!--------");
 		return ret;
 	}
@@ -120,9 +109,9 @@ class RunDistDupMult {
 		var ret:Boolean = true;
 		Console.OUT.println("Starting Dist-Dup block matrix trans-multiply test (transpose 1st operand)");
 		
-		val A = DistBlockMatrix.makeDense(K, M, bK, bM, 1, Place.MAX_PLACES);
+		val A = DistBlockMatrix.makeDense(K, M, bK, bM, 1, Place.numPlaces());
 		val B = DupBlockMatrix.makeDense(K, N, bK, bN);
-		val C = DistBlockMatrix.makeDense(M, N, bM, bN, Place.MAX_PLACES, 1) as DistBlockMatrix(M,N);
+		val C = DistBlockMatrix.makeDense(M, N, bM, bN, Place.numPlaces(), 1) as DistBlockMatrix(M,N);
 		
 		A.init((r:Long,c:Long)=>1.0*(r+c));
 		B.init((r:Long,c:Long)=>1.0*(r+c));
@@ -135,9 +124,7 @@ class RunDistDupMult {
 		
 		ret &= dC.equals(C as Matrix(dC.M,dC.N));
 
-		if (ret)
-			Console.OUT.println("Dist-Dup Block matrix trans-multiply test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Dist-Dup Block matrix trans-multiply test failed!--------");
 		return ret;
 	}
@@ -161,10 +148,12 @@ class RunDistDupMult {
 		
 		ret &= dC.equals(C as Matrix(dC.M,dC.N));
 
-		if (ret)
-			Console.OUT.println("Dist-Dup block matrix multiply-transpose test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Dist-Dup block matrix multiply-transpose test failed!--------");
 		return ret;
+	}
+
+    public static def main(args:Rail[String]) {
+		new TestDistDupMult(args).execute();
 	}
 } 

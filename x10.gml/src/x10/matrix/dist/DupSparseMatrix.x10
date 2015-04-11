@@ -15,7 +15,6 @@ import x10.regionarray.Dist;
 import x10.regionarray.DistArray;
 import x10.util.Timer;
 
-import x10.matrix.Debug;
 import x10.matrix.Matrix;
 import x10.matrix.DenseMatrix;
 import x10.matrix.comm.MatrixBcast;
@@ -254,13 +253,9 @@ public class DupSparseMatrix extends Matrix {
 		else if (that instanceof DupDenseMatrix)
 			copyTo(that as DupDenseMatrix);
 		else
-			Debug.exit("CopyTo: target matrix type is not supportede");
+			throw new UnsupportedOperationException("copyTo: target matrix type is not supported");
 	}
 	
-
-	// Data access
-
-	//public def apply(x:Long, y:Long) = this.dupMs(here.id()).apply(x, y);
 	/**
 	 * Access data at(x, y)
 	 */
@@ -377,17 +372,8 @@ public class DupSparseMatrix extends Matrix {
 	/**
 	 * Not support. Cellwise subtraction.
 	 */
-	public def cellSub(A:Matrix(M,N)) {
-		Debug.exit("Not support use sparse matrix to store result");
-		return this;
-	}
-
-	/**
-	 * this = v - this
-	 */
-	public def cellSubFrom(v:Double):DupSparseMatrix(this) {
-		Debug.exit("Not support using sparse matrix to store result");
-		return this;
+	public def cellSub(A:Matrix(M,N)):DupSparseMatrix(this) {
+		throw new UnsupportedOperationException("Not support use sparse matrix to store result");
 	}
 	
 	/**
@@ -539,15 +525,13 @@ public class DupSparseMatrix extends Matrix {
 		throw new UnsupportedOperationException("Not support using sparse matrix to store result");
 	}
 
-
-	// Util
 	public def getCommTime():Long = this.commTime;
 	public def getCalcTime():Long = this.calcTime;
 
-	// Check integrity 
+	/** Check integrity */
 	public def syncCheck():Boolean {
 		val m = local();
-		for (var p:Long=0; p<Place.MAX_PLACES; p++) {
+		for (var p:Long=0; p<Place.numPlaces(); p++) {
 
 			val pid = p;
 			val dm = at(dupMs.dist(pid)) local();
@@ -561,27 +545,19 @@ public class DupSparseMatrix extends Matrix {
 	}
 
 	public def toString() :String {
-		var output:String = "---Duplicated Dense Matrix size:["+M+"x"+N+"]---\n";
+		var output:String = "---Duplicated sparse matrix size:["+M+"x"+N+"]---\n";
 		output += dupMs(here.id()).toString();
 		output += "--------------------------------------------------\n";
 		return output;
 	}
 
 	public def allToString() : String {
-		var output:String = "Duplicated Dense Matrix size:["+M+"x"+N+"]\n";
-		for (var p:Long=0; p<Place.MAX_PLACES; p++) { 
+		var output:String = "Duplicated sparse matrix size:["+M+"x"+N+"]\n";
+		for (var p:Long=0; p<Place.numPlaces(); p++) { 
 			val pid = p;
 			val mstr = at(dupMs.dist(pid)) dupMs(pid).toString();
 			output += "Duplication at place " + pid + "\n"+mstr;
 		}
 		return output;
-	}
-
-	public def printAll(msg:String) :void {
-		Console.OUT.print(msg+allToString());
-		Console.OUT.flush();
-	}
-	public def printAll() {
-		printAll("");
 	}
 }

@@ -178,6 +178,28 @@ namespace {
             case CUDA_ERROR_NOT_SUPPORTED:
                 errstr = "CUDA_ERROR_NOT_SUPPORTED"; break;
             #endif
+
+            #if CUDA_VERSION >= 6000
+            case CUDA_ERROR_INVALID_PTX:
+                errstr = "CUDA_ERROR_INVALID_PTX"; break;
+            case CUDA_ERROR_ILLEGAL_ADDRESS:
+                errstr = "CUDA_ERROR_ILLEGAL_ADDRESS"; break;
+            case CUDA_ERROR_HARDWARE_STACK_ERROR:
+                errstr = "CUDA_ERROR_HARDWARE_STACK_ERROR"; break;
+            case CUDA_ERROR_ILLEGAL_INSTRUCTION:
+                errstr = "CUDA_ERROR_ILLEGAL_INSTRUCTION"; break;
+            case CUDA_ERROR_MISALIGNED_ADDRESS:
+                errstr = "CUDA_ERROR_MISALIGNED_ADDRESS"; break;
+            case CUDA_ERROR_INVALID_ADDRESS_SPACE:
+                errstr = "CUDA_ERROR_INVALID_ADDRESS_SPACE"; break;
+            case CUDA_ERROR_INVALID_PC:
+                errstr = "CUDA_ERROR_INVALID_PC"; break;
+            #endif
+
+            #if CUDA_VERSION >= 6050
+            case CUDA_ERROR_INVALID_GRAPHICS_CONTEXT:
+                errstr = "CUDA_ERROR_INVALID_GRAPHICS_CONTEXT"; break;
+            #endif
         }
         fprintf(stderr,"%s (At %s:%d)\n",errstr,file,line);
         abort();
@@ -737,8 +759,8 @@ void x10rt_cuda_blocks_threads (x10rt_cuda_ctx *ctx, x10rt_msg_type type, int dy
     // round up to 512 bytes (the granularity of shm allocation)
     int shm = round_up(dyn_shm + static_shm, 512);
 
-    int alloc_size = (minor>=2) ? 512 : 256;
-    int max_threads = (minor>=2) ? 1024 : 768;
+    int alloc_size = (major>=2) ? 512 : 256;
+    int max_threads = (major>=2) ? 1024 : 512;
 
     while (*cfg) {
         int b = *(cfg++);
@@ -760,6 +782,25 @@ void x10rt_cuda_blocks_threads (x10rt_cuda_ctx *ctx, x10rt_msg_type type, int dy
     abort();
 #endif
 }
+
+
+void x10rt_cuda_device_sync (x10rt_cuda_ctx *ctx)
+{
+#ifdef ENABLE_CUDA
+    big_lock_of_doom.acquire();
+    CU_SAFE(cuCtxPushCurrent(ctx->ctx));
+
+    CU_SAFE(cuCtxSynchronize());
+    //CU_SAFE(cuStreamSynchronize(ctx->kernel_q.stream));
+
+    CU_SAFE(cuCtxPopCurrent(NULL));
+    big_lock_of_doom.release();
+#else
+    (void)ctx;
+    abort();
+#endif
+}
+
 
 // returns true if something is active in the GPU, or false if the GPU is idle
 bool x10rt_cuda_probe (x10rt_cuda_ctx *ctx)
@@ -784,12 +825,14 @@ bool x10rt_cuda_probe (x10rt_cuda_ctx *ctx)
                 CUdeviceptr cmem = ctx->cbs[type].kernel_cbs.cmem;
                 if (kop->cmemc > 0 && cmem!=0)
                     CU_SAFE(cuMemcpyHtoD(cmem, kop->cmemv, kop->cmemc));
+                void *kernel_params[5] =
+                {
+                    CU_LAUNCH_PARAM_BUFFER_POINTER, &kop->argv[0],
+                    CU_LAUNCH_PARAM_BUFFER_SIZE,    &kop->argc,
+                    CU_LAUNCH_PARAM_END
+                };
                 // y and z params we leave as 1, as threads can vary from 1 to 512
-                CU_SAFE(cuFuncSetBlockShape(k, kop->threads, 1, 1));
-                CU_SAFE(cuParamSetv(k, 0, &kop->argv[0], kop->argc));
-                CU_SAFE(cuParamSetSize(k, kop->argc));
-                CU_SAFE(cuFuncSetSharedSize(k, kop->shm));
-                CU_SAFE(cuLaunchGridAsync(k, kop->blocks, 1, ctx->kernel_q.stream));
+                CU_SAFE(cuLaunchKernel(k, kop->blocks, 1, 1, kop->threads, 1, 1, kop->shm, ctx->kernel_q.stream, NULL, kernel_params));
                 kop->begun = true;
                 assert(ctx->kernel_q.current == NULL);
                 ctx->kernel_q.current = kop;

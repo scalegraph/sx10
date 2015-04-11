@@ -1,14 +1,16 @@
 /*
  *  This file is part of the X10 Applications project.
  *
- *  (C) Copyright IBM Corporation 2011.
+ *  (C) Copyright IBM Corporation 2011-2014.
  */
+
+import harness.x10Test;
 
 import x10.compiler.Ifndef;
 import x10.util.Timer;
 
 import x10.matrix.Matrix;
-import x10.matrix.Debug;
+import x10.matrix.util.Debug;
 import x10.matrix.block.BlockMatrix;
 import x10.matrix.block.Grid;
 import x10.matrix.distblock.DistBlockMatrix;
@@ -21,19 +23,7 @@ import x10.matrix.comm.BlockReduce;
 /**
  * This class contains test cases for collective communication for block matrices.
  */
-public class TestBlockColl{
-    public static def main(args:Rail[String]) {
-		val m = args.size > 0 ? Long.parse(args(0)):2;
-		val n = args.size > 1 ? Long.parse(args(1)):3;
-		val bm= args.size > 2 ? Long.parse(args(2)):2;
-		val bn= args.size > 3 ? Long.parse(args(3)):2;
-		val d = args.size > 4 ? Double.parse(args(4)):0.9;
-		val testcase = new BlockCollTest(m, n, bm, bn, d);
-		testcase.run();
-	}
-}
-
-class BlockCollTest {
+public class TestBlockColl extends x10Test {
 	public val M:Long;
 	public val N:Long;
 	public val nzdensity:Double;
@@ -69,11 +59,9 @@ class BlockCollTest {
 		numplace = Place.numPlaces();
 	}
 	
-	public def run(): void {
- 		// Set the matrix function
+    public def run():Boolean {
 		var retval:Boolean = true;
 	@Ifndef("MPI_COMMU") { // TODO Deadlocks!
-
 		Console.OUT.println("****************************************************************");
 		Console.OUT.println("Test dense blocks collective commu in distributed block matrix");
 		Console.OUT.println("****************************************************************");
@@ -89,11 +77,8 @@ class BlockCollTest {
 		retval &= testGather(sbmat, sblks);
 		retval &= testScatter(sblks, sbmat);
 
-		if (retval) 
-			Console.OUT.println("Block communication test collective commu passed!");
-		else
-			Console.OUT.println("------------Block communication test collective commu failed!-----------");
     }
+        return retval;
 	}
 
 	public def testBcast(bmat:DistBlockMatrix):Boolean {
@@ -116,13 +101,10 @@ class BlockCollTest {
 						   ds*8, avgt/bmat.getGrid().size);
 		
 		//ret = dbmat.syncCheck();
-		if (ret)
-			Console.OUT.println("Bcast dist block matrix passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Bcast block matrix test failed!--------");
 		
 		return ret;
-
 	} 	
 	
 	public def testGather(distmat:DistBlockMatrix, blksmat:BlockMatrix):Boolean {
@@ -131,16 +113,11 @@ class BlockCollTest {
 		Console.OUT.printf("\nTest gather of dist block matrix over %d places\n", numplace);
 		blksmat.reset();
 		
-		Debug.flushln("Start gathering "+numplace+" places");
 		var st:Long =  Timer.milliTime();
 		BlockGather.gather(distmat.handleBS, blksmat.listBs);
-		//Debug.flushln("Done");
 		ret = distmat.equals(blksmat as Matrix(distmat.M, distmat.N));
-		Debug.flushln("Done verification");
 
-		if (ret)
-			Console.OUT.println("Test gather for dist block matrix test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("-----Test gather for dist block matrix failed!-----");
 		return ret;
 	}
@@ -151,18 +128,22 @@ class BlockCollTest {
 		Console.OUT.printf("\nTest scatter of dist block matrix over %d places\n", numplace);
 		distmat.reset();
 		
-		Debug.flushln("Start scatter among "+numplace+" places");
 		var st:Long =  Timer.milliTime();
 		BlockScatter.scatter(blksmat.listBs, distmat.handleBS);
-		//Debug.flushln("Done");
 		
 		ret = distmat.equals(blksmat as Matrix(distmat.M,distmat.N));
-		Debug.flushln("Done verification");
 
-		if (ret)
-			Console.OUT.println("Test scatter for dist block matrix test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("-----Test scatter for dist block matrix failed!-----");
 		return ret;
+	}
+
+    public static def main(args:Rail[String]) {
+		val m = args.size > 0 ? Long.parse(args(0)):2;
+		val n = args.size > 1 ? Long.parse(args(1)):3;
+		val bm= args.size > 2 ? Long.parse(args(2)):2;
+		val bn= args.size > 3 ? Long.parse(args(3)):2;
+		val d = args.size > 4 ? Double.parse(args(4)):0.9;
+		new TestBlockColl(m, n, bm, bn, d).execute();
 	}
 }

@@ -16,10 +16,8 @@ LIBS += $(LIB_FILE_MPI)
 
 PROPERTIES += etc/x10rt_mpi.properties
 
-ifndef ENABLE_CROSS_COMPILE_FX10
-ifndef ENABLE_CROSS_COMPILE_BGQ
+ifndef DISABLE_JAVA_RUNTIME
   EXECUTABLES += mpi/X10MPIJava
-endif
 endif
 
 MOV_LDFLAGS_MPI = $(MOV_LDFLAGS)
@@ -52,8 +50,10 @@ else
 	$(MPICXX) $(CXXFLAGS) $(CXXFLAGS_SHARED) $^ $(SO_LDFLAGS_MPI) $(SO_LDLIBS_MPI) -o $@
 endif
 
+# -ljsig is needed for Oracle VM
+# -ldl is needed for MPICH
 mpi/X10MPIJava: mpi/Java.cc
-	$(MPICXX) $(CXXFLAGS) $(APP_LDFLAGS_MPI) $(APP_LDLIBS_MPI_NO_X10RT) mpi/Java.cc -o mpi/X10MPIJava -ljvm $(JNI_LIBS)
+	$(MPICXX) $(CXXFLAGS) $(APP_LDFLAGS_MPI) $(APP_LDLIBS_MPI_NO_X10RT) mpi/Java.cc -o mpi/X10MPIJava -ljvm -ljsig -ldl $(JNI_LIBS)
 
 etc/x10rt_mpi.properties:
 	@echo "X10LIB_PLATFORM=$(X10RT_PLATFORM)" > $@

@@ -14,9 +14,9 @@ package x10.matrix.blas;
 import x10.compiler.NoInline;
 
 /**
- * The class provides direct calls to BLAS routines. Matrix data inputs are stored in Rail[Double], whose
- * memory layout complies with BLAS specification of column-mayor storage.  The leading dimension
- * of matrix (size of memory in double to store one column data) MUST be same as the matrix rows.
+ * The class provides direct calls to BLAS routines. Matrix data inputs are
+ * stored as Rail[Double] in column-major format.  The leading dimension
+ * of matrix MUST be equal to the number of rows.
  * 
  * <p> NoInline is enforced to avoid WrapBLAS methods inlined in other packages in managed backend 
  */
@@ -42,24 +42,20 @@ public class BLAS {
 		return DriverBLAS.abs_sum(n, X);
 	}
 	
-	public static @NoInline def compMatMultMat(mA:Rail[Double], mB:Rail[Double],mC:Rail[Double], 
-			dim:Rail[Long], scale:Rail[Double], trans:Rail[Int]):void {
-		DriverBLAS.matrix_matrix_mult(mA,mB, mC, dim, scale, trans); 
+	public static @NoInline def compMatMultMat(alpha:Double, mA:Rail[Double], mB:Rail[Double], beta:Double, mC:Rail[Double], dim:Rail[Long], trans:Rail[Int]):void {
+        val ld = [dim(0), dim(2), dim(0)];
+		DriverBLAS.matrix_matrix_mult(alpha, mA, mB, beta, mC, dim, ld, trans); 
 	}
 
-	public static @NoInline def compSymMultMat(mA:Rail[Double], mB:Rail[Double], mC:Rail[Double],
-			dim:Rail[Long], scale:Rail[Double]):void {
-		DriverBLAS.sym_matrix_mult(mA, mB, mC, dim, scale);
+	public static @NoInline def compSymMultMat(alpha:Double, mA:Rail[Double], mB:Rail[Double], beta:Double, mC:Rail[Double], dim:Rail[Long]):void {
+		DriverBLAS.sym_matrix_mult(alpha, mA, mB, beta, mC, dim);
 	}
 
-	public static @NoInline def compMatMultSym(mB:Rail[Double],mA:Rail[Double],mC:Rail[Double],
-			dim:Rail[Long], scale:Rail[Double]):void {
-		DriverBLAS.matrix_sym_mult(mB, mA, mC, dim, scale);
+	public static @NoInline def compMatMultSym(alpha:Double, mB:Rail[Double], mA:Rail[Double], beta:Double, mC:Rail[Double], dim:Rail[Long]):void {
+		DriverBLAS.matrix_sym_mult(mB, alpha, mA, beta, mC, dim);
 	}
 
- 
-	public static @NoInline def compTriMultMat(mA:Rail[Double], mB:Rail[Double], 
-			dim:Rail[Long], tranA:Int):void {
+	public static @NoInline def compTriMultMat(mA:Rail[Double], mB:Rail[Double], dim:Rail[Long], tranA:Int):void {
 		DriverBLAS.tri_matrix_mult(mA, mB, dim, tranA);
 	}
 
@@ -68,14 +64,12 @@ public class BLAS {
 		DriverBLAS.matrix_tri_mult(mB, mA, dim, tranB);
 	}
 
-	public static @NoInline def compMatMultVec(mA:Rail[Double], x:Rail[Double],y:Rail[Double],
-			dim:Rail[Long], scale:Rail[Double], transA:Int):void {
-		DriverBLAS.matrix_vector_mult(mA, x, y, dim, scale, transA);
+	public static @NoInline def compMatMultVec(alpha:Double, mA:Rail[Double], x:Rail[Double], beta:Double, y:Rail[Double], dim:Rail[Long], transA:Int):void {
+		DriverBLAS.matrix_vector_mult(alpha, mA, x, beta, y, dim, transA);
 	}
 	
-	public static @NoInline def compSymMultVec(mA:Rail[Double], x:Rail[Double], y:Rail[Double],
-			dim:Rail[Long], scale:Rail[Double]):void {
-		DriverBLAS.sym_vector_mult(mA, x, y, dim, scale);
+	public static @NoInline def compSymMultVec(alpha:Double, mA:Rail[Double], x:Rail[Double], beta:Double, y:Rail[Double], dim:Rail[Long]):void {
+		DriverBLAS.sym_vector_mult(alpha, mA, x, beta, y, dim);
 	}
 	
 	public static @NoInline def compTriMultVec(mA:Rail[Double], uplo:Boolean, bx:Rail[Double], 

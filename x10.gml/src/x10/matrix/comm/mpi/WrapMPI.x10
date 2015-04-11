@@ -18,10 +18,7 @@ import x10.compiler.Native;
 import x10.compiler.NativeCPPInclude;
 import x10.compiler.NativeCPPCompilationUnit;
 
-import x10.matrix.Debug;
-
-@NativeCPPInclude("mpi_api.h")
-@NativeCPPCompilationUnit("mpi_api.c")
+import x10.matrix.util.Debug;
 
 /**
  * This class provides methods in X10 to invoke MPI routines.  
@@ -40,6 +37,8 @@ import x10.matrix.Debug;
  * <p> Third, collective communication methods including bcast, scatter, gather
  * and reduce sum are available.  X10.team collective communication can be used. 
  */
+@NativeCPPInclude("mpi_api.h")
+@NativeCPPCompilationUnit("mpi_api.cc")
 public class WrapMPI {
     
 	@Native("c++","mpi_new_comm()")
@@ -92,8 +91,8 @@ public class WrapMPI {
 	 */
 	public def this() {
 		dist = Dist.makeUnique();
-		//pidmap = new Rail[Int](Place.MAX_PLACES, (i:Int)=>i);
-		//displs = new Rail[Int](Place.MAX_PLACES, 0);
+		//pidmap = new Rail[Int](Place.numPlaces(), (i:Int)=>i);
+		//displs = new Rail[Int](Place.numPlaces(), 0);
 		@Ifdef("MPI_COMMU") {
 			finish ateach(Dist.makeUnique()) {
 				gml_new_commu();
@@ -106,10 +105,10 @@ public class WrapMPI {
 	 */
 	public static def getProcInfo():String {
 		val mlen = 128;//mpi_name_maxlen();
-		val rk   = new Rail[Int](1, 0n);
-		val np   = new Rail[Int](1, 0n);
-		val hlen = new Rail[Int](1, 0n);
-		val hstr = new Rail[Int](mlen, 0n);
+		val rk   = new Rail[Int](1);
+		val np   = new Rail[Int](1);
+		val hlen = new Rail[Int](1);
+		val hstr = new Rail[Int](mlen);
 		world.get_proc_info(rk, np, hlen, hstr);
 		val sc = new Rail[Char](hlen(0), (i:Long)=>(hstr(i) as Char));
 		return new String(sc, 0, hlen(0));
@@ -119,7 +118,7 @@ public class WrapMPI {
 	 * Return MPI process rank ID at here.
 	 */
 	public static def getCommProcID():Int {
-		val rk = new Rail[Int](1, 0n);
+		val rk = new Rail[Int](1);
 		world.get_comm_pid(rk);
 		return rk(0);
 	}
@@ -412,8 +411,8 @@ public class WrapMPI {
         var intRecvcnts:Rail[Int];
 		//Debug.assure(pidmap(0) == 0, "Inconsistance found in pid map");
 		if (root == here.id()) {
-			displs = new Rail[Int](Place.MAX_PLACES);
-            intRecvcnts = new Rail[Int](Place.MAX_PLACES);
+			displs = new Rail[Int](Place.numPlaces());
+            intRecvcnts = new Rail[Int](Place.numPlaces());
             intRecvcnts(0) = recvcnts(0) as Int;
 			for (var i:Long=1; i<displs.size; i++) {
 				//Debug.assure(pidmap(i) == i, "Inconsistance found in pid map");
@@ -459,8 +458,8 @@ public class WrapMPI {
         var intRecvcnts:Rail[Int];
 		var displs:Rail[Int];
 		if (root == here.id()) {
-			displs = new Rail[Int](Place.MAX_PLACES, 0n);
-            intRecvcnts = new Rail[Int](Place.MAX_PLACES);
+			displs = new Rail[Int](Place.numPlaces());
+            intRecvcnts = new Rail[Int](Place.numPlaces());
             intRecvcnts(0) = recvcnts(0) as Int;
 			for (var i:Long=1; i<displs.size; i++) {
 				//Debug.assure(pidmap(i) == i, "Inconsistance found in pid map");
@@ -506,8 +505,8 @@ public class WrapMPI {
         var intSendcnts:Rail[Int];
 		var displs:Rail[Int];
 		if (root == here.id()) {
-            intSendcnts = new Rail[Int](Place.MAX_PLACES);
-			displs = new Rail[Int](Place.MAX_PLACES);
+            intSendcnts = new Rail[Int](Place.numPlaces());
+			displs = new Rail[Int](Place.numPlaces());
             intSendcnts(0) = sendcnts(0) as Int;
 			for (var i:Long=1; i<displs.size; i++) {
 				//Debug.assure(pidmap(i) == i, "Inconsistance found in pid map");
@@ -543,8 +542,8 @@ public class WrapMPI {
 		var intSendcnts:Rail[Int];
 		var displs:Rail[Int];
 		if (root == here.id()) {
-            intSendcnts = new Rail[Int](Place.MAX_PLACES);
-			displs = new Rail[Int](Place.MAX_PLACES);
+            intSendcnts = new Rail[Int](Place.numPlaces());
+			displs = new Rail[Int](Place.numPlaces());
             intSendcnts(0) = sendcnts(0) as Int;
 			for (var i:Long=1; i<displs.size; i++) {
 				//Debug.assure(pidmap(i) == i, "Inconsistance found in pid map");
@@ -585,11 +584,11 @@ public class WrapMPI {
 
 		//Compute displs, since the recv data is adjacent to each other.
 		//Debug.assure(pidmap(0) == 0, "Inconsistance found in pid map");
-		val intRecvcnts = new Rail[Int](Place.MAX_PLACES);
-		val displs = new Rail[Int](Place.MAX_PLACES);
+		val intRecvcnts = new Rail[Int](Place.numPlaces());
+		val displs = new Rail[Int](Place.numPlaces());
 		
         intRecvcnts(0) = recvcnts(0) as Int;
-		for (var i:Long=1; i<Place.MAX_PLACES; i++) {
+		for (var i:Long=1; i<Place.numPlaces(); i++) {
 			//Debug.assure(pidmap(i) == i, "Inconsistance found in pid map");
 			displs(i) = displs(i-1) + intRecvcnts(i-1);
 		}

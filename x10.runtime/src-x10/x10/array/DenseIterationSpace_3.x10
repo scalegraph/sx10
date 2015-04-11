@@ -36,6 +36,10 @@ public final class DenseIterationSpace_3 extends IterationSpace(3){rect} {
         this.max2 = max2;
     }
 
+    public operator this * (that:LongRange):DenseIterationSpace_4{self!=null} {
+        return new DenseIterationSpace_4(min0, min1, min2, that.min, max0, max1, max2, that.max);
+    }
+
     public def min(i:Long):Long {
         if (i == 0) return min0;
         if (i == 1) return min1;
@@ -51,6 +55,8 @@ public final class DenseIterationSpace_3 extends IterationSpace(3){rect} {
     }
 
     public def isEmpty() = max0 < min0 || max1 < min1 || max2 < min2;
+
+    public def size() = (max0 - min0 + 1) * (max1 - min1 + 1) * (max2 - min2 + 1);
 
     public def iterator():Iterator[Point(3)] = new DIS3_It();
 
@@ -80,5 +86,13 @@ public final class DenseIterationSpace_3 extends IterationSpace(3){rect} {
            }
            return p;
         }
+    }
+
+    public def toString():String {
+        return "["
+            +min0+".."+max0+","
+            +min1+".."+max1+","
+            +min2+".."+max2
+            +"]";
     }
 }

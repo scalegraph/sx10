@@ -24,18 +24,26 @@ public final class DistArray_Unique[T] extends DistArray[T]{this.rank()==1} impl
     public property rank() = 1;
 
     /**
-     * Construct a zero-initialized DistArray_Unique object on the WORLD PlaceGroup
+     * Construct a zero-initialized DistArray_Unique object over Place.places()
      */
     public def this(){T haszero} {
-        super(PlaceGroup.WORLD, () => new LocalState[T](PlaceGroup.WORLD, new Rail[T](1), PlaceGroup.WORLD.size()), PlaceGroup.WORLD.size());
+        this(Place.places());
     }
 
     /**
-     * Construct a DistArray_Unique object on the WORLD PlaceGroup using the
+     * Construct a zero-initialized DistArray_Unique object over the given PlaceGroup
+     */
+    public def this(pg:PlaceGroup{self!=null}){T haszero} {
+        super(pg, () => new LocalState[T](pg, new Rail[T](1), pg.size()), pg.size());
+    }
+
+
+    /**
+     * Construct a DistArray_Unique object over Place.places() using the
      * given initialization function.
      */
     public def this(init:()=>T) {
-        super(PlaceGroup.WORLD, () => new LocalState[T](PlaceGroup.WORLD, new Rail[T](1, init()), PlaceGroup.WORLD.size()), PlaceGroup.WORLD.size());
+        this(Place.places(), init);
     }
 
     /**
@@ -136,6 +144,10 @@ public final class DistArray_Unique[T] extends DistArray[T]{this.rank()==1} impl
      * @see #operator(Point)
      */
     public @Inline operator this(p:Point(this.rank()))=(v:T):T{self==v} = this(p(0)) = v;
+
+    public def getPatch(space:IterationSpace(1){self.rect}):Rail[T] {
+        throw new UnsupportedOperationException("getPatch not supported for DistArray_Unique");
+    }
 
     /*
      * Order of tests is designed to minimize the dynamic number of comparisons

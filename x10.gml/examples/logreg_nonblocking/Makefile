@@ -1,15 +1,4 @@
 ###################################################
-###################################################
-## Name:  	X10 application test
-## Created by: 	Juemin Zhang
-## Contact:   	zhangj@us.ibm.com
-###################################################
-###################################################
-
-# Build [mpi|sockets|lapi] transport: make [mpi|sock|lapi]
-# Build java backend: make java
-# Build all excutable and java backend: make all
-###################################################
 # Source and target file
 ###################################################
 target = RunLogReg
@@ -23,7 +12,7 @@ depend_src  = SeqLogReg.x10 LogisticRegression.x10
 build_path	= build
 
 # GML path
-gml_path    = ../../../matrix
+gml_path    = ../..
 
 # compile options
 X10_FLAG	= -sourcepath ../.  -d $(build_path) -report postcompile=2 -v -errors 5 -VERBOSE_CHECKS -O -NO_CHECKS

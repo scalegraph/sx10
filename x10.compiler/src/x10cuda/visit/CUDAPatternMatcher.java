@@ -1,3 +1,14 @@
+/*
+ *  This file is part of the X10 project (http://x10-lang.org).
+ *
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2006-2014.
+ */
+
 package x10cuda.visit;
 
 import java.util.List;
@@ -252,7 +263,7 @@ public class CUDAPatternMatcher extends ContextVisitor {
 					SharedMem cmem = new SharedMem();
 					for (int i = 0; i < kernel_block.statements().size() - 1; ++i) {
 						Stmt ld_ = kernel_block.statements().get(i);
-						complainIfNot( ld_ instanceof LocalDecl, "val <something> = <autoBlocks/Threads or constant cache definition", ld_);
+						complainIfNot(ld_ instanceof LocalDecl, "val <something> = CUDAUtilities.autoBlocks/Threads() or CUDAConstantRail definition", ld_);
 						LocalDecl ld = (LocalDecl) ld_;
 						
 						Type decl_type = ld.type().type();
@@ -406,6 +417,7 @@ public class CUDAPatternMatcher extends ContextVisitor {
 	private static Node setReachable (Term x) {
 		if (x==null) return null;
 		return x.visit(new NodeVisitor() {
+			@Override
 			public Node leave(Node parent, Node old, Node child, NodeVisitor v) {
 				if (child instanceof Term) {
 					Term child_term = (Term) child;

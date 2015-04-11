@@ -1,12 +1,18 @@
 /*
- *  This file is part of the X10 Applications project.
+ *  This file is part of the X10 project (http://x10-lang.org).
  *
- *  (C) Copyright IBM Corporation 2012.
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2012-2014.
  */
+
+import harness.x10Test;
 
 import x10.compiler.Ifndef;
 
-import x10.matrix.Debug;
 import x10.matrix.Matrix;
 import x10.matrix.DenseMatrix;
 
@@ -19,14 +25,7 @@ import x10.matrix.distblock.DistBlockMatrix;
 import x10.matrix.distblock.summa.SummaMult;
 import x10.matrix.distblock.summa.SummaMultTrans;
 
-public class TestSumma {
-    public static def main(args:Rail[String]) {
-		val testcase = new TestRunSumma(args);
-		testcase.run();
-	}
-}
-
-class TestRunSumma {
+public class TestSumma extends x10Test {
 	public val M:Long;
 	public val K:Long;
 	public val N:Long;
@@ -67,7 +66,7 @@ class TestRunSumma {
 		dTransB = (DistGrid.make(gTransB)).dmap;
 	}
 
-    public def run (): void {
+    public def run():Boolean {
 		var ret:Boolean = true;
 	@Ifndef("MPI_COMMU") { // TODO Deadlocks!
 		ret &= (testMult());
@@ -80,10 +79,7 @@ class TestRunSumma {
 		//ret &= (testRandomDistMult());
 		//ret &= (testRandomDistMultTrans());
     }
-		if (ret)
-			Console.OUT.println("Test passed!");
-		else
-			Console.OUT.println("----------------Test failed!----------------");
+        return ret;
 	}
     
 	public def testMult():Boolean {
@@ -101,9 +97,7 @@ class TestRunSumma {
 		val dc= da % db;
 		ret &= dc.equals(c as Matrix(dc.M,dc.N));
 
-		if (ret)
-			Console.OUT.println("Distributed dense block Matrix SUMMA mult passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Distributed dense block matrix SUMMA mult test failed!--------");
 		return ret;
 	}
@@ -118,15 +112,12 @@ class TestRunSumma {
 		val b = DistBlockMatrix.makeSparse(gB, dB, nzd).init((r:Long,c:Long)=>1.0*(r+c));
 		val c = DistBlockMatrix.makeDense(gC, dC);
 		SummaMult.mult(panel, 0.0, a, b, c);
-		Debug.flushln("Done SUMMA mult");
 		val da= a.toDense() as DenseMatrix(a.M, a.N);
 		val db= b.toDense() as DenseMatrix(a.N, b.N);
 		val dc= da % db;
 		ret &= dc.equals(c as Matrix(dc.M,dc.N));
 
-		if (ret)
-			Console.OUT.println("Distributed sparse block Matrix SUMMA mult passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Distributed sparse block matrix SUMMA mult test failed!--------");
 		return ret;
 	}
@@ -142,16 +133,13 @@ class TestRunSumma {
 		val b = DistBlockMatrix.makeDense(gTransB, dB).initRandom() as DistBlockMatrix{self.N==a.N};
 		val c = DistBlockMatrix.makeDense(gC, dC) as DistBlockMatrix(a.M,b.M);
 		SummaMultTrans.multTrans(a, b, c, false);
-		Debug.flushln("Done SUMMA multTrans");
 		val da= a.toDense() as DenseMatrix(a.M, a.N);
 		val db= b.toDense() as DenseMatrix(b.M, a.N);
 		val dc= DenseMatrix.make(da.M, db.M) as DenseMatrix(a.M,b.M);
 		dc.multTrans(da, db, false);
 		ret &= dc.equals(c as Matrix(dc.M,dc.N));
 
-		if (ret)
-			Console.OUT.println("Distributed dense block Matrix SUMMA multTrabs passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Distributed dense block matrix SUMMA multTrans test failed!--------");
 		return ret;
 	}
@@ -168,16 +156,13 @@ class TestRunSumma {
 		val b = DistBlockMatrix.makeSparse(gTransB, dB, nzd).initRandom() as DistBlockMatrix{self.N==a.N};
 		val c = DistBlockMatrix.makeDense(gC, dC) as DistBlockMatrix(a.M,b.M);
 		SummaMultTrans.multTrans(a, b, c, false);
-		Debug.flushln("Done SUMMA multTrans");
 		val da= a.toDense() as DenseMatrix(a.M, a.N);
 		val db= b.toDense() as DenseMatrix(b.M, a.N);
 		val dc= DenseMatrix.make(da.M, db.M) as DenseMatrix(a.M,b.M);
 		dc.multTrans(da, db, false);
 		ret &= dc.equals(c as Matrix(dc.M,dc.N));
 
-		if (ret)
-			Console.OUT.println("Distributed sparse block Matrix SUMMA multTrabs passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Distributed sparse block matrix SUMMA multTrans test failed!--------");
 		return ret;
 	}
@@ -186,9 +171,8 @@ class TestRunSumma {
 		Console.OUT.println("Starting SUMMA on multiply dense block Matrix test using cylic distribution");
 		Console.OUT.printf("matrix (%dx%d) x (%dx%d) partitioned in (%dx%d) blocks ",
 				M, K, K, N, bM, bN);
-		Console.OUT.printf("cylic distribution in %d places\n", Place.MAX_PLACES);
 		var ret:Boolean = true;
-		val dmap = DistMap.makeCylic(bM*bN, Place.MAX_PLACES);
+		val dmap = DistMap.makeCylic(bM*bN, Place.numPlaces());
 		
 		val a = DistBlockMatrix.makeDense(gA, dmap).initRandom();
 		val b = DistBlockMatrix.makeDense(gB, dmap).initRandom();
@@ -200,10 +184,8 @@ class TestRunSumma {
 		val dc= da % db;
 		ret &= dc.equals(c as Matrix(dc.M,dc.N));
 
-		if (ret)
-			Console.OUT.println("Cylic distribution of dense block Matrix SUMMA mult test passed!");
-		else
-			Console.OUT.println("--------Cylic distribution of dense block matrix SUMMA mult test failed!--------");
+		if (!ret)
+			Console.OUT.println("--------Cyclic distribution of dense block matrix SUMMA mult test failed!--------");
 		return ret;
 	}
 	
@@ -211,9 +193,9 @@ class TestRunSumma {
 		Console.OUT.println("Starting SUMMA on mult-trans dense block Matrix test using cylic distribution");
 		Console.OUT.printf("matrix (%dx%d) x (%dx%d) partitioned in (%dx%d) blocks ",
 				M, K, K, N, bM, bN);
-		Console.OUT.printf("cylic distribution in %d places\n", Place.MAX_PLACES);
+		Console.OUT.printf("cylic distribution in %d places\n", Place.numPlaces());
 		var ret:Boolean = true;
-		val dmap = DistMap.makeCylic(bM*bN, Place.MAX_PLACES);
+		val dmap = DistMap.makeCylic(bM*bN, Place.numPlaces());
 		
 		val a = DistBlockMatrix.makeDense(gA, dmap).initRandom();
 		val b = DistBlockMatrix.makeDense(gTransB, dmap).initRandom() as DistBlockMatrix{self.N==a.N};
@@ -226,10 +208,8 @@ class TestRunSumma {
 		val dc= DenseMatrix.make(da.M, db.M) as DenseMatrix(a.M,b.M);
 		dc.multTrans(da, db, false);
 		
-		if (ret)
-			Console.OUT.println("Cylic distribution of dense block Matrix SUMMA mult-trans test passed!");
-		else
-			Console.OUT.println("--------Cylic distribution of dense block matrix SUMMA mult-trans test failed!--------");
+		if (!ret)
+			Console.OUT.println("--------Cyclic distribution of dense block matrix SUMMA mult-trans test failed!--------");
 		return ret;
 	}
 
@@ -237,9 +217,9 @@ class TestRunSumma {
 		Console.OUT.println("Starting SUMMA on mult dense block Matrix test using random distribution");
 		Console.OUT.printf("matrix (%dx%d) x (%dx%d) partitioned in (%dx%d) blocks ",
 				M, K, K, N, bM, bN);
-		Console.OUT.printf("randomly distributed in %d places\n", Place.MAX_PLACES);
+		Console.OUT.printf("randomly distributed in %d places\n", Place.numPlaces());
 		var ret:Boolean = true;
-		val dmap = DistMap.makeRandom(bM*bN, Place.MAX_PLACES);
+		val dmap = DistMap.makeRandom(bM*bN, Place.numPlaces());
 		
 		val a = DistBlockMatrix.makeDense(gA, dmap).initRandom();
 		val b = DistBlockMatrix.makeDense(gB, dmap).initRandom() as DistBlockMatrix(a.N);
@@ -252,9 +232,7 @@ class TestRunSumma {
 		val dc= DenseMatrix.make(da.M, db.N) as DenseMatrix(a.M,b.N);
 		dc.mult(da, db, false);
 		
-		if (ret)
-			Console.OUT.println("Random distribution of dense block Matrix SUMMA mult test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Random distribution of dense block matrix SUMMA mult test failed!--------");
 		return ret;
 	}
@@ -263,9 +241,9 @@ class TestRunSumma {
 		Console.OUT.println("Starting SUMMA on mult-trans dense block Matrix test using random distribution");
 		Console.OUT.printf("matrix (%dx%d) x (%dx%d) partitioned in (%dx%d) blocks ",
 				M, K, K, N, bM, bN);
-		Console.OUT.printf("randomly distributed in %d places\n", Place.MAX_PLACES);
+		Console.OUT.printf("randomly distributed in %d places\n", Place.numPlaces());
 		var ret:Boolean = true;
-		val dmap = DistMap.makeRandom(bM*bN, Place.MAX_PLACES);
+		val dmap = DistMap.makeRandom(bM*bN, Place.numPlaces());
 		
 		val a = DistBlockMatrix.makeDense(gA, dmap).initRandom();
 		val b = DistBlockMatrix.makeDense(gTransB, dmap).initRandom() as DistBlockMatrix{self.N==a.N};
@@ -278,10 +256,12 @@ class TestRunSumma {
 		val dc= DenseMatrix.make(da.M, db.M) as DenseMatrix(a.M,b.M);
 		dc.multTrans(da, db, false);
 		
-		if (ret)
-			Console.OUT.println("Random distribution of dense block Matrix SUMMA mult-trans test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Random distribution of dense block matrix SUMMA mult-trans test failed!--------");
 		return ret;
+	}
+
+    public static def main(args:Rail[String]) {
+		new TestSumma(args).execute();
 	}
 } 

@@ -8,13 +8,16 @@
  *
  *  (C) Copyright IBM Corporation 2006-2014.
  */
-import x10.regionarray.*;
-import x10.util.*;
+import x10.resilient.regionarray.DistArray;
+import x10.regionarray.Dist;
+import x10.regionarray.Region;
+import x10.util.ArrayList;
+import x10.util.GrowableRail;
 
 /**
- * Resilient HeatTransfer which uses resilient DistArray
+ * Resilient HeatTransfer which uses Resilient DistArray
  * Partially based on HeatTransfer_v2.x10
- * Uses ResilientDistArray
+ * Uses Resilient DistArray
  * @author kawatiya
  * 
  * For Managed X10:
@@ -34,6 +37,7 @@ public class ResilientHeatTransfer {
     public static def main(args:Rail[String]) {
         val n = (args.size>=1) ? Long.parseLong(args(0)) : 10L;
         Console.OUT.println("HeatTransfer for " + n + "x" + n + ", epsilon=" + epsilon);
+        for (p in Place.places()) at (p) Console.OUT.println(here+" running in "+Runtime.getName());
         
         /*
          * Initialize the data
@@ -49,9 +53,9 @@ public class ResilientHeatTransfer {
         var D_Base:Dist = Dist.makeUnique(SmallD.places());
         
         /* Resilient DistArrays */
-        val A = ResilientDistArray.make[Double](BigD,(p:Point)=>{ LastRow.contains(p) ? 1.0 : 0.0 });
-        val Temp = ResilientDistArray.make[Double](BigD);
-        val Scratch = ResilientDistArray.make[Double](BigD);
+        val A = DistArray.make[Double](BigD,(p:Point)=>{ LastRow.contains(p) ? 1.0 : 0.0 });
+        val Temp = DistArray.make[Double](BigD);
+        val Scratch = DistArray.make[Double](BigD);
         
         /*
          * Do the computation
@@ -59,15 +63,16 @@ public class ResilientHeatTransfer {
         A.snapshot();
         var snapshot_iter:Long = 0L;
         var delta:Double = 1.0;
-        for (i in 1..ITERATIONS) {
-            Console.OUT.println("---- Iteration: "+i);
+        var iter:Long = 1;
+        while (iter <= ITERATIONS) {
+            Console.OUT.println("---- Iteration: "+iter);
             try {
                 /*
                  * Restore if necessary
                  */
                 if (restore_needed()) {
                     /* Create new Dist on available places */
-                    Console.OUT.println("Create new Dist over available " + (Place.MAX_PLACES-Place.numDead()) + " places");
+                    Console.OUT.println("Create new Dist over available " + (Place.numPlaces()-Place.numDead()) + " places");
                     BigD = Dist.makeBlock(BigR, 0, new SparsePlaceGroup(livePlaces.toRail())); printDist(BigD);
                     SmallD = BigD | SmallR;
                     D_Base = Dist.makeUnique(SmallD.places());
@@ -76,6 +81,7 @@ public class ResilientHeatTransfer {
                     A.restore(BigD); // RESTORE with new Dist!
                     Temp.remake(BigD);
                     Scratch.remake(BigD);
+                    iter = snapshot_iter; // may need to re-run some iterations
                     restore_needed() = false;
                 }
                 
@@ -97,19 +103,21 @@ public class ResilientHeatTransfer {
                 if (delta <= epsilon) {
                     Console.OUT.println("Result converged"); break;
                 }
+
+                iter++;
                 
                 /*
                  * Create a snapshot at every 10th iteration
                  */
-                if (i % 10 == 0) {
-                    Console.OUT.println("Create a snapshot at iteration " + i);
-                    A.snapshot(); snapshot_iter = i; // SNAPSHOT!
+                if (iter % 10 == 0) {
+                    Console.OUT.println("Create a snapshot at iteration " + iter);
+                    A.snapshot(); snapshot_iter = iter; // SNAPSHOT!
                 }
-                
+
             } catch (e:Exception) {
                 processException(e, 0);
             } /* try */
-        } /* for (i) */
+        } /* while (iter <= ITERATIONS) */
         
         /*
          * Pretty print the result
@@ -122,7 +130,7 @@ public class ResilientHeatTransfer {
      * Process Exception(s)
      * l is the nest level of MultipleExceptions (for pretty print)
      */
-    private static def processException(e:Exception, l:Long) {
+    private static def processException(e:CheckedThrowable, l:Long) {
         if (e instanceof DeadPlaceException) {
             val deadPlace = (e as DeadPlaceException).place;
             Console.OUT.println(new String(new Rail[Char](l,' ')) + "DeadPlaceException thrown from " + deadPlace);
@@ -131,21 +139,25 @@ public class ResilientHeatTransfer {
         } else if (e instanceof MultipleExceptions) {
             val exceptions = (e as MultipleExceptions).exceptions();
             Console.OUT.println(new String(new Rail[Char](l,' ')) + "MultipleExceptions size=" + exceptions.size);
-            for (ec in exceptions) processException(ec, l+1);
+            val deadPlaceExceptions = (e as MultipleExceptions).getExceptionsOfType[DeadPlaceException]();
+            for (dpe in deadPlaceExceptions) {
+                processException(dpe, l+1);
+            }
+            val filtered = (e as MultipleExceptions).filterExceptionsOfType[DeadPlaceException]();
+            if (filtered != null) throw filtered;
         } else {
-            Console.OUT.println(new String(new Rail[Char](l,' ')) + e);
-            throw e;
+            Console.ERR.println("unhandled exception " + e);
         }
     }
     
-    private static def stencil_1(A:ResilientDistArray[Double](2), [x,y]:Point(2)): Double {
+    private static def stencil_1(A:DistArray[Double](2), [x,y]:Point(2)): Double {
         return ((at(A.dist(x-1,y)) A(x-1,y)) + 
                 (at(A.dist(x+1,y)) A(x+1,y)) + 
                 (at(A.dist(x,y-1)) A(x,y-1)) + 
                 (at(A.dist(x,y+1)) A(x,y+1))) / 4;
     }
     // /* Tentative workaround since DeatPlaceException is not thrown for "at (p) ..." */
-    // private static def stencil_1(A:ResilientDistArray[Double](2), [x,y]:Point(2)): Double {
+    // private static def stencil_1(A:DistArray[Double](2), [x,y]:Point(2)): Double {
     //     val a:Double, b:Double, c:Double, d:Double;
     //     finish a = at(A.dist(x-1,y)) A(x-1,y);
     //     finish b = at(A.dist(x+1,y)) A(x+1,y);
@@ -154,7 +166,7 @@ public class ResilientHeatTransfer {
     //     return (a+b+c+d)/4;
     // }
     
-    private static def prettyPrint(A:ResilientDistArray[Double](2)) {
+    private static def prettyPrint(A:DistArray[Double](2)) {
         for ([i] in A.region.projection(0)) {
             for ([j] in A.region.projection(1)) {
                 val tmp = at (A.dist(i,j)) A(i,j);

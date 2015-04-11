@@ -11,28 +11,40 @@
 
 package x10.x10rt;
 
+import java.io.UnsupportedEncodingException;
+import java.nio.ByteBuffer;
+
+import com.hazelcast.core.IMap;
+
 import x10.lang.GlobalRail;
 import x10.x10rt.SocketTransport.RETURNCODE;
 
 public class X10RT {
     enum State { UNINITIALIZED, INITIALIZED, RUNNING, TEARING_DOWN, TORN_DOWN };
+    
+    // environment variables we check here
+	public static final String X10_JOIN_EXISTING = "X10_JOIN_EXISTING"; // used to join an existing set of places
+	public static final String X10RT_IMPL = "X10RT_IMPL"; // disabled, javasockets, or x10rt_* (e.g. x10rt_sockets )
+	public static final String X10RT_DATASTORE = "X10RT_DATASTORE"; // only hazelcast is valid currently
 
     static State state = State.UNINITIALIZED;
-    static int here;
-    static int numPlaces;
+    static int hereId;
+    static x10.lang.Place here = null;
     static boolean forceSinglePlace = false;
     public static SocketTransport javaSockets = null;
+    public static long initialEpoch = -1; // set by JavaSockets if we are joining an existing set of places with an existing epoch
     
     public static boolean X10_EXITING_NORMALLY = false;
     static final boolean REPORT_UNCAUGHT_USER_EXCEPTIONS = true;
     public static final boolean VERBOSE = false;
+    static HazelcastDatastore hazelcastDatastore = null;
     
     /**
      * Initialize the X10RT runtime.  This method, or the standard init() method below 
      * must be called before any other methods on this class or on any other X10RT 
      * related class can be successfully invoked.
      */
-    public static synchronized String init_library(final x10.runtime.impl.java.Runtime mainClass) {
+    public static synchronized String init_library() {
     	if (state != State.UNINITIALIZED && 
     			state != State.TORN_DOWN) return null; // already initialized
 
@@ -44,7 +56,7 @@ public class X10RT {
                 System.loadLibrary(libs[i]);
         }
 
-        String libName = System.getProperty("X10RT_IMPL", "sockets");
+        String libName = System.getProperty(X10RT_IMPL, "JavaSockets");
         if (libName.equals("disabled"))
             forceSinglePlace = true;
         else if (libName.equalsIgnoreCase("JavaSockets")) {
@@ -73,9 +85,7 @@ public class X10RT {
 
         state = State.INITIALIZED;
         if (forceSinglePlace) {
-        	here = 0;
-        	numPlaces = 1;
-        	x10.runtime.impl.java.Runtime.MAX_PLACES = numPlaces;
+        	hereId = 0;
             state = State.RUNNING;
         	return null;
         }
@@ -83,6 +93,13 @@ public class X10RT {
         	return x10rt_preinit();
     }
     
+    /**
+     * @deprecated use {@link #init_library()} instead
+     */
+    public static synchronized String init_library(x10.runtime.impl.java.Runtime mainClass) {
+        return init_library();
+    }
+
     /*
      * This method is the second phase of the init_library() call above.  Init_library only initializes
      * internal variables, minus what is needed for communication with other places.
@@ -97,12 +114,8 @@ public class X10RT {
     public static synchronized boolean connect_library(int myPlace, String[] connectionInfo) {
     	if (state != State.INITIALIZED) return true; // already initialized
 
-        X10RT.here = myPlace;
-        if (connectionInfo == null)
-        	numPlaces = 1;
-        else
-        	numPlaces = connectionInfo.length;
-    
+        X10RT.hereId = myPlace;
+        
     	int errcode;
     	if (X10RT.javaSockets != null)
     		errcode = X10RT.javaSockets.establishLinks(myPlace, connectionInfo);
@@ -116,10 +129,40 @@ public class X10RT {
             } catch (java.lang.UnsatisfiedLinkError e){}
             return false;
         }
-        x10.runtime.impl.java.Runtime.MAX_PLACES = numPlaces;
+
         state = State.RUNNING;
+        initDataStore();
+
         return true;
     }
+
+    // elastic X10 form of connect_library, to connect to an existing computation
+    public static synchronized boolean connect_library(String join) {
+    	if (state != State.INITIALIZED) return true; // already initialized
+
+    	int errcode;
+    	if (X10RT.javaSockets != null) {
+    		errcode = X10RT.javaSockets.establishLinks(join);
+    		if (errcode != 0) {
+    			System.err.println("Failed to initialize X10RT. errorcode = "+errcode);
+    			try { x10rt_finalize();
+    			} catch (java.lang.UnsatisfiedLinkError e){}
+    			return false;
+    		}
+    	}
+    	else {
+    		System.err.println("Joining an existing computation is currently only available with JavaSockets");
+    		return false;
+    	}
+
+    	hereId = X10RT.javaSockets.x10rt_here();
+
+        state = State.RUNNING;
+        initDataStore();
+
+        return true;
+    }
+
 
     
     /*
@@ -129,20 +172,26 @@ public class X10RT {
     public static synchronized boolean init() {
       if (state != State.UNINITIALIZED) return true; // already initialized
 
-      String libName = System.getProperty("X10RT_IMPL", "sockets");
+      String libName = System.getProperty("X10RT_IMPL", "JavaSockets");
       if (libName.equals("disabled")) {
           forceSinglePlace = true;
       } 
       else if (libName.equalsIgnoreCase("JavaSockets")) {
+    	  int ret;
     	  X10RT.javaSockets = new SocketTransport();
-    	  int ret = X10RT.javaSockets.establishLinks();
+    	  // check if we are joining an existing computation
+  		  String join = System.getProperty(X10_JOIN_EXISTING);
+  		  if (join != null)
+  			  ret = X10RT.javaSockets.establishLinks(join);
+  		  else
+  			  ret = X10RT.javaSockets.establishLinks();
+  		  
     	  if (ret != RETURNCODE.X10RT_ERR_OK.ordinal()) {
     		  forceSinglePlace = true;
     		  System.err.println("Unable to establish links!  errorcode: "+ret+". Forcing single place execution");
     	  }
     	  else {
-    		  here = X10RT.javaSockets.x10rt_here();
-    		  numPlaces = X10RT.javaSockets.x10rt_nplaces();
+    		  hereId = X10RT.javaSockets.x10rt_here();
     	  }
       }
       else {
@@ -158,8 +207,7 @@ public class X10RT {
 
               TeamSupport.initialize();
 
-              here = x10rt_here();
-              numPlaces = x10rt_nplaces();
+              hereId = x10rt_here();
           } catch (UnsatisfiedLinkError e) {
               System.err.println("Unable to load "+libName+". Forcing single place execution");
               forceSinglePlace = true;
@@ -167,8 +215,7 @@ public class X10RT {
       }
 
       if (forceSinglePlace) {
-          here = 0;
-          numPlaces = 1;
+          hereId = 0;
       }
       else {
           // Add a shutdown hook to automatically teardown X10RT as part of JVM teardown
@@ -187,13 +234,17 @@ public class X10RT {
                           if (VERBOSE) System.err.println("Abnormal exit; skipping call to x10rt_finalize");
                       }
                       state = State.TORN_DOWN;
+                      if (hazelcastDatastore != null)
+                    	  hazelcastDatastore.shutdown();
                       System.err.flush();
                       System.out.flush();
                   }
               }}));
       }
-      x10.runtime.impl.java.Runtime.MAX_PLACES = numPlaces;
+      
       state = State.RUNNING;
+      initDataStore();
+
       return true;
     }
 
@@ -246,8 +297,20 @@ public class X10RT {
      * Return the numeric id of the current Place.
      * @return the numeric id of the current Place.
      */
-    public static int here() {
+    public static int hereId() {
       assert isBooted();
+      return hereId;
+    }
+
+    /**
+     * Return the current Place.
+     * @return the current Place.
+     */
+    public static x10.lang.Place here() {
+      assert isBooted();
+      if (null == here) {
+          here = new x10.lang.Place(hereId);
+      }
       return here;
     }
 
@@ -257,7 +320,12 @@ public class X10RT {
      */
     public static int numPlaces() {
       assert isBooted();
-      return numPlaces;
+      if (javaSockets != null) 
+    	  return javaSockets.x10rt_nplaces();
+      else if (!forceSinglePlace) 
+    	  return x10rt_nplaces();
+      else
+    	  return 1;
     }
 
     /**
@@ -308,7 +376,7 @@ public class X10RT {
         	return x10rt_blocking_probe_support();
       }
 
-    static boolean isBooted() {
+    public static boolean isBooted() {
       return state.compareTo(State.RUNNING) >= 0;
     }
 
@@ -333,8 +401,68 @@ public class X10RT {
     		ret = javaSockets.shutdown();
     	else
     		ret = x10rt_finalize();
+    	
+    	if (hazelcastDatastore != null)
+    		hazelcastDatastore.shutdown();
     	state = State.TORN_DOWN;
     	return ret;
+    }
+    
+    // Retrieve a resilient data store from the underlying network transport
+    // See details of the implementation here: http://hazelcast.org/docs/latest/javadoc/com/hazelcast/core/IMap.html
+    @SuppressWarnings("rawtypes")
+	public static IMap getResilientMap(String name) {
+    	if (hazelcastDatastore != null)
+    		return hazelcastDatastore.getResilientMap(name);
+    	else
+    		return null;
+    }
+    
+    // this form of initDataStore is called as a part of normal startup.
+    private static void initDataStore() {
+        // initialize hazelcast if X10RT_HAZELCAST has been set to true, and this is place 0
+    	// we only start at 0 because the other places need to join an existing hazelcast cluster, 
+    	// and the cluster is seeded via at least one other hazelcast instance.  place 0 doesn't join
+    	// an existing cluster - it is the start of one.
+    	
+    	if (hereId == 0 && "Hazelcast".equalsIgnoreCase(System.getProperty(X10RT_DATASTORE, "none"))) {
+    		if (X10RT.javaSockets == null) {
+    			System.err.println("Error: you specified X10RT_DATASTORE=Hazelcast, but are not using JavaSockets, which is required.  Hazelcast is disabled.");
+    			return;
+    		}
+    		// initialize a new hazelcast cluster
+        	hazelcastDatastore = new HazelcastDatastore(null);
+        	
+        	// go to all other places, and tell them to connect to my newly created hazelcast cluster (of one, so far)
+			try {
+				byte[] message = hazelcastDatastore.getConnectionInfo().getBytes(SocketTransport.UTF8);
+	      	   	for (int i=1; i<numPlaces(); i++) {
+	          	   	javaSockets.sendMessage(SocketTransport.MSGTYPE.CONNECT_DATASTORE, i, 0, ByteBuffer.wrap(message));
+	      	   	}
+
+			} catch (UnsupportedEncodingException e) {
+				// this won't happen, because UTF8 is a required encoding
+				e.printStackTrace();
+				assert(false);
+			}
+			
+			// wait until the number of expected containers have joined us
+			while (hazelcastDatastore.getContainerCount() < numPlaces() ) {
+				try {
+					Thread.sleep(100);
+				} catch (InterruptedException e) {
+					// nothing to do - just go back and check again
+				}
+			}
+			// hazelcast is up and running in all places.  Return, and allow the user program to begin
+    	}
+    }
+    
+    // this form of initDataStore is used to load the data store on demand after normal startup
+    // it takes one argument which is used to describe where this datastore should connect to
+    static void initDataStore(String connectTo) {
+    	//System.out.println("Connecting to hazelcast at "+connectTo);
+    	hazelcastDatastore = new HazelcastDatastore(connectTo);
     }
     
     /*
@@ -366,6 +494,16 @@ public class X10RT {
     }
     public static void remoteXor__1$u(GlobalRail target, long idx, long val) {
         throw new UnsupportedOperationException("remoteXor not implemented for Managed X10");
+    }
+    
+    /*
+     * Forward a request to add more places to the launcher, if supported
+     */
+    public static long addPlaces(long newPlaces) {
+    	if (X10RT.javaSockets != null)
+    		return X10RT.javaSockets.addPlaces(newPlaces);
+    	else
+    		return 0;
     }
 
     /*

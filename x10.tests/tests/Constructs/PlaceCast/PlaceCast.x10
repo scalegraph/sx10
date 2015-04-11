@@ -18,14 +18,14 @@ public class PlaceCast extends x10Test {
     private val root=GlobalRef[PlaceCast](this);
     public def run()  {
 	  val d: Dist = Dist.makeUnique();
-	  Console.OUT.println("num places = " + Place.MAX_PLACES);
+	  Console.OUT.println("num places = " + Place.numPlaces());
 	  val disagree = DistArray.make[BoxedBoolean](d, (Point)=> new BoxedBoolean());
 	  val root = this.root;
 	  finish ateach (p in d) {
 	      // remember if here and d[p] disagree
 	      // at any activity at any place
 	      try {
-		    val q  = d(p).next();
+		    val q  = Place.places().next(d(p));
 		    // Always throws ClassCastException
 		    val x = disagree(p).root as GlobalRef[BoxedBoolean]{self.home==q};
 		    at (root) atomic root().nplaces++; 

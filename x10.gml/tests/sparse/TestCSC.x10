@@ -1,21 +1,21 @@
 /*
- *  This file is part of the X10 Applications project.
+ *  This file is part of the X10 project (http://x10-lang.org).
  *
- *  (C) Copyright IBM Corporation 2011.
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2011-2014.
  */
+
+import harness.x10Test;
 
 import x10.matrix.sparse.CompressArray;
 import x10.matrix.sparse.Compress2D;
 import x10.matrix.sparse.SparseCSC;
 
-public class TestCSC{
-    public static def main(args:Rail[String]) {
-		val testcase = new AddSubCSC(args);
-		testcase.run();
-	}
-}
-
-class AddSubCSC {
+public class TestCSC extends x10Test {
 	public val nzp:Double;
 	public val M:Long;
 	public val N:Long;
@@ -26,10 +26,9 @@ class AddSubCSC {
 		nzp = args.size > 2 ? Double.parse(args(2)):0.99;
 	}
 
-	public def run(): void {
+    public def run():Boolean {
 		var ret:Boolean = true;
 		Console.OUT.println("CSC Test on "+M+"x"+N+" matrix "+ nzp+" sparsity");
- 		// Set the matrix function
 		ret &= (testClone());
 		ret &= (testInit());
 		ret &= (testAdd());
@@ -39,10 +38,7 @@ class AddSubCSC {
 		//ret &= (testExtraction());
 		ret &= (testCopy());
 
-		if (ret)
-			Console.OUT.println("CSC Test passed!");
-		else
-			Console.OUT.println("----------------CSC Test failed!----------------");
+        return ret;
 	}
 
 	public def testClone():Boolean{
@@ -52,19 +48,17 @@ class AddSubCSC {
 		sp.printStatistics();
 		val sp1 = sp.clone();
 		var ret:Boolean = sp.equals(sp1);
-		if (ret)
-		 	Console.OUT.println("CSC Clone test passed!");
-		else
+		if (!ret)
 		 	Console.OUT.println("--------CSC Clone test failed!--------");
-                sp1(1, 1) = sp1(2,2) = 10.0;
 
-                if ((sp1(1,1)==sp1(2,2)) && (sp1(1,1)==10.0)) {
-                        ret &= true;
-                        Console.OUT.println("SparseCSC Matrix chain assignment test passed!");
-                } else {
-                        ret &= false;
-                        Console.OUT.println("---------- SparseCSC Matrix chain assignment test failed!-------");
-                }
+        sp1(1, 1) = sp1(2,2) = 10.0;
+
+        if ((sp1(1,1)==sp1(2,2)) && (sp1(1,1)==10.0)) {
+            ret &= true;
+        } else {
+            ret &= false;
+            Console.OUT.println("---------- SparseCSC Matrix chain assignment test failed!-------");
+        }
 
 		return ret;
 	}
@@ -77,29 +71,25 @@ class AddSubCSC {
 		val sp0 = sp + nsp;
 
 		val ret = sp0.equals(0.0);
-		if (ret)
-			Console.OUT.println("CSC Add: sp+sp.neg() test passed");
-		else
+		if (!ret)
 			Console.OUT.println("--------CSC Add: sp+sp.neg() test failed--------");
 		return ret;
 	}
-	
+
 	public def testInit():Boolean {
-		Console.OUT.println("Start Sparse CSC initialization func test");
+		Console.OUT.println("Sparse CSC initialization func test");
 		var ret:Boolean=true;
 		val sp = SparseCSC.make(M, N, 0.6).init((r:Long, c:Long)=>((r+c)%2 as Double));
 
 		for (var c:Long=0; c<N; c++)
 			for (var r:Long=0; r<M; r++)
 				ret &= (sp(r,c) == ((r+c)%2 as Double));
-		
-		if (ret)
-			Console.OUT.println("SparseCSC initialization func test passed!");
-		else
+
+		if (!ret)
 			Console.OUT.println("--------SparseCSC initialization func test failed--------");
 		return ret;
 	}
-	
+
 	public def testAddSub():Boolean {
 		Console.OUT.println("CSC Add-sub");
 		val sp = SparseCSC.make(M, N, nzp);
@@ -109,13 +99,11 @@ class AddSubCSC {
 		val sp2 = sp + sp1;
 		val sp_c = sp2 - sp1;
 		val ret = sp.equals(sp_c);
-		if (ret)
-			Console.OUT.println("CSC Add-sub test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------CSC Add-sub test failed!--------");
 		return ret;
 	}
-	
+
 	public def testAddAssociative():Boolean {
 		Console.OUT.println("CSC Add associative test");
 		val a = SparseCSC.make(M, N, nzp);
@@ -125,9 +113,7 @@ class AddSubCSC {
 		val c1 = a + b + c;
 		val c2 = a + (b + c);
 		val ret = c1.equals(c2);
-		if (ret)
-			Console.OUT.println("CSC Add associative test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------CSC Add associative test failed!--------");
 		return ret;
 	}
@@ -140,9 +126,7 @@ class AddSubCSC {
 		val a2= a * 0.8;
 		val aa=a1+a2;
 		val ret = a.equals(aa);
-		if (ret)
-			Console.OUT.println("CSC Scaling-Add test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------CSC Scaling-Add test failed!--------");
 		return ret;
 	}
@@ -157,53 +141,48 @@ class AddSubCSC {
 
 		SparseCSC.copyRows(sm, 0, s2, 0, M);
 		//sm.copyRowsToSparse(0, M, s2);//in SparseCSC
-		ret &= sm.equals(s2); 
-		if (ret) Console.OUT.println("Copy row by row passed");
+		ret &= sm.equals(s2);
 
  		//sm.copyColsToSparse(0, N, s2);
 		SparseCSC.copy(sm, s2);
  		ret &= s2.equals(s2);
-		if (ret) Console.OUT.println("Full copy all columns passed");
-		
+
 		val s3 = SparseCSC.make(M-2, N, nzp);
 		//sm.copyRowsToSparse(1, M-2, s3);
 		SparseCSC.copyRows(sm, 1, s3, 0, M-2);
 		for (var c:Long=0; c<s3.N; c++)
 			for (var r:Long=0; r<s3.M; r++)
-				ret &= sm(r+1, c)==s3(r, c); 
-		if (ret) Console.OUT.println("Partial rows copy passed");
+				ret &= sm(r+1, c)==s3(r, c);
 
 		val s4 = SparseCSC.make(M, N-2, nzp);
  		//sm.copyColsToSparse(1, N-2, s4);
 		SparseCSC.copyCols(sm, 1, s4, 0, N-2);
 		for (var c:Long=0; c<s4.N; c++)
 			for (var r:Long=0; r<s4.M; r++)
-				ret &= sm(r, c+1)==s4(r, c); 
-		if (ret) Console.OUT.println("Partial column copy passed");
+				ret &= sm(r, c+1)==s4(r, c);
 
-		
-		if (ret)
-			Console.OUT.println("CSC submatrix and data extraction test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------CSC submatrix and data extraction failed!--------");
-		return ret;		
+		return ret;
 	}
-	
+
 	public def testCopy():Boolean {
-		Console.OUT.println("CSC start testing copying for CSC to another CSC");
+		Console.OUT.println("CSC copying to another CSC");
 		Console.OUT.flush();
-		var retval:Boolean = true;
+		var ret:Boolean = true;
 		val sm = SparseCSC.make(M, N, nzp).initRandom();
 		val dm = SparseCSC.make(M, N, nzp);
-		
+
 		SparseCSC.copyCols(sm, N-1, dm, 0, 1);
 		for (var r:Long=0; r<M; r++)
-			retval &= (sm(r, N-1)== dm(r, 0));
-		
-		if (retval)
-			Console.OUT.println("CSC copy test passed!");
-		else
+			ret &= (sm(r, N-1)== dm(r, 0));
+
+		if (!ret)
 			Console.OUT.println("--------CSC copy test failed!--------");
-		return retval;
+		return ret;
+	}
+
+    public static def main(args:Rail[String]) {
+		new TestCSC(args).execute();
 	}
 }

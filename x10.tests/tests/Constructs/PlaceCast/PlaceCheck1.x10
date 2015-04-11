@@ -19,7 +19,7 @@ public class PlaceCheck1 extends x10Test {
 
 	public def run(): boolean = {
 		var ret: boolean;
-		x10.io.Console.OUT.println("num places = " + Place.MAX_PLACES);
+		x10.io.Console.OUT.println("num places = " + Place.numPlaces());
 		// this test only works with > 1 place
 		if (Place.numPlaces() <= 1) {
 			x10.io.Console.OUT.println("This test requires at least 2 places.");
@@ -38,7 +38,7 @@ public class PlaceCheck1 extends x10Test {
 		return ret;
 	}
 
-	public static def getNotHere() = here.next();
+	public static def getNotHere() = Place.places().next(here);
 	public var foo: int;
 	public def foo_method() = 42;
 

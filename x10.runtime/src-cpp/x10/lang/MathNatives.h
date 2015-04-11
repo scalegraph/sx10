@@ -52,7 +52,19 @@ namespace x10 {
             static inline x10_double ceil(x10_double x) { return ::ceil(x); }
             static inline x10_double floor(x10_double x) { return ::floor(x); }
             static inline x10_double round(x10_double x) { return ::round(x); }
+            static inline x10_float roundf(x10_float x) { return ::roundf(x); }
             static inline x10_double copysign(x10_double x, x10_double y) { return ::copysign(x, y); }
+            static inline x10_float copysignf(x10_float x, x10_float y) { return ::copysignf(x, y); }
+            static inline x10_double scalbn(x10_double x, x10_int y) { return ::scalbn(x,y); }
+            static inline x10_float scalbnf(x10_float x, x10_int y) { return ::scalbnf(x,y); }
+            static inline x10_double nextafter(x10_double x, x10_double y) { return ::nextafter(x, y); }
+            static inline x10_float nextafterf(x10_float x, x10_float y) { return ::nextafterf(x, y); }
+            static inline x10_double rint(x10_double x) { return ::rint(x); }
+            static inline x10_double remainder(x10_double x, x10_double y) { return ::remainder(x, y); }
+            static inline x10_double fmax(x10_double x, x10_double y) { return ::fmax(x, y); }
+            static inline x10_float fmaxf(x10_float x, x10_float y) { return ::fmaxf(x, y); }
+            static inline x10_double fmin(x10_double x, x10_double y) { return ::fmin(x, y); }
+            static inline x10_float fminf(x10_float x, x10_float y) { return ::fminf(x, y); }
         };
     }
 }

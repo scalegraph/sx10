@@ -25,7 +25,6 @@ import x10.serialization.X10JavaSerializer;
  * Represents a boxed ULong value. Boxed representation is used when casting
  * a ULong value into type Any or parameter type T.
  */
-@SuppressWarnings("serial")
 final public class ULong extends java.lang.Number implements StructI, java.lang.Comparable<ULong>,
 // for X10PrettyPrinterVisitor.exposeSpecialDispatcherThroughSpecialInterface
 //    x10.lang.Arithmetic<ULong>, x10.lang.Bitwise<ULong>, x10.util.Ordered<ULong>
@@ -126,6 +125,10 @@ final public class ULong extends java.lang.Number implements StructI, java.lang.
         if (a > b) return 1;
         else if (a < b) return -1;
         return 0;
+    }
+
+    private Object writeReplace() throws java.io.ObjectStreamException {
+        return new x10.serialization.SerializationProxy(this);
     }
 
     public void $_serialize(X10JavaSerializer $serializer) throws IOException {

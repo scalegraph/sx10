@@ -17,7 +17,6 @@
 #include <x10aux/config.h>
 
 #include <x10/lang/X10Class.h>
-#include <x10/lang/Fun_0_1.h>
 #include <x10/lang/CharSequence.h>
 #include <x10/lang/Comparable.h>
 
@@ -173,12 +172,14 @@ namespace x10 {
             x10_boolean endsWith(::x10::lang::String* s);
 
             String () : FMGL(content)(NULL) { }
-            virtual ~String () {
-                #ifndef X10_USE_BDWGC
-                ::x10aux::dealloc(FMGL(content));
-                #endif
-            }
 
+            // For use in compiler generated code for static string literals.
+            // Invariant: Caller must ensure lifetime of content
+            //   is at least as long as that of the String instance since
+            //   we are NOT copying the content into a new object.
+            String(const char* s) : FMGL(content)(s),
+                FMGL(content_length)(strlen(s)) { }
+            
             template<class T> static String* __plus(String*, T);
             template<class T> static String* __plus(T, String*);
             static String* __plus(String* p1, String* p2);

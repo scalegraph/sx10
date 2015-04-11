@@ -13,7 +13,7 @@ package x10.matrix.dist;
 
 import x10.util.Timer;
 
-import x10.matrix.Debug;
+import x10.matrix.util.Debug;
 import x10.matrix.Matrix;
 import x10.matrix.DenseMatrix;
 import x10.matrix.blas.DenseMatrixBLAS;
@@ -222,9 +222,9 @@ public class DistMultDistToDup {
             val dmC = C.local() as DenseMatrix(dmA.N, dmB.N);
             
             if (p != rootpid || !plus)
-                DenseMatrixBLAS.compTransMult(dmA, dmB, dmC, false);
+                DenseMatrixBLAS.compTransMult(1.0, dmA, dmB, 0.0, dmC);
             else 
-                DenseMatrixBLAS.compTransMult(dmA, dmB, dmC, true);
+                DenseMatrixBLAS.compTransMult(1.0, dmA, dmB, 1.0, dmC);
         }
         /* TIMING */ C.calcTime += Timer.milliTime() - stt;
 

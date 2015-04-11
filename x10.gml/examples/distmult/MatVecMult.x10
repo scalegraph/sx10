@@ -9,9 +9,9 @@
  *  (C) Copyright IBM Corporation 2006-2014.
  */
 
-import x10.matrix.Debug;
+import x10.matrix.util.Debug;
 import x10.matrix.Matrix;
-import x10.matrix.MathTool;
+import x10.matrix.util.MathTool;
 import x10.matrix.DenseMatrix;
 import x10.matrix.Vector;
 import x10.matrix.block.Grid;
@@ -37,10 +37,10 @@ public class MatVecMult {
 	public val verify:Boolean;
 	
 	public def this(args:Rail[String]) {
-		M = args.size > 0      ? Int.parse(args(0)):10;
-		N = args.size > 1      ? Int.parse(args(1)):(M as Int)+1;
-		bM = args.size > 2     ? Int.parse(args(2)):4;
-		bN = args.size > 3     ? Int.parse(args(3)):5;
+		M = args.size > 0      ? Long.parse(args(0)):10;
+		N = args.size > 1      ? Long.parse(args(1)):M+1;
+		bM = args.size > 2     ? Long.parse(args(2)):4;
+		bN = args.size > 3     ? Long.parse(args(3)):5;
 		nzd =  args.size > 4   ? Double.parse(args(4)):0.99;
 		verify = args.size > 5 ? true:false;
 	
@@ -68,7 +68,7 @@ public class MatVecMult {
 		Console.OUT.printf("----------------------------------------------------\n");
 		Console.OUT.printf("Demo DistBlockMatrix * DistVector = DupVector. Matrix must have horizontal distribution\n");
 		
-		val pM = 1, pN=Place.MAX_PLACES; //Horizontal distribution
+		val pM = 1, pN=Place.numPlaces(); //Horizontal distribution
 		
 		Console.OUT.printf("Creating dense matrix(%d,%d) partitioned in (%dx%d) blocks ",	M, N, bM, bN);
 		Console.OUT.printf("distributed in (%dx%d) places (horizontal dist)\n", pM, pN);
@@ -106,7 +106,7 @@ public class MatVecMult {
 	public def demoDistMatDupVecMult():Boolean{
 		Console.OUT.printf("----------------------------------------------------\n");
 		Console.OUT.printf("Demo DistBlockMatrix * DupVector = DistVector. Matrix must have vertical distribution\n");
-		val pM = Place.MAX_PLACES, pN= 1;//Vertical distribution
+		val pM = Place.numPlaces(), pN= 1;//Vertical distribution
 		
 		Console.OUT.printf("Creating partitioning of matrix(%d,%d) in (%dx%d) blocks\n", M, N, bM, bN);
 		val gPart = DistGrid.makeGrid(M, N, bM, bN, pM, pN);
@@ -149,8 +149,8 @@ public class MatVecMult {
 	
 		Console.OUT.printf("----------------------------------------------------\n");
 		Console.OUT.printf("Deome DistBlockMatrix * DupVector -> DupVector for any matrix DistGrid distribution\n");
-		val pM:Long = MathTool.sqrt(Place.MAX_PLACES);
-		val pN:Long = Place.MAX_PLACES / pM;
+		val pM:Long = MathTool.sqrt(Place.numPlaces());
+		val pN:Long = Place.numPlaces() / pM;
 		
 		Console.OUT.printf("Creating dense matrix (%d,%d) partitoned in (%dx%d) blocks ", M, N, bM, bN);
 		Console.OUT.printf("distributed over (%dx%d) places\n", pM, pN);

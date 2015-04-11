@@ -25,7 +25,7 @@ import x10.serialization.X10JavaSerializer;
  * a Boolean value to type Any, parameter type T or superinterfaces such
  * as Comparable<Boolean>.
  */
-final public class Boolean extends Struct implements java.lang.Comparable<Boolean>
+final public class Boolean implements StructI, java.lang.Comparable<Boolean>
 {
     public static final RuntimeType<?> $RTT = Types.BOOLEAN;
     public RuntimeType<?> $getRTT() {return $RTT;}
@@ -100,6 +100,10 @@ final public class Boolean extends Struct implements java.lang.Comparable<Boolea
     // implements Comparable<Boolean>
     public int compareTo(Boolean o) {
         return (o.$value == $value ? 0 : ($value ? 1 : -1));
+    }
+
+    private Object writeReplace() throws java.io.ObjectStreamException {
+        return new x10.serialization.SerializationProxy(this);
     }
 
     public void $_serialize(X10JavaSerializer $serializer) throws IOException {

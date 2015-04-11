@@ -17,8 +17,8 @@ public final class Queue extends BC implements TaskQueue[Queue, Double] {
 		super(rmat, permute, yf);
 		lower = new Rail[Int](4096);
 		upper = new Rail[Int](4096);
-		val h = Runtime.hereInt();
-		val max = Place.MAX_PLACES;
+		val h = here.id as Int;
+		val max = Place.numPlaces();
 		lower(0) = (N as Long*h/max) as Int;
 		upper(0) = (N as Long*(h+1)/max) as Int;
 		size = 1;

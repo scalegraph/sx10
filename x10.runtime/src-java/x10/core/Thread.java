@@ -29,9 +29,13 @@ public class Thread implements Any, Unserializable {
 
     private java.lang.Thread jthread;
 
+    public static boolean isX10WorkerThread$O() {
+	return java.lang.Thread.currentThread() instanceof X10WorkerThread;
+    }
+
     static final ThreadLocal<Thread> context = new ThreadLocal<Thread>() {
         protected Thread initialValue() {
-            return x10.lang.Runtime.wrapNativeThread();
+            return x10.xrx.Runtime.wrapNativeThread();
         }
     };
 
@@ -44,18 +48,23 @@ public class Thread implements Any, Unserializable {
     // constructor just for allocation
     public Thread(java.lang.System[] $dummy) {}
 
-    public final Thread x10$lang$Thread$$init$S(String name) {
-        jthread = new java.lang.Thread(name) {
+    class X10WorkerThread extends java.lang.Thread {
+	public X10WorkerThread (String name) {
+	    super(name);
+	}
             public void run() {
-                context.set(Thread.this);
-                if (null != body) {
-                    body.$apply();
-                } else {
-                    $apply();
-                }
-            }
-        };
-        return this;
+	       context.set(Thread.this);
+	       if (null != body) {
+		   body.$apply();
+	       } else {
+		   $apply();
+	       }
+	   }
+        }
+
+    public final Thread x10$lang$Thread$$init$S(String name) {
+        jthread = new X10WorkerThread(name);
+	return this;
     }
     
     public void removeWorkerContext() {
@@ -119,11 +128,15 @@ public class Thread implements Any, Unserializable {
             java.lang.Thread.sleep(time, nanos);
         } catch (java.lang.InterruptedException e) {
             try {
-                throw new x10.lang.InterruptedException();
+                throw new x10.xrx.InterruptedException();
             } catch (java.lang.Exception e2) {
                 e2.printStackTrace();
             }
         }
+    }
+
+    private Object writeReplace() throws java.io.ObjectStreamException {
+        throw new x10.io.NotSerializableException("Cannot serialize " + getClass());
     }
 
     public short $_get_serialization_id() {

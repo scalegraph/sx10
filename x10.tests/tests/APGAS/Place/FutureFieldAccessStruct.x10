@@ -33,7 +33,7 @@ public class FutureFieldAccessStruct extends x10Test {
     val c = C[String]("1");
 
     public def run02(): boolean = {
-    		val p = Place.place(1);
+    		val p = Place(1);
     		val cc = this.c;
             val f = Future.make[boolean](() => at(p) {
             	// cannot access a field that is not global
@@ -44,7 +44,7 @@ public class FutureFieldAccessStruct extends x10Test {
     }
 
     public def run(): boolean {
-    	if (Place.MAX_PLACES == 1L) {
+    	if (Place.numPlaces() == 1L) {
     		x10.io.Console.OUT.println("not enough places to run this test");
     		return false;
     	}

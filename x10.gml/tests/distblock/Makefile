@@ -1,18 +1,9 @@
 ###################################################
-###################################################
-## Name:  	X10 application test
-## Created by: 	Juemin Zhang
-## Contact:   	zhangj@us.ibm.com
-###################################################
-###################################################
-
-
-###################################################
 # Source and target file
 ###################################################
 target_list 	= TestDistBlock TestDupBlock TestDistMult TestDistDupMult TestDupDistMult TestSumma TestDistVector TestDupVector TestDistDupVectorMult
 
-target		= TestSumma
+target		= TestDupVector
 #target		= TestDistDupMult
 
 # build path
@@ -22,8 +13,8 @@ build_path	= build
 gml_path    = ../../
 
 # compile options
-X10_FLAG	= -d $(build_path) -report postcompile=2 -v -errors 5 -VERBOSE_CHECKS 
-#-O -NO_CHECKS
+X10_FLAG	= -d $(build_path)  -errors 5 -VERBOSE_CHECKS 
+
 
 # runtime settings
 runtime_list = mpi sock java

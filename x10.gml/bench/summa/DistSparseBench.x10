@@ -12,7 +12,7 @@
 import x10.util.Timer;
 
 import x10.matrix.Matrix;
-import x10.matrix.Debug;
+import x10.matrix.util.Debug;
 import x10.matrix.DenseMatrix;
 import x10.matrix.sparse.SparseCSC;
 
@@ -37,7 +37,7 @@ public class DistSparseBench {
 class RunDistSparseBench {
 	public val M:Long, N:Long, K:Long, iter:Long, nzD:Double, pCmp:Double;
 	public val testps:Long; lastps:Long;
-	public val nplace:Long = Place.MAX_PLACES;
+	public val nplace:Long = Place.numPlaces();
 
 	public val aPart:Grid;
 	public val bPart:Grid;

@@ -28,6 +28,12 @@ public final class DenseIterationSpace_1 extends IterationSpace(1){rect} {
         this.max = max;
     }
 
+    public static operator (r:LongRange) = new DenseIterationSpace_1(r.min, r.max);
+
+    public operator this * (that:LongRange):DenseIterationSpace_2{self!=null} {
+        return new DenseIterationSpace_2(min, that.min, max, that.max);
+    }
+
     public def min(i:Long):Long {
        if (i != 0) throw new IllegalOperationException(i +" is not a valid rank");
        return min;
@@ -39,6 +45,8 @@ public final class DenseIterationSpace_1 extends IterationSpace(1){rect} {
     }
 
     public def isEmpty() = max < min;
+
+    public def size() = max - min + 1;
 
     public def iterator():Iterator[Point(1)] = new DIS_1_It(min, max);
 
@@ -53,5 +61,11 @@ public final class DenseIterationSpace_1 extends IterationSpace(1){rect} {
  
         public def hasNext() = cur <= last;
         public def next() = Point.make(cur++);
+    }
+
+    public def toString():String {
+        return "["
+            +min+".."+max
+            +"]";
     }
 }

@@ -49,10 +49,8 @@ public abstract class Dist(
      * @return a "unique" distribution over all places.
      */
     public static def makeUnique():Dist(1) {
-        return UNIQUE as Dist(1);        
+        return new UniqueDist() as Dist(1);
     }
-    // Cache pre-allocated UniqueDist to optimize makeUnique calls.
-    private static val UNIQUE = new UniqueDist();
 
     /**
      * Create a distribution over the specified region that maps
@@ -76,90 +74,74 @@ public abstract class Dist(
     public static def make(r:Region):Dist(r) = makeConstant(r);
 
     /**
-     * Create a distribution over the specified region that varies in
-     * place only along the specified axis, and maps the ith
-     * coordinate along that axis to place i%Place.NUM_PLACES.
-     *
-     * @param r the given region
-     * @param axis the dimension to cycle over
-     * @return a "cyclic" distribution over r.
-     */     
-    public static def makeCyclic(r:Region, axis:Long):Dist(r) = makeBlockCyclic(r, axis, 1);
-    
-    /**
-     * Create a distribution over the specified region that varies in
-     * place only along the zeroth axis, and maps the ith
-     * coordinate along that axis to place i%Place.NUM_PLACES.
-     *
-     * @param r the given region
-     * @return a "cyclic" distribution over r, cycling over the zeroth axis.
-     */
-    public static def makeCyclic(r:Region):Dist(r) = makeBlockCyclic(r, 0, 1);
-    
-    /**
-     * Create a distribution over the specified region that varies in
-     * place only along the specified axis. It divides the coordinates
-     * along that axis into Place.MAX_PLACES blocks, and assigns
-     * successive blocks to successive places.  If the number of coordinates
+     * Create a distribution of the specified region over all 
+     * Places that varies in place only along the specified axis.
+     * It divides the coordinates along that axis into Place.numPlaces() blocks, 
+     * and assigns successive blocks to successive places.  If the number of coordinates
      * in the axis does not divide evenly into the number of blocks, then 
-     * the first (max(axis)-min(axis)+1)%Place.MAX_PLACES blocks will be assigned 
+     * the first (max(axis)-min(axis)+1)%Place.numPlaces() blocks will be assigned 
      * one more coordinate than the remaining blocks.
      *
      * @param r the given region
      * @param axis the dimension to block over
      * @return a "block" distribution over r.
      */
-    public static def makeBlock(r:Region, axis:Long):Dist(r) = makeBlock(r, axis, PlaceGroup.WORLD);
+    public static def makeBlock(r:Region, axis:Long):Dist(r) = makeBlock(r, axis, Place.places());
 
     /**
-     * Creates a block, block distribution across all places.
+     * Creates a block, block distribution across the specified PlaceGroup pg.
      * The coordinates are split along axis0 into M divisions such that M is the minimum of:
      *   - 2^q where q is the next integer above log2(P) / 2
      *   - the length of axis0
-     * and split along axis1 into N divisions such that M*(N-1) <= P <= M*N.
+     * and split along axis1 into N divisions such that M*(N-1) <= pg.size() <= M*N.
      * Thus there are M*N blocks of size (axis0/M, axis1/N).
      * The blocks are not necessarily of integer size in either dimension.
-     * Places 0..(M*N-P) are each assigned two such blocks, contiguous in axis0.
+     * Places 0..(M*N-pg.size()) are each assigned two such blocks, contiguous in axis0.
      * The remaining places are assigned a single block.
      * Block min and max coordinates are rounded to create subregions for each place,
      * e.g. a block [1.0..1.5,2.25..2.75] is rounded to a subregion [1..2,2..2].
      * @param r the given region
      * @param axis0 the first dimension to block over
      * @param axis1 the second dimension to block over
-     * @return a "block,block" distribution over r.
+     * @param pg the set of places
+     * @return a "block,block" distribution of region r over the places in pg
      */
-    public static def makeBlockBlock(r:Region, axis0:Long, axis1:Long):Dist(r) {
-        return new BlockBlockDist(r, axis0, axis1, PlaceGroup.WORLD);
+    public static def makeBlockBlock(r:Region, axis0:Long, axis1:Long, pg:PlaceGroup):Dist(r) {
+        return new BlockBlockDist(r, axis0, axis1, Place.places());
     }
 
     /**
-     * Create a distribution over the specified region that varies in
+     * Creates a block, block distribution across all places.
+     * @param r the given region
+     * @param axis0 the first dimension to block over
+     * @param axis1 the second dimension to block over
+     * @see makeBlockBlock(Region, Long, Long, PlaceGroup)
+     */
+    public static def makeBlockBlock(r:Region, axis0:Long, axis1:Long):Dist(r)
+        = makeBlockBlock(r, axis0, axis1, Place.places());
+
+    /**
+     * Creates a block, block distribution across all places that varies in
+     * place along the 0-th and 1st axes.
+     * @param r the given region
+     * @see makeBlockBlock(Region, Long, Long, PlaceGroup)
+     */
+    public static def makeBlockBlock(r:Region):Dist(r)
+        = makeBlockBlock(r, 0, 1, Place.places());
+
+    /**
+     * Create a distribution of the specified region over all places that varies in
      * place only along the 0-th axis. It divides the coordinates
-     * along the 0-th axis into Place.MAX_PLACES blocks, and assigns
+     * along the 0-th axis into Place.numPlaces() blocks, and assigns
      * successive blocks to successive places.  If the number of coordinates
      * in the axis does not divide evenly into the number of blocks, then 
-     * the first (max(axis)-min(axis)+1)%Place.MAX_PLACES blocks will be assigned 
+     * the first (max(axis)-min(axis)+1)%Place.numPlaces() blocks will be assigned 
      * one more coordinate than the remaining blocks.
      *
      * @param r the given region
      * @return a "block" distribution over r.
      */
-    public static def makeBlock(r:Region) = makeBlock(r, 0, PlaceGroup.WORLD);
-
-    /**
-     * Create a distribution over the specified region that varies in
-     * place only along the specified axis. It divides the coordinates
-     * along that axis into blocks of the specified size, and assigns
-     * block i to place i%Place.MAX_PLACES.
-     *
-     * @param r the given region
-     * @param axis the dimension to block over
-     * @param blockSize the size of the block
-     * @return a "block-cyclic" distribution over r.
-     */
-    public static def makeBlockCyclic(r:Region, axis:Long, blockSize:Long):Dist(r) {
-        throw new UnsupportedOperationException(); // short term while eliminating BaseDist
-    }
+    public static def makeBlock(r:Region) = makeBlock(r, 0, Place.places());
 
     /**
      * Create a distribution over a rank-1 region that maps every
@@ -170,7 +152,7 @@ public abstract class Dist(
      * @return a "unique" distribution over the places in ps
      */
     public static def makeUnique(pg:PlaceGroup):Dist(1) {
-        if (pg.equals(PlaceGroup.WORLD)) {
+        if (pg.equals(Place.places())) {
             return makeUnique();
         } else {
             return new UniqueDist(pg) as Dist(1);
@@ -187,20 +169,6 @@ public abstract class Dist(
      */
     public static def makeConstant(r:Region, p:Place):Dist(r) {
         return new ConstantDist(r, p);
-    }
-
-    /**
-     * Create a distribution over the specified region that varies in
-     * place only along the specified axis, and maps the ith
-     * coordinate along that axis to place ps(i%ps.length).
-     *
-     * @param r the given region
-     * @param axis the dimension to cycle over
-     * @param pg the PlaceGroup over which to distribute the region
-     * @return a "cyclic" distribution over r, cycling over the places in ps.
-     */
-    public static def makeCyclic(r:Region, axis:Long, pg:PlaceGroup):Dist(r) {
-        throw new UnsupportedOperationException(); // short term while eliminating BaseDist
     }
 
     /**

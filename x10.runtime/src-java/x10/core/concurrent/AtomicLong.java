@@ -21,7 +21,6 @@ import x10.serialization.X10JavaDeserializer;
 import x10.serialization.X10JavaSerializable;
 import x10.serialization.X10JavaSerializer;
 
-@SuppressWarnings("serial")
 public final class AtomicLong extends java.util.concurrent.atomic.AtomicLong implements Any, X10JavaSerializable {
 
     // constructor just for allocation
@@ -54,6 +53,10 @@ public final class AtomicLong extends java.util.concurrent.atomic.AtomicLong imp
     );
     public RuntimeType<AtomicLong> $getRTT() {return $RTT;}
     public Type<?> $getParam(int i) { return null; }
+
+    private Object writeReplace() throws java.io.ObjectStreamException {
+        return new x10.serialization.SerializationProxy(this);
+    }
 
 	public void $_serialize(X10JavaSerializer serializer) throws IOException {
 		serializer.write(this.get());

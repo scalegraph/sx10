@@ -2456,7 +2456,7 @@ public class Emitter {
 
     private void printBridgeMethodForInheritedMethod(ClassType ct, MethodInstance mi) {
     	    MethodDef def = mi.def();
-    	    w.write("// bridge for " + def);
+    	    w.write("// bridge for inherited " + def);
     	    w.newline();
     
     	    Flags flags = mi.flags();
@@ -2511,6 +2511,10 @@ public class Emitter {
     	        closeParen = printUnboxConversion(mi.returnType());
     	    }
     
+    	    if (def.flags().isAbstract()) {
+    	    	// abstract method cannot be called with super
+        	    w.write("/*super.*/");    	    	
+    	    } else
     	    w.write("super.");
     	    
     	    // call
@@ -3005,7 +3009,7 @@ public class Emitter {
         
 	names = new Name[def.formalTypes().size()];
         for (int i = 0; i < def.formalTypes().size(); i++) {
-            Type f = dispatch.formalTypes().get(i);
+            Type df = dispatch.formalTypes().get(i);
             if (!first || i != 0) {
                 w.write(", ");
             }
@@ -3033,7 +3037,7 @@ public class Emitter {
                 names[i] = name1;
             } else {
                 w.write("final ");
-                printType(f, 0);
+                printType(df, 0);
                 
                 w.write(" ");
                 
@@ -3100,7 +3104,10 @@ public class Emitter {
             }
             
             // call
+            // WIP XTENLANG-3402
             printMethodName(mi.def(), false, false, false, null);
+//            printMethodName(def.container().get().toClass(), mi);
+//            printMethodName(mi.container().toClass(), mi);
             
             // print the argument list
             w.write("(");
@@ -3122,10 +3129,20 @@ public class Emitter {
                     w.write(", ");
                 }
                 boolean closeParen = false;
-                if (isBoxedType(def.formalTypes().get(i).get())) {
+                Type type = def.formalTypes().get(i).get();
+                if (isBoxedType(type)) {
                     Type bf = Types.baseType(f);
                     if (!isBoxedType(f)) {
-                        closeParen = printUnboxConversion(f);
+                        // WIP XTENLANG-3402
+                        Type df = dispatch.formalTypes().get(i);
+//                        if (isBoxedType(df)) {
+                        if (false) {
+                            printBoxConversion(f);
+                            w.write("(");
+                            closeParen = true;
+                        } else {
+                            closeParen = printUnboxConversion(f);
+                        }
                     } else if (!isMethodParameter(bf, mi, tr.context())) {
                         // TODO:CAST
                         w.write("(");
@@ -3975,7 +3992,7 @@ public class Emitter {
     private ClassType Thread_;
     private ClassType Thread() {
         if (Thread_ == null)
-            Thread_ = tr.typeSystem().load("x10.lang.Thread");
+            Thread_ = tr.typeSystem().load("x10.xrx.Thread");
         return Thread_;
     }
 
@@ -4380,6 +4397,7 @@ public class Emitter {
             }
             throwsClause = new Join(this, "", "throws ", new Join(this, ", ", l));
         }
+        X10CompilerOptions opts = (X10CompilerOptions) tr.job().extensionInfo().getOptions();
 
         //w.writeln("@SuppressWarnings(\"serial\")");
         w.writeln("public static class " + X10PrettyPrinterVisitor.MAIN_CLASS + " extends " + X10PrettyPrinterVisitor.X10_RUNTIME_IMPL_JAVA_RUNTIME);
@@ -4396,7 +4414,11 @@ public class Emitter {
         w.newline(4);
         w.begin(0);
         w.writeln("// start native runtime");
-        w.write("new " + X10PrettyPrinterVisitor.MAIN_CLASS + "().start(args);");
+        if (opts.x10_config.EXECUTOR_MODE) {
+            w.write("new " + X10PrettyPrinterVisitor.MAIN_CLASS + "().startExecutor(args);");
+        } else {
+            w.write("new " + X10PrettyPrinterVisitor.MAIN_CLASS + "().start(args);");
+        }
         w.end();
         w.newline();
         w.write("}");

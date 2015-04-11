@@ -65,6 +65,12 @@ ifeq ($(X10RT_PLATFORM),cygwin)
     override XRX_DEP_LIBS += -lgc
   endif
 endif
+ifeq ($(subst 64,,$(X10RT_PLATFORM)),darwin)
+  XRX_DEP_LIBS = -L"$(DISTDIR)"/lib
+  ifdef ENABLE_GC
+    override XRX_DEP_LIBS += -lgc
+  endif
+endif
 XRX_PROPERTIES = libx10.properties
 SHLIB_PROPERTIES = sharedlib.properties
 
@@ -86,7 +92,10 @@ xrx: $(XRX_ARCHIVE)
 #
 # The sort is a workaround for XTENLANG-676.  The order in which files are listed on the x10c++ commandline
 # appears to affect the results of typechecking.  By sorting, we force a deterministic order of files.
-XRX_REL_SRCS  = $(shell $(FIND) ../src-x10 -name .svn -prune -o -name '*.x10' -print | sort )
+#
+# By convention, we also ignore all packages called 'managed' when compiling Native X10.
+#
+XRX_REL_SRCS  = $(shell $(FIND) ../src-x10 -name .svn -prune -o -name managed -prune -o -name '*.x10' -print | sort )
 XRX_SRCS = $(subst ../src-x10/,, $(XRX_REL_SRCS))
 
 #enable asserts, do not look in jar for x10 files
@@ -142,6 +151,7 @@ ALL_XRCPP_OBJECTS = \
 	x10aux/lock.o \
 	x10aux/network.o \
 	x10aux/network_dispatcher.o \
+	x10aux/pcond.o \
 	x10aux/place_local.o \
 	x10aux/reference_logger.o \
 	x10aux/RTT.o \
@@ -164,6 +174,7 @@ ALL_XRCPP_OBJECTS = \
 	x10/lang/Closure.o \
 	x10/lang/Comparable.o \
 	x10/lang/Complex.o \
+	x10/lang/Condition.o \
 	x10/lang/Double.o \
 	x10/lang/Fun.o \
 	x10/lang/GlobalRef.o \
@@ -176,10 +187,8 @@ ALL_XRCPP_OBJECTS = \
 	x10/lang/RuntimeNatives.o \
 	x10/lang/Short.o \
 	x10/lang/String.o \
-	x10/lang/Deque.o \
 	x10/lang/Lock__ReentrantLock.o \
 	x10/lang/PlaceLocalHandle_Impl.o \
-	x10/lang/Thread.o \
 	x10/lang/UByte.o \
 	x10/lang/UInt.o \
 	x10/lang/ULong.o \
@@ -189,7 +198,9 @@ ALL_XRCPP_OBJECTS = \
 	x10/util/concurrent/AtomicBooleanNatives.o \
 	x10/util/concurrent/AtomicIntegerNatives.o \
 	x10/util/concurrent/AtomicLongNatives.o \
-	x10/util/concurrent/AtomicReference.o
+	x10/util/concurrent/AtomicReference.o \
+	x10/xrx/Deque.o \
+	x10/xrx/Thread.o
 
 ALL_MANUAL_OBJECTS=$(ALL_XRCPP_OBJECTS)
 

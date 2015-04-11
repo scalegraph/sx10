@@ -42,6 +42,10 @@ while [ $# != 0 ]; do
 	  BUILD_RPM=1
     ;;
 
+    -gml)
+	  BUILD_GML=1
+    ;;
+
    esac
    shift
 done
@@ -72,7 +76,7 @@ case "$UNAME" in
   Linux,*86*,*) X10_PLATFORM='linux_x86';;
   Linux,ppc64*,*) X10_PLATFORM='linux_ppc64'
       SHORT_HOSTNAME=`hostname -s`
-      if [[ "$SHORT_HOSTNAME" == "f01c08n02-hf0" ]]; then 
+      if [[ "$SHORT_HOSTNAME" == "loginf1c3" || "$SHORT_HOSTNAME" == "loginf1c9" ]]; then 
           EXTRA_X10RT_BUILD_ARG="-DX10RT_PAMI=true -DX10RT_PAMI_IS_DEFAULT=true"
           export USE_XLC=1
       fi
@@ -112,16 +116,23 @@ cd $workdir/x10-$X10_VERSION
 echo
 echo getting distrib
 for i in \
+        apgas \
+        apgas.examples \
+        apgas.impl \
+        apgas.tests \
+        apgas.cpp \
+        apgas.cpp.examples \
 	x10.common \
 	x10.compiler \
 	x10.constraints \
 	x10.dist \
 	x10.doc \
+	x10.gml \
 	x10.runtime \
 	x10.tests \
 	x10.wala
 do
-    svn $svn_command -q http://svn.code.sourceforge.net/p/x10/code/tags/$X10_TAG/$i
+    svn $svn_command -q svn://svn.code.sourceforge.net/p/x10/code/tags/$X10_TAG/$i
 done
 )
 
@@ -138,9 +149,13 @@ if [[ -z "$SKIP_X10_BUILD" ]]; then
     fi 
     ant xrx-xdoc
     $distdir/x10.dist/releng/packageRelease.sh -version $X10_VERSION -platform $X10_PLATFORM
-    echo "Platform specific distribuiton tarball created"
+    echo "Platform specific distribution tarball created"
     if [[ "$BUILD_RPM" == 1 ]]; then
 	$distdir/x10.dist/releng/packageRPM.sh -version $X10_VERSION -platform $X10_PLATFORM
-	echo "Platform specific distribuiton rpm created"
+	echo "Platform specific distribution rpm created"
+    fi
+    if [[ "$BUILD_GML" == 1 ]]; then
+	cd $distdir/x10.gml && make srctar
+	echo "GML source tarball created"
     fi
 fi

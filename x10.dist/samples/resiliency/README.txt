@@ -11,17 +11,19 @@ resilient unless the environment variable X10_RESILIENT_MODE is set to
 a non-zero value.  The currently supported values of
 X10_RESILIENT_MODE are:
   X10_RESILIENT_MODE=0	-> Non-resilient X10 (normal execution)
-  X10_RESILIENT_MODE=1	-> Place0-based resilient finish 
-                            (most stable resilient mode)
-  X10_RESILIENT_MODE=2	-> Distributed resilient finish
-                            (better scalability, but may not be as stable as 
-                             Place0-based resilient finish; under development)
-  X10_RESILIENT_MODE=3	-> ZooKeeper-based resilient finish
-                            (Not yet ready for external usage; uses 
-                             additional code not yet committed to sourceforge)
+  X10_RESILIENT_MODE=1	-> Most stable resilient mode (now is an alias to 11)
+  X10_RESILIENT_MODE=11	-> Place0-based resilient finish
+  X10_RESILIENT_MODE=99	-> Non-resilient X10, but resilient/elastic X10RT
 
-There will be a paper describing Resilient X10 in the upcoming PPoPP 2014
-conference in February. 
+We are planning to add various implementations of resilient finish,
+but you can choose the most stable one by "X10_RESILIENT_MODE=1".
+
+A paper describing Resilient X10 appeared in PPoPP 2014
+(http://dl.acm.org/citation.cfm?doid=2555243.2555248). 
+
+A paper describing how to make X10 applications fault tolerant in X10 2014
+(http://x10.sourceforge.net/documentation/papers/X10Workshop2014/x1014-kawachiya.pdf
+ http://x10.sourceforge.net/documentation/papers/X10Workshop2014/x1014-kawachiya-slides.pdf).
 
 How to run each sample app:
 
@@ -29,6 +31,7 @@ How to run each sample app:
 ./ResilientKMeans [num_points] [num_clusters]
 ./ResilientHeatTransfer [size]
 ./ResilientSimpleHeatTransfer [size]
+./ResilientPlhHeatTransfer [size]
 
 MatVecMult assumes data exists on disk in a particular format.  This
 data is not publicly available, although the format is simple and
@@ -40,9 +43,7 @@ You need to kill place(s) manually to test the resiliency.  Note that
 place 0 should not be killed in current implementation.
 
 Known limitations:
-- Currently, only "X10_RESILIENT_MODE=1" is supported.
-- Current implementation needs more internal threads to run.  If you
-  encounter a "TOO MANY THREADS" error, try to increase "X10_MAX_THREADS".
+- Currently, only "X10_RESILIENT_MODE=11" is supported.
 - Both of native and managed X10 are supported, but only for sockets
   (default) backend.
-- Clocked finish and workstealing are not supported yet.
+- Clocked finish and collecting finish are not resilient yet.

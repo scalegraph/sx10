@@ -35,6 +35,10 @@
 #endif
 #include <sys/time.h>  // for gettimeofday (POSIX)
 
+#ifdef __GNU_LIBRARY__ 
+#include <sys/sysinfo.h> // for get_nprocs
+#endif
+
 #include <strings.h>
 
 #ifdef __MACH__
@@ -60,11 +64,8 @@ using namespace x10::io;
 
 
 void RuntimeNatives::exit(x10_int code) {
-    // Cannot do ::exit here, as we'll need to clean up.
-    // We need not worry about user code catching the int
-    // because such a catch block can only be generated
-    // by us.
-    throw (int)code;
+	// exit now, using this exit code
+	::exit(code);
 }
 
 x10_long RuntimeNatives::currentTimeMillis() {
@@ -83,6 +84,37 @@ x10_long RuntimeNatives::nanoTime() {
     ::clock_gettime(CLOCK_X10, &ts);
     return (x10_long)(ts.tv_sec * 1000000000LL + ts.tv_nsec);
 #endif
+}
+
+x10_int RuntimeNatives::availableProcessors() {
+    x10_int numProcs = -1; // -1 means we don't know.
+
+#ifdef __GNU_LIBRARY__ 
+    numProcs = get_nprocs();
+#endif
+
+#if defined(_SC_NPROCESSORS_ONLN)
+    if (numProcs < 0) {
+        numProcs = sysconf(_SC_NPROCESSORS_ONLN);
+    }
+#endif
+
+    if (numProcs < 1) {
+        // Oh well, we don't know, so maintain the X10 2.4.3 and older
+        // behavior and just say it is 1.
+        numProcs = 1;
+    }
+
+    return numProcs;
+}
+
+
+::x10::lang::String* RuntimeNatives::timeToString(long seconds) {
+    time_t t = static_cast<const time_t>(seconds);
+    struct tm *timeinfo = localtime(&t);
+    char buffer[80];
+    strftime(buffer, 80, "%a %b %d %H:%M:%S %Z %Y", timeinfo);
+    return ::x10aux::makeStringLit(buffer);
 }
 
 void RuntimeNatives::println(const char *msg) {

@@ -28,8 +28,11 @@ import x10.compiler.Native;
 @NativeRep("c++", "x10::lang::GlobalRef< #T >", "x10::lang::GlobalRef< #T >", null)
 public struct GlobalRef[T](
     @Native("java", "(#this).home")
-    @Native("c++", "::x10::lang::Place::place((#this)->location)")
-    home:Place) {T isref} {
+    @Native("c++", "::x10::lang::Place::_make((#this)->location)")
+    home:Place,
+    @Native("java", "(#this).epoch")
+    @Native("c++", "(#this)->epoch")
+    epoch:Long) {T isref} {
 
     /** 
      * Create a value encapsulating the given object of type T.
@@ -81,6 +84,18 @@ public struct GlobalRef[T](
     @Native("java", "x10.core.GlobalRef.LocalEval.<#T$box>getLocalOrCopy(#T$rtt,#this)")
     @Native("c++", "::x10::lang::GlobalRef__LocalEval::getLocalOrCopy< #T >(#this)")
     public native def getLocalOrCopy():T;
+
+    /** 
+     * Called when the object referred to by the GlobalRef is no 
+     * longer accesible from other places and therefore can
+     * be removed from the data sturctures that keep objects
+     * alive even when they are not live locally. 
+     * Can only be invoked at the place at which the value was
+     * created. 
+     */
+    @Native("java", "(#this).forget()")
+    @Native("c++", "(#this)->forget()")
+    public native def forget(){here == this.home}:void;
 
     /*
      * @Native methods from Any because the handwritten C++ code doesn't 100% match 

@@ -44,6 +44,11 @@ public class ArrayList[T] extends AbstractCollection[T] implements List[T] {
         a.add(v);
         return true;
     }
+
+    public def addAll(elems:Rail[T]):Boolean {
+        a.addAll(elems);
+        return true;
+    }
     
     public def remove(v: T): Boolean {
         for (i in 0..(a.size()-1)) {
@@ -140,6 +145,37 @@ public class ArrayList[T] extends AbstractCollection[T] implements List[T] {
             	return i;
         }
         return -1;
+    }
+
+    /**
+     * Resize this ArrayList so that it contains <code>newSize</code> elements.
+     * If <code>newSize</code> is larger than the current size, grow the  
+     * backing store to accommodate the new elements.
+     * If <code>newSize</code> is smaller than the current size, shrink the 
+     * backing store and remove all elements after <code>newSize</code>.
+     * @param newSize the new number of elements for this list
+     * @param value the default value for new elements
+     */
+    public def resize(newSize:Long, value:T) {
+        val oldSize = a.size();
+        if (newSize > oldSize) {
+            if (newSize > a.capacity()) a.grow(newSize);
+            for (i in oldSize..(newSize-1)) {
+                a.add(value);
+            }
+        } else {
+            a.shrink(newSize);
+        }
+    }
+
+    /**
+     * Resize this ArrayList so that it contains <code>newSize</code> elements.
+     * New elements are zero-initialized.
+     * @param newSize the new number of elements for this list
+     * @see ArrayList.resize(newSize:Long, value:T)
+     */
+    public def resize(newSize:Long){T haszero} {
+        resize(newSize, Zero.get[T]());
     }
 
     public def moveSectionToRail(i:Long, j:Long) = a.moveSectionToRail(i,j);

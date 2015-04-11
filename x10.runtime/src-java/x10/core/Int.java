@@ -25,7 +25,6 @@ import x10.serialization.X10JavaSerializer;
  * an Int value to type Any, parameter type T or superinterfaces such
  * as Comparable<Int>.
  */
-@SuppressWarnings("serial")
 final public class Int extends java.lang.Number implements StructI, java.lang.Comparable<Int>,
 // for X10PrettyPrinterVisitor.exposeSpecialDispatcherThroughSpecialInterface
 //    x10.lang.Arithmetic<Int>, x10.lang.Bitwise<Int>, x10.util.Ordered<Int>
@@ -184,6 +183,10 @@ final public class Int extends java.lang.Number implements StructI, java.lang.Co
     @Override
     public double doubleValue() {
         return (double)$value;
+    }
+
+    private Object writeReplace() throws java.io.ObjectStreamException {
+        return new x10.serialization.SerializationProxy(this);
     }
 
     public void $_serialize(X10JavaSerializer $serializer) throws IOException {

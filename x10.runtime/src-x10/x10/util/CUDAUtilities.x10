@@ -13,30 +13,32 @@ package x10.util;
 
 import x10.compiler.Native;
 
-/** A collection of functions useful in/around CUDA kernels.
+/**
+ * A collection of functions useful in/around CUDA kernels.
  */
 public class CUDAUtilities {
 
-    /** Automatically choose enough blocks to saturate the GPU.  This takes
+    /**
+     * Automatically choose enough blocks to saturate the GPU.  This takes
      * account features of the GPU and kernel in question.  If running on the CPU
      * it returns a fixed number of blocks.  Intended to be used with autoThreads().
-     * <p>
-     * <code>
-     * async at (gpu) {
+     * <p><blockquote><pre>
+     * async at (gpu) &#064;CUDA {
      *     val threads = CUDAUtilities.autoThreads(), blocks = CUDAUtilities.autoBlocks();
-     *     for ((block) in 0..(blocks-1)) {
+     *     finish for (block in 0n..(blocks-1n)) async {
      *         ...
-     *         for ((thread) in 0..(threads-1)) async { ... }
+     *         clocked finish for (thread in 0n..(threads-1n)) clocked async { ... }
      *     }
      * }
-     * </code>
+     * </pre></blockquote><p>
      * @see autoThreads
      */
     public static def autoBlocks() : Int = 8n;
 
-    /** Automatically choose enough threads to saturate the GPU.  
-      * @see autoBlocks
-      */
+    /**
+     * Automatically choose enough threads to saturate the GPU.
+     * @see autoBlocks
+     */
     public static def autoThreads() : Int = 1n;
 
     private static def initCUDARail[T](local:Rail[T],
@@ -111,6 +113,19 @@ public class CUDAUtilities {
 
     @Native("cuda","__mul24(#a, #b)")
     public static def mul24(a:Int, b:Int) : Int = a * b;
+
+
+    /**
+     * This is needed to copy the shared FIFO used by printf device system call to host
+     * before launching another kernel on the same CUDA device.
+     */
+    public static def syncDevice(place:Place):void
+    {
+        if (place.isCUDA()) {
+            @Native("c++", "::x10aux::device_sync(place.FMGL(id));") { }
+        }
+    }
+
 }
 
 // vim: shiftwidth=4:tabstop=4:expandtab

@@ -2,9 +2,9 @@
 
 public class ResilientHeatTransfer_v3 {
     static val arrayColsPerPlace : Long = 256;
-    static val epsilon = 1.0e-3;
-    static val dimensionSize : Long = arrayColsPerPlace * Place.MAX_PLACES;
-    static val iterationsPerBackup = 0;
+    static val epsilon = 1.0e-2;
+    static val dimensionSize : Long = arrayColsPerPlace * Place.numPlaces();
+    static val iterationsPerBackup = 6;
     
 
     public static class PartitionedHeatArray {
@@ -123,8 +123,8 @@ public class ResilientHeatTransfer_v3 {
       var numCheckPoints : Long;
 
       def this() {
-        activePlaces = new Rail[Boolean](Place.MAX_PLACES, true);
-	lastActivePlace = Place.MAX_PLACES - 1;
+        activePlaces = new Rail[Boolean](Place.numPlaces(), true);
+	lastActivePlace = Place.numPlaces() - 1;
 	lastCheckPointIter = 0;
 	numCheckPoints = 0;
       }
@@ -235,7 +235,7 @@ public class ResilientHeatTransfer_v3 {
       try {
         finish {
           while (placeNum < recoveryInfo.lastActivePlace) {
-            val nextPlace = findActivePlace(p.next(), recoveryInfo.activePlaces, true);
+            val nextPlace = findActivePlace(Place.places().next(p), recoveryInfo.activePlaces, true);
 	    val currPlace = p;
             at (nextPlace) async backupPlh().updatePartition(at (currPlace) heatArrayPlh(), iterationNumber);
 	    p = nextPlace;
@@ -268,12 +268,11 @@ public class ResilientHeatTransfer_v3 {
     // 3. While the array values are being checkpointed at remote places.
     // 4. While the array values are being checkpointed locally.  At this stage, all of the information from the current
     //    iteration is recoverable.  Thus, there is no reason to undo the results of recent loop iterations
-      for (e2 in e.exceptions) {
-        if (!(e2 instanceof DeadPlaceException)) {
-          throw e2;
-        }
-        val dead_place = (e2 as DeadPlaceException).place;
-      }
+
+        //val deadPlaceExceptions = e.getExceptionsOfType[DeadPlaceException]();\
+        // TODO do something with dead place exception?
+        val filtered = e.filterExceptionsOfType[DeadPlaceException]();
+        if (filtered != null) throw filtered;
     }
 
     static def findActivePlace(p:Place, activePlaces:Rail[Boolean], ascending:Boolean): Place {
@@ -281,21 +280,21 @@ public class ResilientHeatTransfer_v3 {
 
       while (!activePlaces(p1.id())) {
         if (ascending)
-          p1 = p1.next();
+          p1 = Place.places().next(p1);
         else
-          p1 = p1.prev();
+          p1 = Place.places().prev(p1);
       }
       return p1;
     }
 
     public static def main(Rail[String]) {
-      val heatArrayPlh = PlaceLocalHandle.make[PartitionedHeatArray](PlaceGroup.WORLD, ()=>initializeHeatArray());
-      val tempArrayPlh = PlaceLocalHandle.make[PartitionedHeatArray](PlaceGroup.WORLD, ()=>initializeTempArray());
-      val columnArrayPlh = PlaceLocalHandle.make[Rail[Double]](PlaceGroup.WORLD, ()=>initializeColumnArray());
-      val columnArrayPlhHigh = PlaceLocalHandle.make[Rail[Double]](PlaceGroup.WORLD, ()=>initializeColumnArray());
-      val backupPlh = PlaceLocalHandle.make[BackupPartitions](PlaceGroup.WORLD, ()=>new BackupPartitions(arrayColsPerPlace));
+      val heatArrayPlh = PlaceLocalHandle.make[PartitionedHeatArray](Place.places(), ()=>initializeHeatArray());
+      val tempArrayPlh = PlaceLocalHandle.make[PartitionedHeatArray](Place.places(), ()=>initializeTempArray());
+      val columnArrayPlh = PlaceLocalHandle.make[Rail[Double]](Place.places(), ()=>initializeColumnArray());
+      val columnArrayPlhHigh = PlaceLocalHandle.make[Rail[Double]](Place.places(), ()=>initializeColumnArray());
+      val backupPlh = PlaceLocalHandle.make[BackupPartitions](Place.places(), ()=>new BackupPartitions(arrayColsPerPlace));
       var keepIterating : Boolean = true;
-      val continueVariables = new Rail[Boolean](Place.MAX_PLACES);
+      val continueVariables = new Rail[Boolean](Place.numPlaces());
       val outputResults : Boolean = false;
       val printDebugInfo : Boolean = false;
       var iterationNumber : Long = 0;
@@ -310,7 +309,7 @@ public class ResilientHeatTransfer_v3 {
       var checkPointSucceeded : Boolean;
 
       Console.OUT.printf("Array Dimension: %i, heat difference threshold: %e, number of places: %i\n", 
-                           dimensionSize, epsilon, Place.MAX_PLACES);
+                           dimensionSize, epsilon, Place.numPlaces());
       Console.OUT.printf("Array columns per place: %i\n", arrayColsPerPlace);
       Console.OUT.printf("Loop iterations between checkpoints: %i\n", iterationsPerBackup);
       before = System.nanoTime();
@@ -326,7 +325,7 @@ public class ResilientHeatTransfer_v3 {
 	  continue;
         }
         keepIterating = false;
-        for (i in 0..(Place.MAX_PLACES-1)) {
+        for (i in 0..(Place.numPlaces()-1)) {
 	  if (recoveryInfo.activePlaces(i))
             if (continueVariables(i) == true) {
               keepIterating = true;  // only 1 needs to be true to continue iterating
@@ -340,8 +339,8 @@ public class ResilientHeatTransfer_v3 {
         // Copy border columns across partitions
 	  try {
             finish {
-              val secondPlace : Place = findActivePlace((Place.FIRST_PLACE).next(), recoveryInfo.activePlaces, true);
-	      val secondToLastPlace = findActivePlace(Place(recoveryInfo.lastActivePlace).prev(), recoveryInfo.activePlaces, false);
+              val secondPlace : Place = findActivePlace(Place.places().next(Place.FIRST_PLACE), recoveryInfo.activePlaces, true);
+	      val secondToLastPlace = findActivePlace(Place.places().prev(Place(recoveryInfo.lastActivePlace)), recoveryInfo.activePlaces, false);
 	      async {
                 at (secondPlace) getColumn(heatArrayPlh(), false, columnArrayPlh());
                 at(Place.FIRST_PLACE) replaceColumn(heatArrayPlh(), true, at (secondPlace) columnArrayPlh());
@@ -360,7 +359,7 @@ public class ResilientHeatTransfer_v3 {
                   at (prevPlace) getColumn(heatArrayPlh(), true, columnArrayPlhHigh());
                   at (p1) replaceColumn(heatArrayPlh(), false, at (prevPlace) columnArrayPlhHigh());
                 }
-		val nextPlace = findActivePlace(p1.next(), recoveryInfo.activePlaces, true);
+		val nextPlace = findActivePlace(Place.places().next(p1), recoveryInfo.activePlaces, true);
 		async {
  		  at (nextPlace) getColumn(heatArrayPlh(), false, columnArrayPlh());
                   at (p1) replaceColumn(heatArrayPlh(), true, at (nextPlace) columnArrayPlh());

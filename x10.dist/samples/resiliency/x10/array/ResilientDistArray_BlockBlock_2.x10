@@ -23,9 +23,9 @@ public class ResilientDistArray_BlockBlock_2[T] implements (Long,Long)=>T {
         this.da = new DistArray_BlockBlock_2[T](m, n, pg, init);
         this.savedPg = null;
     }
-    public def this(m:Long, n:Long, init:(Long,Long)=>T) { this(m, n, PlaceGroup.WORLD, init); }
+    public def this(m:Long, n:Long, init:(Long,Long)=>T) { this(m, n, Place.places(), init); }
     public def this(m:Long, n:Long, pg:PlaceGroup{self!=null}){T haszero} { this(m, n, pg, (Long,Long)=>Zero.get[T]()); }
-    public def this(m:Long, n:Long){T haszero} { this(m, n, PlaceGroup.WORLD, (Long,Long)=>Zero.get[T]()); }
+    public def this(m:Long, n:Long){T haszero} { this(m, n, Place.places(), (Long,Long)=>Zero.get[T]()); }
     
     public final def placeGroup():PlaceGroup = da.placeGroup();
     public final def globalIndices():DenseIterationSpace_2{self!=null} = da.globalIndices();
@@ -161,7 +161,7 @@ public class ResilientDistArray_BlockBlock_2[T] implements (Long,Long)=>T {
      * Test program, should print "0 1 2 3 4 5 6 7 8 9" without Exception
      * 
      * Usage: [X10_RESILIENT_STORE_MODE=1] [X10_RESILIENT_STORE_VERBOSE=1] \
-     *         X10_RESILIENT_MODE=1 X10_NPLACES=4 \
+     *         X10_RESILIENT_MODE=11 X10_NPLACES=4 \
      *         x10 x10.array.ResilientDistArray_BlockBlock_2
      */
     public static def main(ars:Rail[String]) {
@@ -171,7 +171,7 @@ public class ResilientDistArray_BlockBlock_2[T] implements (Long,Long)=>T {
         val pg = new SparsePlaceGroup(livePlaces.toRail());
         val A = new ResilientDistArray_BlockBlock_2[Long](10, 1, pg, (x:Long,y:Long)=>x);
         A.snapshot();
-        livePlaces.remove(here.next());
+        livePlaces.remove(Place(1));
         val newPg = new SparsePlaceGroup(livePlaces.toRail());
         A.restore(newPg);
         for (pt:Point(2) in A.globalIndices()) Console.OUT.print(at(A.place(pt))A(pt) + " ");

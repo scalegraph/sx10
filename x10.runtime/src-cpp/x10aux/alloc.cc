@@ -162,6 +162,7 @@ namespace {
     size_t congruent_sz;
 }
 
+#ifdef __linux__
 // partial reimplemntation of glibc's getline
 static ssize_t mygetline (char **lineptr, size_t *sz, FILE *f)
 {
@@ -184,6 +185,7 @@ static ssize_t mygetline (char **lineptr, size_t *sz, FILE *f)
     *sz += 1;
     return *sz;
 }
+#endif
 
 #if !defined(SHM_R) || !defined(SHM_W)
 #include <sys/stat.h>

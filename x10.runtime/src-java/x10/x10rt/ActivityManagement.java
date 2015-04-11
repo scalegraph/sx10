@@ -11,14 +11,16 @@
 
 package x10.x10rt;
 
-import x10.lang.FinishState;
+import x10.xrx.Activity;
+import x10.xrx.FinishState;
 
 public class ActivityManagement {
     
     public static FinishState activityCreationBookkeeping() {
-        FinishState fs = x10.lang.Runtime.activity().finishState();
-        fs.notifySubActivitySpawn(x10.lang.Runtime.home());
-        fs.notifyActivityCreation$O(x10.lang.Runtime.home());
+        Activity activity = x10.xrx.Runtime.activity();
+        FinishState fs = activity.finishState();
+        fs.notifySubActivitySpawn(x10.xrx.Runtime.home());
+        fs.notifyActivityCreation$O(x10.xrx.Runtime.home(), null); // DG: FIXME: Suspicious...we're doing something dodgy here
         return fs;
     }
 

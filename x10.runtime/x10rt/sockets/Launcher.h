@@ -48,16 +48,20 @@
 #define X10_JDB_BASE_PORT "X10_JDB_BASE_PORT" // Port to run jdb on (+ the place index)
 #define X10_JDB_SUSPEND "X10_JDB_SUSPEND" // Whether to suspend all, none, or the first place's jdb vms (i.e. start execution paused)
 #define X10_FORCEPORTS "X10_FORCEPORTS" // a way to force specific listen ports, to run without the launcher
-#define X10_NOYIELD "X10_NOYIELD" // setting this flag means "don't issue a sched_yield() after a probe comes up empty".
 #define X10_LAZYLINKS "X10_LAZYLINKS" // flag to establish place to place links to be at startup, instead of lazily.
 #define X10_NOWRITEBUFFER "X10_NOWRITEBUFFER" // turns off non-blocking sockets
 #define X10_LIBRARY_MODE "X10_LIBRARY_MODE" // Don't use our own launcher, but instead rely on some external system.
+#define X10_LAUNCHER_TTY "X10_LAUNCHER_TTY" // set to false to disable Pseudo-TTY over SSH, which is used by default
 // don't miss X10_DEBUGGER_ID and X10_DEBUGGER_NAME over in DebugHelper.h
+
+// how many seconds to wait after the first runtime exits, before we force any remaining runtimes to die
+#define SHUTDOWN_GRACE_PERIOD 3
 
 // Enable/disable debug information
 //#define DEBUG 1
 
-enum CTRL_MSG_TYPE {HELLO, GOODBYE, PORT_REQUEST, PORT_RESPONSE}; // matching set in SocketTransport.java
+enum CTRL_MSG_TYPE {HELLO, GOODBYE, PORT_REQUEST, PORT_RESPONSE, LAUNCH_REQUEST, LAUNCH_RESPONSE}; // matching set in SocketTransport.java
+
 struct ctrl_msg
 {
 	CTRL_MSG_TYPE type;
@@ -119,7 +123,8 @@ class Launcher
 
 		/* parent child structure */
 		char ** _hostlist; /* child host list */
-		char _runtimePort[1024]; /* the host:port number of the associated x10 runtime's listen port */
+        static const int PORT_MAX = 1024;
+		char _runtimePort[PORT_MAX]; /* the host:port number of the associated x10 runtime's listen port */
 		uint32_t _firstchildproc; /* the ID of the first child launcher */
 		uint32_t _numchildren; /* number of launcher children in this node */
 		int * _pidlst; /* list of all spawned pids */

@@ -21,7 +21,6 @@ import x10.serialization.X10JavaDeserializer;
 import x10.serialization.X10JavaSerializable;
 import x10.serialization.X10JavaSerializer;
 
-@SuppressWarnings("serial")
 public final class AtomicReference<T> extends java.util.concurrent.atomic.AtomicReference<T> implements Any, X10JavaSerializable {
 
     // constructor just for allocation
@@ -62,6 +61,10 @@ public final class AtomicReference<T> extends java.util.concurrent.atomic.Atomic
     public Type<?> $getParam(int i) { return i == 0 ? T : null; }
     
     public Type<T> T;
+
+    private Object writeReplace() throws java.io.ObjectStreamException {
+        return new x10.serialization.SerializationProxy(this);
+    }
 
 	public void $_serialize(X10JavaSerializer serializer) throws IOException {
 		serializer.write(this.T);

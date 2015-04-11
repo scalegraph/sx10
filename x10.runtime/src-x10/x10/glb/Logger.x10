@@ -1,11 +1,23 @@
+/*
+ *  This file is part of the X10 project (http://x10-lang.org).
+ *
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2006-2014.
+ */
+
 package x10.glb;
+
 /**
  * <p>Class that collects lifeline statistics of GLB
  * </p>
  */
 public final class Logger {
-	
-	/* workload sent/recieved stat*/
+    
+    /* workload sent/recieved stat*/
     public var nodesCount:Long = 0;
     public var nodesGiven:Long = 0;
     public var lifelineNodesReceived:Long = 0;
@@ -110,7 +122,7 @@ public final class Logger {
      */
     public def get(verbose:Boolean) {
         if (verbose) {
-            Console.OUT.println("" + Runtime.hereLong() + " -> " +
+            Console.OUT.println("" + here.id + " -> " +
                 sub("" + (timeAlive/1E9), 0n, 6n) + " : " +
                 sub("" + (timeDead/1E9), 0n, 6n) + " : " + 
                 sub("" + ((timeAlive + timeDead)/1E9), 0n, 6n) + " : " + 

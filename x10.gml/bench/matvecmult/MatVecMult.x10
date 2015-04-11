@@ -7,9 +7,8 @@
 import x10.util.Timer;
 
 import x10.matrix.Matrix;
-import x10.matrix.Debug;
+import x10.matrix.util.Debug;
 import x10.matrix.DenseMatrix;
-import x10.matrix.blas.DenseMatrixBLAS;
 import x10.matrix.block.Grid;
 
 import x10.matrix.dist.DistDenseMatrix;
@@ -17,7 +16,6 @@ import x10.matrix.dist.DistSparseMatrix;
 import x10.matrix.dist.DupDenseMatrix;
 
 import x10.matrix.dist.DistMultDupToDist;
-//import x10.matrix.dist.DistMultDistToDup;
 
 /**
    This class implements matrix * vector multiplication: 
@@ -38,11 +36,9 @@ import x10.matrix.dist.DistMultDupToDist;
  */
 
 public class MatVecMult{
-	
     public static def main(args:Rail[String]) {
-    	
     	val M   = args.size > 0 ? Long.parse(args(0)):100;
-    	val nnz = args.size > 1 ?Double.parse(args(1)):0.5;
+    	val nnz = args.size > 1 ? Double.parse(args(1)):0.5;
     	val it  = args.size > 2 ? Long.parse(args(2)):3;
     	val vrf = args.size > 3 ? Long.parse(args(3)):0;
    	
@@ -52,9 +48,8 @@ public class MatVecMult{
 }
 
 class DVMultRowwise {
-	val it:Int;
-	val vrf:Int;
-	
+	val it:Long;
+	val vrf:Long;
 
 	val M:Long;
 	val partA:Grid;
@@ -65,18 +60,17 @@ class DVMultRowwise {
 	val V:DenseMatrix(M,1);
 	val dstP:DistDenseMatrix(M,1);
 	val P:DenseMatrix(M,1);
-	
 
 	public var st:Double;
 	public var ed:Double;
 	public var cmpt:Double = 0.0;
 	public var comt:Double = 0.0;
 
-    public def this(m:Long, nnz:Double, i:Int, v:Int) {
+    public def this(m:Long, nnz:Double, i:Long, v:Long) {
     	M=m;
     	it = i; vrf=v;
     	
-    	val numP = Place.numPlaces();//Place.MAX_PLACES;
+    	val numP = Place.numPlaces();//Place.numPlaces();
     	Console.OUT.printf("\nTest Dist sparse mult Dup dense in %d places\n", numP);
  
     	partA = new Grid(M, M, numP, 1);
@@ -136,14 +130,12 @@ class DVMultRowwise {
 		Console.OUT.printf("Starting verification on dense matrix\n");
 		
 		for (1..it) {
-			DenseMatrixBLAS.comp(ma, mb, mc, false);
+			mc.mult(ma, mb);
 			mc.copyTo(mb);
 		}
 		
 		val ret = mc.equals(dupV.local() as Matrix(mc.M, mc.N));
-		if (ret)
-			Console.OUT.println("Dist*Dup->Dist MatVecMult test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("-----Dist*Dup->Dist MatVecMult test failed!-----");
 		return ret;
 	}
