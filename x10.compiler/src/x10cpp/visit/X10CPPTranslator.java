@@ -97,11 +97,6 @@ import x10cpp.debug.LineNumberMap;
 import x10cpp.postcompiler.CXXCommandBuilder;
 import x10cpp.postcompiler.PostCompileProperties;
 import x10cpp.postcompiler.SharedLibProperties;
-//<<<<<<< HEAD
-//import x10cpp.postcompiler.SunOS_CXXCommandBuilder;
-//import x10cpp.postcompiler.CXXMakeBuilder;
-////=======
-//>>>>>>> 175f057
 import x10cpp.types.X10CPPContext_c;
 
 public class X10CPPTranslator extends Translator {

@@ -24,14 +24,7 @@
     <property name="shrike.jar" value="${lib}/com.ibm.wala.shrike_1.3.1.201101071300.jar"/>
     <property name="bdwgc.dir" location="${basedir}/src-cpp/bdwgc-${bdwgc.version}"/>
     <property name="bdwgc.tar" value="bdwgc-${bdwgc.version}.tar.gz"/>
-	<!--
-<<<<<<< HEAD
-    <property name="bdwgc.url" value="http://x10.sourceforge.net/dependencies/${bdwgc.tar}"/>
-    <property name="bdwgc.cflags" value="-g -O2"/>
-=======
--->
     <property name="bdwgc.url" value="dependencies/${bdwgc.tar}"/>
-<!-->>>>>>> git_svn_x10-->
     <property name="make.exe" value="make"/>
     <property name="bash.exe" value="bash"/>
     <property name="tar.exe" value="tar"/>

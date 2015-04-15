@@ -3613,7 +3613,6 @@ public class MessagePassingCodeGenerator extends X10DelegatingVisitor {
 		    }
 		}
 
-        emitter.hoge();
         emitter.printDeclarationList(sw, c, env, refs);
         sw.forceNewline();
         

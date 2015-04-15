@@ -969,8 +969,6 @@ public class Emitter {
 		return;
 	}
 
-    public void hoge(){
-    }
 	public void printDeclarationList(CodeWriter w, X10CPPContext_c c, List<VarInstance<?>> vars, List<VarInstance<?>> refs) {
 		printDeclarationList(w, c, vars, true, false, refs);
 	}
