@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2014.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.x10rt;
@@ -15,6 +15,7 @@ import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 
 import com.hazelcast.core.IMap;
+import com.hazelcast.core.HazelcastInstance;
 
 import x10.lang.GlobalRail;
 import x10.x10rt.SocketTransport.RETURNCODE;
@@ -417,6 +418,14 @@ public class X10RT {
     	else
     		return null;
     }
+
+	public static HazelcastInstance getHazelcastInstance() {
+		if (hazelcastDatastore != null)
+			return hazelcastDatastore.getHazelcastInstance();
+		else
+			return null;
+	}
+
     
     // this form of initDataStore is called as a part of normal startup.
     private static void initDataStore() {

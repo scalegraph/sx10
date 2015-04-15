@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2014.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 #include <x10aux/config.h>
@@ -235,7 +235,7 @@ void x10aux::run_async_at(x10aux::place p, x10::lang::VoidFun_0_0* body_fun,
     if (prof!=NULL) {
         before_nanos = x10::lang::RuntimeNatives::nanoTime();
     }
-    x10rt_msg_params params = {x10rt_place(p), msg_id, buf.borrow(), sz, 0};
+    x10rt_msg_params params = {x10rt_place(p), msg_id, buf.borrow(), sz};
     x10rt_send_msg(&params);
     if (prof!=NULL) {
         prof->FMGL(communicationNanos) += x10::lang::RuntimeNatives::nanoTime() - before_nanos;
@@ -290,7 +290,7 @@ void x10aux::run_closure_at(x10aux::place p, x10::lang::VoidFun_0_0* body_fun,
         VoidFun_0_0::__apply(preSendAction);
     }
     
-    x10rt_msg_params params = {x10rt_place(p), msg_id, buf.borrow(), sz, 0};
+    x10rt_msg_params params = {x10rt_place(p), msg_id, buf.borrow(), sz};
     x10rt_send_msg(&params);
 }
 
@@ -298,7 +298,7 @@ void x10aux::send_get (x10aux::place place, x10aux::serialization_id_t id_,
                        serialization_buffer &buf, void *data, x10aux::copy_sz len)
 {
     msg_type id = NetworkDispatcher::getMsgType(id_);
-    x10rt_msg_params p = { x10rt_place(place), id, buf.borrow(), buf.length(), 0};
+    x10rt_msg_params p = { x10rt_place(place), id, buf.borrow(), buf.length()};
     _X_(ANSI_BOLD<<ANSI_X10RT<<"Transmitting a get: "<<ANSI_RESET<<data<<" nid "<<id_<<" id "<<id
     		<<" size "<<len<<" header "<<buf.length()<<" to place: "<<place);
     x10rt_send_get(&p, data, len);
@@ -308,7 +308,7 @@ void x10aux::send_put (x10aux::place place, x10aux::serialization_id_t id_,
                        serialization_buffer &buf, void *data, x10aux::copy_sz len)
 {
     msg_type id = NetworkDispatcher::getMsgType(id_);
-    x10rt_msg_params p = { x10rt_place(place), id, buf.borrow(), buf.length(), 0 };
+    x10rt_msg_params p = { x10rt_place(place), id, buf.borrow(), buf.length()};
     _X_(ANSI_BOLD<<ANSI_X10RT<<"Transmitting a put: "<<ANSI_RESET<<data<<" nid "<<id_<<" id "<<id
     		<<" size "<<len<<" header "<<buf.length()<<" to place: "<<place);
     x10rt_send_put(&p, data, len);
@@ -331,8 +331,10 @@ static void receive_async (const x10rt_msg_params *p) {
                 VoidFun_0_0::__apply(reinterpret_cast<VoidFun_0_0*>(body));
                 x10aux::dealloc(body);
             } catch (x10::lang::CheckedThrowable* e) {
-                printf("WARNING: Ignoring uncaught exception in @Immediate async.");
-                e->printStackTrace();
+                if (!x10::xrx::Configuration::silenceInternalWarnings()) {
+                    printf("WARNING: Ignoring uncaught exception in @Immediate async.");
+                    e->printStackTrace();
+                }
             }
         } break;
         case x10aux::CLOSURE_KIND_ASYNC_CLOSURE: {
@@ -501,7 +503,7 @@ void x10aux::cuda_put (place gpu, x10_ulong addr, void *var, size_t sz)
     buf.write((x10_ulong)(size_t)&finished);
     buf.write(addr);
     size_t len = buf.length();
-    x10rt_msg_params p = {x10rt_place(gpu), kernel_put, buf.borrow(), len, 0};
+    x10rt_msg_params p = {x10rt_place(gpu), kernel_put, buf.borrow(), len};
     x10rt_send_put(&p, var, sz);
     while (!finished) x10rt_probe();
 }
@@ -510,6 +512,7 @@ void x10aux::cuda_put (place gpu, x10_ulong addr, void *var, size_t sz)
 
 void *x10aux::coll_enter() {
     x10::xrx::FinishState* fs = x10::xrx::Runtime::activity()->finishState();
+    fs->notifyRemoteContinuationCreated();
     fs->notifySubActivitySpawn(x10::lang::Place::_make(x10aux::here));
     fs->notifyActivityCreation(x10::lang::Place::_make(x10aux::here), NULL);
     return fs;

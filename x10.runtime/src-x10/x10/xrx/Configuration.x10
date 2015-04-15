@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2014.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.xrx;
@@ -19,9 +19,6 @@ final class Configuration {
 
     @Native("c++", "PLATFORM_MAX_THREADS")
     private static PLATFORM_MAX_THREADS: Int = Int.MAX_VALUE;
-
-    @Native("c++", "DEFAULT_STATIC_THREADS")
-    private static DEFAULT_STATIC_THREADS: Boolean = false;
 
     @Native("java", "java.lang.Runtime.getRuntime().availableProcessors()")
     @Native("c++", "::x10::lang::RuntimeNatives::availableProcessors()")
@@ -49,7 +46,7 @@ final class Configuration {
 
     static def strict_finish():Boolean = envOrElse("X10_STRICT_FINISH", false);
 
-    static def static_threads():Boolean = envOrElse("X10_STATIC_THREADS", DEFAULT_STATIC_THREADS);
+    static def static_threads():Boolean = envOrElse("X10_STATIC_THREADS", false);
 
     static def warn_on_thread_creation():Boolean = envOrElse("X10_WARN_ON_THREAD_CREATION", false);
 
@@ -62,6 +59,12 @@ final class Configuration {
     static def cancellable():Boolean { 
         val envVar = envOrElse("X10_CANCELLABLE", false);
         val sysProp = sysPropOrElse("X10_CANCELLABLE", envVar);
+        return sysProp;
+    }
+
+    static def silenceInternalWarnings():Boolean {
+        val envVar = envOrElse("X10_SILENCE_INTERNAL_WARNINGS", false);
+        val sysProp = sysPropOrElse("x10.SILENCE_INTERNAL_WARNINGS", envVar);
         return sysProp;
     }
 
@@ -91,7 +94,8 @@ final class Configuration {
     static def num_immediate_threads():Int {
         var v:Int = 1n;
         try {
-            v = Int.parse(Runtime.env.getOrElse("X10_NUM_IMMEDIATE_THREADS", "1"));
+            val defVal = Runtime.x10rtBlockingProbeSupport() ? "1" : "0";
+            v = Int.parse(Runtime.env.getOrElse("X10_NUM_IMMEDIATE_THREADS", defVal));
         } catch (NumberFormatException) {
         }
         return v;

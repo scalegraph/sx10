@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2014.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.xrx;
@@ -92,8 +92,10 @@ public final class Worker extends Thread implements Unserializable {
                 while (loop());
             }
         } catch (t:CheckedThrowable) {
-            Runtime.println("Uncaught exception in worker thread");
-            t.printStackTrace();
+            if (!Configuration.silenceInternalWarnings()) {
+                Runtime.println("Uncaught exception in worker thread");
+                t.printStackTrace();
+            }
         } finally {
             Runtime.pool.release(promoted);
             if (Runtime.pool.workers.multiplace && Runtime.NUM_IMMEDIATE_THREADS > 0) Runtime.x10rtUnblockProbe();

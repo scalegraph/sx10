@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2014.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 #include <x10aux/config.h>
@@ -49,6 +49,8 @@ void x10aux::initialize_xrx() {
     x10::xrx::Runtime::FMGL(STATIC_THREADS__do_init)();
     x10::xrx::Runtime::FMGL(WARN_ON_THREAD_CREATION__do_init)();
     x10::xrx::Runtime::FMGL(BUSY_WAITING__do_init)();
+    x10::xrx::Runtime::FMGL(CANCELLABLE__do_init)();
+    x10::xrx::Runtime::FMGL(RESILIENT_MODE__do_init)();
     x10::util::Team::FMGL(WORLD__do_init)();
 //    x10::lang::Place::FMGL(places__do_init)();
 //    x10::lang::Place::FMGL(FIRST_PLACE__do_init)();

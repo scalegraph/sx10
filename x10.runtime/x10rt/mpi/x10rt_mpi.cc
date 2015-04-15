@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2014.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 /* MPICH2 mpi.h wants to not have SEEK_SET etc defined for C++ bindings */
@@ -39,6 +39,11 @@
 #include <x10rt_cpp.h>
 #include <x10rt_ser.h>
 
+#if MPI_VERSION >= 3 || (defined(OPEN_MPI) && ( OMPI_MAJOR_VERSION >= 2 || (OMPI_MAJOR_VERSION == 1 && OMPI_MINOR_VERSION >= 8))) || (defined(MVAPICH2_NUMVERSION) && MVAPICH2_NUMVERSION == 10900002)
+#define X10RT_NONBLOCKING_SUPPORTED true
+#else
+#define X10RT_NONBLOCKING_SUPPORTED false
+#endif
 
 #define X10RT_NET_DEBUG(fmt, ...) do { \
     if(coll_state.is_enabled_debug_print) { \
@@ -62,8 +67,11 @@ static void x10rt_net_coll_init(int *argc, char ** *argv, x10rt_msg_type *counte
 #define X10RT_MAX_OUTSTANDING_SENDS     (256)
 #define X10RT_DATATYPE_TBL_SIZE         (256)
 #define X10RT_MPI_DEBUG_PRINT "X10RT_MPI_DEBUG_PRINT"
-#define X10RT_MPI_THREAD_MULTIPLE "X10RT_MPI_THREAD_MULTIPLE"
 #define X10RT_MPI_FORCE_COLLECTIVES "X10RT_MPI_FORCE_COLLECTIVES"
+#define X10RT_MPI_THREAD_SERIALIZED "X10RT_MPI_THREAD_SERIALIZED"
+#define X10_STATIC_THREADS "X10_STATIC_THREADS"
+#define X10_NTHREADS "X10_NTHREADS"
+#define X10_NUM_IMMEDIATE_THREADS "X10_NUM_IMMEDIATE_THREADS"
 
 /* Generic utility funcs */
 template <class T> T* ChkAlloc(size_t len) {
@@ -116,13 +124,19 @@ static inline void release_lock(pthread_mutex_t * lock) {
     }
 }
 
+// We need to lock/unlock at the x10rt level exactly when
+// the threading mode is SERIALIZED.
+// In SINGLE and FUNNELED mode, only a single thread will ever make
+// MPI calls, so no locking is needed.
+// In MULTIPLE mode, the underlying MPI implementation will handle the
+// locking, so we should not lock redundantly here.
 #define LOCK_IF_MPI_IS_NOT_MULTITHREADED {  \
-    if(!global_state.is_mpi_multithread)    \
+    if(global_state.threading_mode ==  MPI_THREAD_SERIALIZED) \
         get_lock(&global_state.lock);       \
 }
 
 #define UNLOCK_IF_MPI_IS_NOT_MULTITHREADED {    \
-    if(!global_state.is_mpi_multithread)        \
+    if(global_state.threading_mode ==  MPI_THREAD_SERIALIZED) \
         release_lock(&global_state.lock);       \
 }
 
@@ -356,7 +370,7 @@ class x10rt_internal_state {
         bool                init;
         bool                finalized;
         pthread_mutex_t     lock;
-        bool                is_mpi_multithread;
+        int					threading_mode;
         bool				report_nonblocking_coll;
         int                 rank;
         int                 nprocs;
@@ -380,8 +394,8 @@ class x10rt_internal_state {
         x10rt_internal_state() {
             init                = false;
             finalized           = false;
-            is_mpi_multithread  = false;
-            report_nonblocking_coll	= false;
+            threading_mode      = MPI_THREAD_SINGLE;
+            report_nonblocking_coll	= X10RT_NONBLOCKING_SUPPORTED;
         }
         void Init() {
             init          = true;
@@ -452,15 +466,16 @@ struct CollState {
         }
         is_enabled_debug_print = checkBoolEnvVar(getenv(X10RT_MPI_DEBUG_PRINT));
     }
-
-    ~CollState() {
-        /*
-        for (int i = 1; i < X10RT_DATATYPE_TBL_SIZE; i++) {
+    
+    void finalize() {
+    	for (int i = 1; i < X10RT_DATATYPE_TBL_SIZE; i++) {
             LOCK_IF_MPI_IS_NOT_MULTITHREADED;
             MPI_Type_free(&datatypeTbl[i]);
             UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
         }
-        */
+	}    
+
+    ~CollState() {
         free(datatypeTbl);
     }
 
@@ -486,35 +501,47 @@ x10rt_error x10rt_net_init(int *argc, char ** *argv, x10rt_msg_type *counter) {
 
     global_state.Init();
 
-    int provided;
-    if(checkBoolEnvVar(getenv(X10RT_MPI_THREAD_MULTIPLE))) {
-        global_state.is_mpi_multithread = true;
-        if (MPI_SUCCESS != MPI_Init_thread(argc, argv, 
-                    MPI_THREAD_MULTIPLE, &provided)) {
+    // special case: if using static threads, and the thread count is exactly 1 we don't need multi-thread MPI
+    char* sthreads = getenv(X10_STATIC_THREADS);
+    char* nthreads = getenv(X10_NTHREADS);
+    char* ithreads = getenv(X10_NUM_IMMEDIATE_THREADS);
+    if (checkBoolEnvVar(sthreads) && nthreads && ithreads && (atoi(nthreads) == 1) && (atoi(ithreads) == 0)) {
+        global_state.threading_mode = MPI_THREAD_SINGLE;
+        if (MPI_SUCCESS != MPI_Init(argc, argv)) {
             fprintf(stderr, "[%s:%d] Error in MPI_Init\n", __FILE__, __LINE__);
             abort();
         }
+    } else {
+        char *thread_serialized = getenv(X10RT_MPI_THREAD_SERIALIZED);
+        int level_required;
+        int level_provided;
+
+        if (thread_serialized) {
+            global_state.threading_mode = MPI_THREAD_SERIALIZED;
+            level_required = MPI_THREAD_SERIALIZED;
+        } else {
+            global_state.threading_mode = MPI_THREAD_MULTIPLE;
+            level_required = MPI_THREAD_MULTIPLE;
+        }
+        if (MPI_SUCCESS != MPI_Init_thread(argc, argv, level_required, &level_provided)) {
+            fprintf(stderr, "[%s:%d] Error in MPI_Init_Thread\n", __FILE__, __LINE__);
+            abort();
+        }
+
         MPI_Comm_rank(MPI_COMM_WORLD, &global_state.rank);
-        if (MPI_THREAD_MULTIPLE != provided) {
+        if (level_required != level_provided) {
             if (0 == global_state.rank) {
                 fprintf(stderr, "[%s:%d] Underlying MPI implementation"
-                        " needs to provide "X10RT_MPI_THREAD_MULTIPLE" threading level\n",
+                        " does not provide requested threading level\n",
                         __FILE__, __LINE__);
-                fprintf(stderr, "[%s:%d] Alternatively, you could unset env var "
-                        X10RT_MPI_THREAD_MULTIPLE" from you environment\n",
-                        __FILE__, __LINE__);
+                fprintf(stderr, "Unable to support requested level of X10 threading; exiting\n");
             }
             if (MPI_SUCCESS != MPI_Finalize()) {
                 fprintf(stderr, "[%s:%d] Error in MPI_Finalize\n",
                         __FILE__, __LINE__);
                 abort();
             }
-        }
-    } else {
-        global_state.is_mpi_multithread = false;
-        if (MPI_SUCCESS != MPI_Init(argc, argv)) {
-            fprintf(stderr, "[%s:%d] Error in MPI_Init\n", __FILE__, __LINE__);
-            abort();
+	    abort();
         }
     }
 
@@ -867,8 +894,7 @@ static void recv_completion(int ix, int bytes,
     x10rt_msg_params p = { x10rt_net_here(),
                            ix,
                            req->getBuf(),
-                           bytes,
-                           0
+                           bytes
                          };
 
     q->remove(req);
@@ -895,8 +921,7 @@ static void get_incoming_data_completion(x10rt_req_queue * q,
     x10rt_msg_params p = { get_req->dest_place,
                            get_req->type,
                            get_req->msg,
-                           get_req->msg_len,
-                           0
+                           get_req->msg_len
                          };
     q->remove(req);
     x10rt_lgl_stats.get_copied_bytes_sent += get_req->len;
@@ -930,8 +955,7 @@ static void get_incoming_req_completion(int dest_place,
     x10rt_msg_params p = { x10rt_net_here(),
                            get_nw_req->type,
                            static_cast <void *> (&get_nw_req[1]),
-                           get_nw_req->msg_len,
-                           0
+                           get_nw_req->msg_len
                          };
     q->remove(req);
     x10rt_lgl_stats.get.messages_received++;
@@ -997,8 +1021,7 @@ static void put_incoming_req_completion(int src_place,
     x10rt_msg_params p = { x10rt_net_here(),
                            put_req->type,
                            static_cast <void *> (&put_req[1]),
-                           put_req->msg_len,
-                           0
+                           put_req->msg_len
                          };
     q->remove(req);
     x10rt_lgl_stats.put.messages_received++;
@@ -1029,8 +1052,7 @@ static void put_incoming_data_completion(x10rt_req_queue * q, x10rt_req * req) {
     x10rt_msg_params p = { x10rt_net_here(),
                            put_req->type,
                            static_cast <void *> (&put_req[1]),
-                           put_req->msg_len,
-                           0
+                           put_req->msg_len
                          };
     q->remove(req);
     x10rt_lgl_stats.put_copied_bytes_received += put_req->len;
@@ -1242,27 +1264,6 @@ static void x10rt_net_probe_ex (bool network_only) {
     x10rt_net_team_probe();
 }
 
-void x10rt_net_finalize(void) {
-    assert(global_state.init);
-    assert(!global_state.finalized);
-
-    while (global_state.pending_send_list.length() > 0 ||
-            global_state.pending_recv_list.length() > 0) {
-        x10rt_net_probe();
-    }
-    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    if (MPI_SUCCESS != MPI_Barrier(global_state.mpi_comm)) {
-        fprintf(stderr, "[%s:%d] Error in MPI_Barrier\n", __FILE__, __LINE__);
-        abort();
-    }
-    if (MPI_SUCCESS != MPI_Finalize()) {
-        fprintf(stderr, "[%s:%d] Error in MPI_Finalize\n", __FILE__, __LINE__);
-        abort();
-    }
-    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
-    global_state.finalized = true;
-}
-
 x10rt_coll_type x10rt_net_coll_support () {
     if (global_state.report_nonblocking_coll)
 	    return X10RT_COLL_ALLNONBLOCKINGCOLLECTIVES;
@@ -1369,6 +1370,18 @@ struct TeamDB {
         return t;
     }
 
+    void releaseAllTeams()
+    {
+    	assert(global_state.init);
+        assert(!global_state.finalized);
+        for (x10rt_team t=0; t<teamc; t++) {
+        	X10RT_NET_DEBUG("freeing t = %d", t);
+        	LOCK_IF_MPI_IS_NOT_MULTITHREADED;
+        	MPI_Comm_free(&(this->teamv[t]));
+        	UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+        }
+    }
+
     void releaseTeam (x10rt_team t)
     {
         assert(global_state.init);
@@ -1423,8 +1436,8 @@ private:
                 x10rt_team new_teamc = i+1;
                 teamv = safe_realloc(teamv, new_teamc);
                 if (iscleared) {
-			for (x10rt_team j = 0; j < new_teamc - teamc; ++j)
-				teamv[teamc + j] = MPI_COMM_NULL;
+                	for (x10rt_team j = 0; j < new_teamc - teamc; ++j)
+                		teamv[teamc + j] = MPI_COMM_NULL;
                 }
                 teamc = new_teamc;
             }
@@ -1449,17 +1462,15 @@ private:
             LOCK_IF_MPI_IS_NOT_MULTITHREADED;
             MPI_Comm_group(MPI_COMM_WORLD, &MPI_GROUP_WORLD);
             if (MPI_SUCCESS != MPI_Group_incl(MPI_GROUP_WORLD, placec, ranks, &grp)) {
-		fprintf(stderr, "[%s:%d] %s\n",
-				__FILE__, __LINE__, "Error in MPI_Group_incl");
-		delete[] ranks;
-		abort();
+            	fprintf(stderr, "[%s:%d] %s\n", __FILE__, __LINE__, "Error in MPI_Group_incl");
+            	delete[] ranks;
+            	abort();
             }
             delete[] ranks;
             MPI_Comm comm;
             if (MPI_SUCCESS != MPI_Comm_create(MPI_COMM_WORLD, grp, &comm)) {
-		fprintf(stderr, "[%s:%d] %s\n",
-				__FILE__, __LINE__, "Error in MPI_Comm_create");
-		abort();
+            	fprintf(stderr, "[%s:%d] %s\n", __FILE__, __LINE__, "Error in MPI_Comm_create");
+            	abort();
             }
             MPI_Group_free(&MPI_GROUP_WORLD);
             MPI_Group_free(&grp);
@@ -1469,6 +1480,30 @@ private:
         }
 
 } mpi_tdb;
+
+void x10rt_net_finalize(void) {
+    assert(global_state.init);
+    assert(!global_state.finalized);
+
+    while (global_state.pending_send_list.length() > 0 ||
+            global_state.pending_recv_list.length() > 0) {
+        x10rt_net_probe();
+    }
+    LOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    if (MPI_SUCCESS != MPI_Barrier(global_state.mpi_comm)) {
+        fprintf(stderr, "[%s:%d] Error in MPI_Barrier\n", __FILE__, __LINE__);
+        abort();
+    }
+    coll_state.finalize();
+    mpi_tdb.releaseAllTeams();
+    MPI_Comm_free(&global_state.mpi_comm);
+    if (MPI_SUCCESS != MPI_Finalize()) {
+        fprintf(stderr, "[%s:%d] Error in MPI_Finalize\n", __FILE__, __LINE__);
+        abort();
+    }
+    UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
+    global_state.finalized = true;
+}
 
 struct CollectivePostprocessEnv {
     x10rt_completion_handler *ch;
@@ -2591,14 +2626,14 @@ MPI_Op mpi_red_op_type(x10rt_red_type dtype, x10rt_red_op_type op) {
 #define TOSTR(x) TOSTR_I(x)
 #define TOSTR_I(x) #x
 
-#if MPI_VERSION >= 3 || (defined(OPEN_MPI) && ( OMPI_MAJOR_VERSION >= 2 || (OMPI_MAJOR_VERSION == 1 && OMPI_MINOR_VERSION >= 8))) || (defined(MVAPICH2_NUMVERSION) && MVAPICH2_NUMVERSION == 10900002)
+#if X10RT_NONBLOCKING_SUPPORTED
 #define MPI_COLLECTIVE(name, iname, ...) \
      CollectivePostprocess *cp = new CollectivePostprocess(); \
      MPI_Request &req = cp->req; \
      LOCK_IF_MPI_IS_NOT_MULTITHREADED; \
      if (MPI_SUCCESS != MPI_NONBLOCKING_COLLECTIVE_NAME(iname)(__VA_ARGS__, &req)) { \
          fprintf(stderr, "[%s:%d] %s\n", \
-                 __FILE__, __LINE__, "Error in MPI_" #name); \
+                 __FILE__, __LINE__, "Error in MPI_" #iname); \
          abort(); \
      } \
      UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;

@@ -6,14 +6,15 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2014.
+ *  (C) Copyright IBM Corporation 2014-2015.
  */
 
 import x10.matrix.DenseMatrix;
 import x10.matrix.Vector;
 
 /**
- * Sequential implementation of support vector machine
+ * Sequential implementation of linear support vector machine,
+ * with L2 regularization and a hinge loss function.
  */
 public class SeqSVM(N:Long) {
     /** Weights for each feature.  w(N-1) is the intercept. */
@@ -29,8 +30,6 @@ public class SeqSVM(N:Long) {
     /**
      * Train this SVM using the given examples and labels, using gradient
      * descent over the entire batch of examples.
-     * This is a linear SVM, meaning it uses L2 regularization and a hinge
-     * loss function.
      * @param X the M training examples, each with N-1 features plus a bias of
      *   1.0 for the intercept
      * @param y the training labels, [0.0, 1.0]
@@ -41,7 +40,7 @@ public class SeqSVM(N:Long) {
                      y:Vector(X.M),
                      initialStepSize:Double,
                      regularization:Double,
-                     iterations:Long):SeqSVM {
+                     iterations:Long):SeqSVM{self==this} {
         val scaledLabel = Vector.make(X.M);
         val wX = Vector.make(X.M);
         val gradient = Vector.make(X.N);
@@ -61,11 +60,11 @@ public class SeqSVM(N:Long) {
             }
 
             // gradient = -(2y - 1) * x
-            gradient.transMult(X, scaledLabel).scale(1.0 / X.M);
+            gradient.mult(scaledLabel, X).scale(1.0 / X.M);
 
             // gradient descent on weights: w = (1 - stepSize * reg) - stepSize * gradient
             val stepSize = initialStepSize / Math.sqrt(iter);
-            w.map(gradient, (w_i:Double, grad_i:Double) => w_i * (1.0 - stepSize * regularization) - stepSize * grad_i);
+            w.map(w, gradient, (w_i:Double, grad_i:Double) => w_i * (1.0 - stepSize * regularization) - stepSize * grad_i);
         }
 
 		return this;

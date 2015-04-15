@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2014.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.xrx;
@@ -211,7 +211,7 @@ public final class Runtime {
         public static native def congruentAvailable():Boolean;
 
         /**
-         * Request a memory allocator with the desried properties,
+         * Request a memory allocator with the desired properties,
          * the closest available allocator (which may be the default 
          * allocator) will be returned.
          * 
@@ -515,17 +515,38 @@ public final class Runtime {
                 val h = hereInt();
                 val cl = ()=> @x10.compiler.RemoteInvocation("start_2") {terminate();};
                 for (var j:Int=Math.max(1n, h-31n); j<h; ++j) {
-                    x10rtSendMessage(j, cl, null);
+                	try {
+                    	x10rtSendMessage(j, cl, null);
+                	} catch (dpe:DeadPlaceException){
+                		// ignore - no need to worry about cancelling anything at a dead place
+                	}
                 }
                 terminate();
             };
             for(var i:Long=numPlaces-1; i>0; i-=32) {
-                x10rtSendMessage(i, cl1, null);
+            	try {
+                	x10rtSendMessage(i, cl1, null);
+            	} catch (dpe:DeadPlaceException) {
+            		// handle this portion of the fan-out directly, since the intermediate place is dead
+            		val h = i as Int;
+            		val cl = ()=> @x10.compiler.RemoteInvocation("start_4") {terminate();};
+            		for (var j:Int=Math.max(1n, h-31n); j<h; ++j) {
+            			try {
+            				x10rtSendMessage(j, cl, null);
+            			} catch (dpe2:DeadPlaceException){
+            				// ignore - no need to worry about cancelling anything at a dead place
+            			}
+            		}
+            	}
             }
         } else {
             val cl = ()=> @x10.compiler.RemoteInvocation("start_3") {terminate();};
             for (var i:Long=numPlaces-1; i>0; --i) {
-                x10rtSendMessage(i, cl, null);
+            	try {
+                	x10rtSendMessage(i, cl, null);
+            	} catch (dpe:DeadPlaceException){
+            		// ignore - no need to worry about cancelling anything at a dead place
+            	}
             }
         }
         terminate();
@@ -696,6 +717,11 @@ public final class Runtime {
                 prof.bytes += ser.dataBytesWritten();
             }
 
+            // Needed to prevent the worker that calls stopFinish
+            // from trying to help and improperly scheduling an activity
+            // from an unrelated finish.
+	    activity().finishState().notifyRemoteContinuationCreated();
+
             // Spawn asynchronous activity
             val asyncBody = ()=>{
                 val deser = new Deserializer(ser);
@@ -733,8 +759,10 @@ public final class Runtime {
             try {
                 copiedBody();
             } catch (e:CheckedThrowable) {
-                println("WARNING: Ignoring uncaught exception in @Immediate async.");
-                e.printStackTrace();
+                if (!Configuration.silenceInternalWarnings()) {
+                    println("WARNING: Ignoring uncaught exception in @Immediate async.");
+                    e.printStackTrace();
+                }
             }
         } else {
             x10rtSendMessage(place.id, body, prof, null);
@@ -752,6 +780,12 @@ public final class Runtime {
         a.ensureNotInAtomic();
 
         val epoch = a.epoch;
+
+        // Needed to prevent the worker that calls stopFinish
+        // from trying to help and improperly scheduling an activity
+        // from an unrelated finish.
+	activity().finishState().notifyRemoteContinuationCreated();
+
         submitLocalActivity(new Activity(epoch, body, here, new FinishState.UncountedFinish()));
     }
 
@@ -764,10 +798,11 @@ public final class Runtime {
         var clockPhases:Clock.ClockPhases = null;
     }
 
-    /** Subvert X10 and target language exception checking.
+    /**
+     * Subvert X10 and target language exception checking.
      */
     @Native("c++", "::x10aux::throwException(::x10aux::nullCheck(#e))")
-    @Native("java", "java.lang.Thread.currentThread().stop(#e)")
+    @Native("java", "x10.runtime.impl.java.Runtime.throwCheckedWithoutThrows(#e)")
     static native def throwCheckedWithoutThrows (e:CheckedThrowable) : void;
 
     /**
@@ -913,7 +948,7 @@ public final class Runtime {
      */
     public static def runImmediateAt(dst:Place, cl:()=>void):void {
         val verbose = FinishResilient.verbose;
-        if (verbose>=1) {
+        if (verbose>=1 && !Configuration.silenceInternalWarnings()) {
             if (Runtime.worker().promoted) {
                 debug("DANGER: lowlevelAt called on @Immediate worker!");
                 new Exception().printStackTrace();
@@ -1169,7 +1204,7 @@ public final class Runtime {
 
     private static def evalImmediateAtImpl(dst:Place, cl:()=>Any):Any {
         val verbose = FinishResilient.verbose;
-        if (verbose>=1) {
+        if (verbose>=1 && !Configuration.silenceInternalWarnings()) {
             if (Runtime.worker().promoted) {
                 debug("DANGER: lowlevelAt called on @Immediate worker!");
                 new Exception().printStackTrace();

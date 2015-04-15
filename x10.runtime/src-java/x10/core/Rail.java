@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2014.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.core;
@@ -222,7 +222,7 @@ public final class Rail<T> extends Ref implements x10.lang.Iterable,
         // If the T is a java primitive type, we use default java serialization here
         // cause its much faster than reading a single element at a time
         if (Types.isPrimitiveType(obj.T)) {
-            obj.value = deserializer.readUsingObjectInputStream();
+            obj.value = deserializer.readUsingObjectInputStream(false);
         } else if (Types.isStringType(obj.T)) {
             String[] values = (String[]) obj.T.makeArray(allocCheckSize(obj.size));
             for (int i = 0; i < (int)obj.size; i++) {

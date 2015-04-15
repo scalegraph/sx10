@@ -11,9 +11,11 @@
 
 package apgas;
 
+import java.io.Serializable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * The {@link GlobalRuntime} class provides mechanisms to initialize and shut
@@ -72,6 +74,16 @@ public abstract class GlobalRuntime {
   }
 
   /**
+   * Registers a place failure handler.
+   * <p>
+   * The handler is invoked for each failed place.
+   *
+   * @param handler
+   *          the handler to register or null to deregister the current handler
+   */
+  public abstract void setPlaceFailureHandler(Consumer<Place> handler);
+
+  /**
    * Shuts down the {@link GlobalRuntime} instance.
    */
   public abstract void shutdown();
@@ -109,7 +121,20 @@ public abstract class GlobalRuntime {
    * @param f
    *          the function to run
    */
-  protected abstract void asyncat(Place p, Job f);
+  protected abstract void asyncat(Place p, SerializableJob f);
+
+  /**
+   * Submits an uncounted task to the global runtime to be run at {@link Place}
+   * {@code p} with body {@code f} and returns immediately. The termination of
+   * this task is not tracked by the enclosing finish. If an exception is thrown
+   * by the task it is logged to System.err and ignored.
+   *
+   * @param p
+   *          the place of execution
+   * @param f
+   *          the function to run
+   */
+  protected abstract void uncountedasyncat(Place p, SerializableJob f);
 
   /**
    * Runs {@code f} at {@link Place} {@code p} and waits for all the tasks
@@ -122,7 +147,7 @@ public abstract class GlobalRuntime {
    * @param f
    *          the function to run
    */
-  protected abstract void at(Place p, Job f);
+  protected abstract void at(Place p, SerializableJob f);
 
   /**
    * Evaluates {@code f} at {@link Place} {@code p}, waits for all the tasks
@@ -136,7 +161,8 @@ public abstract class GlobalRuntime {
    *          the function to run
    * @return the result
    */
-  protected abstract <T> T at(Place p, Fun<T> f);
+  protected abstract <T extends Serializable> T at(Place p,
+      SerializableCallable<T> f);
 
   /**
    * Returns the current {@link Place}.

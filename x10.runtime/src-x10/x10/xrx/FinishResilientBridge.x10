@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2014.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 package x10.xrx;
 
@@ -22,6 +22,7 @@ class FinishResilientBridge extends FinishResilient {
     public static def debug(msg:String) { FinishResilient.debug(msg); }
     
     public def notifySubActivitySpawn(place:Place):void { throw new UnsupportedOperationException(); }
+    public def notifyRemoteContinuationCreated():void { throw new UnsupportedOperationException(); }
     public def notifyActivityCreation(srcPlace:Place, activity:Activity):Boolean { throw new UnsupportedOperationException(); }
     public def notifyActivityCreationBlocking(srcPlace:Place, activity:Activity):Boolean { throw new UnsupportedOperationException(); }
     public def notifyActivityCreationFailed(srcPlace:Place, t:CheckedThrowable):void { throw new UnsupportedOperationException(); }

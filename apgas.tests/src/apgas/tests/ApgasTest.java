@@ -25,8 +25,8 @@ import org.junit.Test;
 import apgas.Configuration;
 import apgas.GlobalRuntime;
 import apgas.MultipleException;
+import apgas.DeadPlaceException;
 import apgas.Place;
-import apgas.util.BadPlaceException;
 import apgas.util.GlobalRef;
 
 @SuppressWarnings("javadoc")
@@ -83,14 +83,14 @@ public class ApgasTest {
     }
   }
 
-  @Test(expected = BadPlaceException.class)
-  public void testBadPlaceException() {
+  @Test(expected = IllegalArgumentException.class)
+  public void testIllegalArgumentException() {
     place(-1);
   }
 
-  @Test(expected = BadPlaceException.class)
+  @Test(expected = DeadPlaceException.class)
   public void testBadPlaceExceptionAsyncAt() {
-    asyncat(new Place(-1), () -> {
+    asyncat(new Place(places().size()), () -> {
     });
   }
 
@@ -115,7 +115,7 @@ public class ApgasTest {
     }));
   }
 
-  public int fib(int n) {
+  public static int fib(int n) {
     if (n < 2) {
       return n;
     }
@@ -132,6 +132,7 @@ public class ApgasTest {
     assertEquals(fib(10), 55);
   }
 
+  @SuppressWarnings("serial")
   @Test(expected = RuntimeException.class)
   public void testSerializationException() throws Throwable {
     try {
@@ -152,6 +153,7 @@ public class ApgasTest {
     }
   }
 
+  @SuppressWarnings("serial")
   @Test(expected = NotSerializableException.class)
   public void testDeserializationException() throws Throwable {
     final Object obj = new Foo();

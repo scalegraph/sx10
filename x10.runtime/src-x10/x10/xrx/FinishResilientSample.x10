@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2014.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 package x10.xrx;
 
@@ -194,6 +194,10 @@ class FinishResilientSample extends FinishResilient implements Runtime.Mortal {
         if (verbose>=3) state.dump("DUMP id="+id);
        RS.unlock();
         if (verbose>=1) debug("<<<< notifySubActivitySpawn(id="+id+") returning");
+    }
+
+    def notifyRemoteContinuationCreated():void { 
+        // A no-op for this finish
     }
     
     def notifyActivityCreation(srcPlace:Place, activity:Activity):Boolean {

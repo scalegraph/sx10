@@ -37,9 +37,6 @@ endif
 override XRX_PROPS_LDLIBS += -lm -lpthread
 
 # -lrt
-ifeq ($(X10RT_PLATFORM),sunos)
-  override XRX_PROPS_LDLIBS += -lrt
-endif
 ifeq ($(shell uname -s),Linux)
   override XRX_PROPS_LDLIBS += -lrt
 endif
@@ -48,8 +45,10 @@ ifeq ($(shell uname -s),FreeBSD)
 endif
 
 # -ldl
-ifneq ($(shell uname -s),FreeBSD)
-  override XRX_PROPS_LDLIBS += -ldl
+ifndef X10_STATIC_LIB
+  ifneq ($(shell uname -s),FreeBSD)
+    override XRX_PROPS_LDLIBS += -ldl
+  endif
 endif
 
 override CXXFLAGS += $(INCLUDE_DIRS) -I$(GEN_DIR)
@@ -214,17 +213,10 @@ $(XRX_ARCHIVE): $(GEN_DIR)/all-o-generated $(ALL_MANUAL_OBJECTS)
 	$(AR) $(ARFLAGS) $@ $(shell sed -e's@^\(.*\)\.cc$$@\1.o@' $(GEN_DIR)/all-cpp-generated) $(ALL_MANUAL_OBJECTS)
 else
 $(XRX_ARCHIVE): $(GEN_DIR)/all-o-generated $(ALL_MANUAL_OBJECTS)
-ifeq ($(X10RT_PLATFORM),aix_xlc)
-	$(SHLINK) $(CXXFLAGS) $(CXXFLAGS_SHARED) $(LDFLAGS_SHARED) -o $@ \
-	    $(shell sed -e's@^\(.*\)\.cc$$@\1.o@' $(GEN_DIR)/all-cpp-generated) \
-            $(ALL_MANUAL_OBJECTS) \
-	    $(XRX_DEP_LIBS)
-else
 	$(CXX) $(CXXFLAGS) $(CXXFLAGS_SHARED) $(LDFLAGS_SHARED) -o $@ \
-	    $(shell sed -e's@^\(.*\)\.cc$$@\1.o@' $(GEN_DIR)/all-cpp-generated) \
-            $(ALL_MANUAL_OBJECTS) \
-	    $(XRX_DEP_LIBS)
-endif
+	$(shell sed -e's@^\(.*\)\.cc$$@\1.o@' $(GEN_DIR)/all-cpp-generated) \
+	$(ALL_MANUAL_OBJECTS) \
+	$(XRX_DEP_LIBS)
 endif
 
 # The dummy files are needed to avoid rebuilds so must not be removed as

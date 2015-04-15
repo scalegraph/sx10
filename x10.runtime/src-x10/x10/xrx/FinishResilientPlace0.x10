@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2014.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 package x10.xrx;
 
@@ -119,6 +119,10 @@ class FinishResilientPlace0 extends FinishResilient {
             if (verbose>=3) state.dump("DUMP id="+id);
         }});
         if (verbose>=1) debug("<<<< notifySubActivitySpawn(id="+id+") returning");
+    }
+
+    def notifyRemoteContinuationCreated():void { 
+        hasRemote = true;
     }
 
     /*

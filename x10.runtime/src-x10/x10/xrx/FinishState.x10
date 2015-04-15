@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2014.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.xrx;
@@ -54,6 +54,18 @@ abstract class FinishState {
     def notifyShiftedActivitySpawn(dstPlace:Place):void {
         notifySubActivitySpawn(dstPlace);
     }
+
+    /**
+     * Called by an activity running at the current Place when it
+     * has created a continution of itself via a low-level network 
+     * interaction (for example a non-blocking collective) that will
+     * continue logical execution of the current activity, potentially
+     * on a different worker thread.
+     *
+     * Scheduling note: Will only be called on a full-fledged worker thread;
+     *                  this method is allowed to block/pause.
+     */
+    abstract def notifyRemoteContinuationCreated():void;
 
     /**
      * Called at the Place at which the argument activity will execute.
@@ -181,6 +193,9 @@ abstract class FinishState {
             assert place.id == Runtime.hereLong();
             count.getAndIncrement();
         }
+        public def notifyRemoteContinuationCreated():void { 
+            throw new IllegalOperationException("Cannot create remote continution under a LocalFinish");
+        }
         public def notifyActivityCreation(srcPlace:Place, activity:Activity) = true;
         public def notifyActivityCreationBlocking(srcPlace:Place, activity:Activity) = true;
         public def notifyActivityCreationFailed(srcPlace:Place, t:CheckedThrowable):void {
@@ -233,6 +248,7 @@ abstract class FinishState {
         public def notifySubActivitySpawn(place:Place) {
             count.incrementAndGet();
         }
+        public def notifyRemoteContinuationCreated():void { } // no-op for this finish
         public def notifyActivityCreationFailed(srcPlace:Place, t:CheckedThrowable):void {
             pushException(t);
             notifyActivityTermination();
@@ -269,6 +285,7 @@ abstract class FinishState {
             assert place.id == Runtime.hereLong();
             count.getAndIncrement();
         }
+        public def notifyRemoteContinuationCreated():void { } // no-op for this finish
         public def notifyActivityCreation(srcPlace:Place, activity:Activity) = true;
         public def notifyActivityCreationBlocking(srcPlace:Place, activity:Activity) = true;
         public def notifyActivityCreationFailed(srcPlace:Place, t:CheckedThrowable):void {
@@ -327,6 +344,7 @@ abstract class FinishState {
         @Embed protected val latch = @Embed new SimpleLatch();
         protected var exception:CheckedThrowable = null;
         public def notifySubActivitySpawn(place:Place):void {}
+        public def notifyRemoteContinuationCreated():void { } // no-op for this finish
         public def notifyActivityCreationFailed(srcPlace:Place, t:CheckedThrowable):void {
             pushException(t);
             notifyActivityTermination();
@@ -362,6 +380,7 @@ abstract class FinishState {
             notifyActivityTermination();
         }
         public def notifySubActivitySpawn(place:Place):void {}
+        public def notifyRemoteContinuationCreated():void { } // no-op for this finish
         public def pushException(t:CheckedThrowable):void {
             exception = t;
         }
@@ -402,17 +421,22 @@ abstract class FinishState {
     // a pseudo finish used to implement @Uncounted async
     static class UncountedFinish extends FinishState {
         public def notifySubActivitySpawn(place:Place) {}
+        public def notifyRemoteContinuationCreated():void { } // no-op for this finish
         public def notifyActivityCreation(srcPlace:Place, activity:Activity) = true; 
         public def notifyActivityCreationBlocking(srcPlace:Place, activity:Activity) = true;
         public def notifyActivityCreationFailed(srcPlace:Place, t:CheckedThrowable):void {
-            Runtime.println("Uncaught exception in uncounted activity");
-            t.printStackTrace();
+            if (!Configuration.silenceInternalWarnings()) {
+                Runtime.println("Uncaught exception in uncounted activity");
+                t.printStackTrace();
+            }
         }
         public def notifyActivityCreatedAndTerminated(srcPlace:Place) {}
         public def notifyActivityTermination() {}
         public def pushException(t:CheckedThrowable) {
-            Runtime.println("Uncaught exception in uncounted activity");
-            t.printStackTrace();
+            if (!Configuration.silenceInternalWarnings()) {
+                Runtime.println("Uncaught exception in uncounted activity");
+                t.printStackTrace();
+            }
         }
         public final def waitForFinish() { assert false; }
     }
@@ -476,6 +500,7 @@ abstract class FinishState {
         }
         def ref() = xxxx;
         public def waitForFinish() { assert false; }
+        public def notifyRemoteContinuationCreated():void { } // no-op for remote finish
     }
 
     // the top of the finish hierarchy
@@ -493,6 +518,7 @@ abstract class FinishState {
             s.writeAny(ref);
         }
         public def notifySubActivitySpawn(place:Place) { me.notifySubActivitySpawn(place); }
+        public def notifyRemoteContinuationCreated():void { me.notifyRemoteContinuationCreated(); }
         public def notifyActivityCreation(srcPlace:Place, activity:Activity) { 
             return me.notifyActivityCreation(srcPlace, activity); 
         }
@@ -553,7 +579,7 @@ abstract class FinishState {
                 remoteActivities = new HashMap[Long,Int]();
             }
         }
-        public def notifySubActivitySpawn(place:Place):void {
+       public def notifySubActivitySpawn(place:Place):void {
             val p = place.parent(); // CUDA
             latch.lock();
             if (p == ref().home) {
@@ -563,6 +589,11 @@ abstract class FinishState {
             }
             ensureRemoteActivities();
             remoteActivities.put(p.id, remoteActivities.getOrElse(p.id, 0n)+1n);
+            latch.unlock();
+        }
+        public def notifyRemoteContinuationCreated():void {
+            latch.lock();
+            ensureRemoteActivities();
             latch.unlock();
         }
         public def notifyActivityCreationFailed(srcPlace:Place, t:CheckedThrowable):void {

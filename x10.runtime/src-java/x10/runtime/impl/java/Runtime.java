@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2014.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.runtime.impl.java;
@@ -102,6 +102,8 @@ public abstract class Runtime implements VoidFun_0_0 {
         x10.xrx.Runtime.get$STATIC_THREADS();
         x10.xrx.Runtime.get$WARN_ON_THREAD_CREATION();
         x10.xrx.Runtime.get$BUSY_WAITING();
+        x10.xrx.Runtime.get$CANCELLABLE();
+        x10.xrx.Runtime.get$RESILIENT_MODE();
         if (X10RT.initialEpoch != -1) {
             // initialize epoch to match other places
             x10.xrx.Runtime.epoch$O(); 
@@ -261,7 +263,7 @@ public abstract class Runtime implements VoidFun_0_0 {
     /**
      * Disable Assertions
      */
-    public static final boolean DISABLE_ASSERTIONS = Boolean.getBoolean("x10.DISABLE_ASSERTIONS");
+    public static boolean DISABLE_ASSERTIONS = Boolean.getBoolean("x10.DISABLE_ASSERTIONS");
     
     public static boolean sysPropOrElse(String s, boolean b) {
         if (System.getProperty(s) == null) {
@@ -278,19 +280,24 @@ public abstract class Runtime implements VoidFun_0_0 {
     /**
      * Trace serialization
      */
-    public static final boolean TRACE_SER = Boolean.getBoolean("x10.TRACE_SER");
+    public static boolean TRACE_SER = Boolean.getBoolean("x10.TRACE_SER");
 
     /**
      * Trace static init
      */
-    public static final boolean TRACE_STATIC_INIT = Boolean.getBoolean("X10_TRACE_STATIC_INIT");
+    public static boolean TRACE_STATIC_INIT = Boolean.getBoolean("X10_TRACE_STATIC_INIT");
     
     /**
-     * Emit detail serialization traces for java serialization. Using for debugging in preliminary stage
+     * Emit very detailed serialization tracing messages.
      */
-    public static final boolean TRACE_SER_DETAIL = Boolean.getBoolean("x10.TRACE_SER_DETAIL");
+    public static boolean TRACE_SER_DETAIL = Boolean.getBoolean("x10.TRACE_SER_DETAIL");
+    
+    /**
+     * Use Java serialization to serialize all non-X10 Java types that implement java.io.Serializable
+     */
+    public static boolean USE_JAVA_SERIALIZATION = Boolean.getBoolean("x10.USE_JAVA_SERIALIZATION");
 
-    public static final boolean X10_TRACE_ANSI_COLORS = Boolean.getBoolean("X10_TRACE_ANSI_COLORS");
+    public static boolean X10_TRACE_ANSI_COLORS = Boolean.getBoolean("X10_TRACE_ANSI_COLORS");
 
     public static final String ANSI_RESET = X10_TRACE_ANSI_COLORS? "\u001b[1;0m" :"";
     public static final String ANSI_BOLD = X10_TRACE_ANSI_COLORS? "\u001b[1;1m" :"";
@@ -346,7 +353,6 @@ public abstract class Runtime implements VoidFun_0_0 {
             start = prof!=null ? System.nanoTime() : 0;
             if (X10RT.javaSockets != null) {
             	if (X10RT.javaSockets.sendMessage(place, SocketTransport.CALLBACKID.simpleAsyncMessageID.ordinal(), serializer.getDataBytes()) != RETURNCODE.X10RT_ERR_OK.ordinal()) {
-            		if (x10.xrx.Runtime.get$RESILIENT_MODE() == 0) System.err.println("Unable to send an async to place "+place);
             		throw new DeadPlaceException(new Place(place), "Unable to send an async to "+place);
             	}
             } else {
@@ -399,7 +405,6 @@ public abstract class Runtime implements VoidFun_0_0 {
 			start = prof!=null ? System.nanoTime() : 0;
 			if (X10RT.javaSockets != null) {
 				if (X10RT.javaSockets.sendMessage(place, SocketTransport.CALLBACKID.closureMessageID.ordinal(), serializer.getDataBytes()) != RETURNCODE.X10RT_ERR_OK.ordinal()) {
-					if (x10.xrx.Runtime.get$RESILIENT_MODE() == 0) System.err.println("Unable to send a closure to place "+place);
             		throw new DeadPlaceException(new Place(place), "Unable to send a closure to "+place);
 				}
 			} else {
@@ -411,9 +416,13 @@ public abstract class Runtime implements VoidFun_0_0 {
             if (TRACE_SER_DETAIL) {
                 System.out.println("Message sent for runAt " + body.getClass());
             }
+		} catch (DeadPlaceException e) {
+			throw e;
 		} catch (Throwable e) {
-		    System.out.println("WARNING: Ignoring uncaught exception in sending of @Immediate async.");
-			e.printStackTrace();
+            if (!x10.xrx.Configuration.silenceInternalWarnings$O()) {
+		        System.out.println("WARNING: Ignoring uncaught exception in sending of @Immediate async.");
+			    e.printStackTrace();
+            }
 		}
 	}
 
@@ -526,24 +535,32 @@ public abstract class Runtime implements VoidFun_0_0 {
         throw new x10.io.NotSerializableException("Cannot serialize " + getClass());
 	}
 
+    /**
+     * Subvert X10 and target language exception checking.
+     */
+    public static void throwCheckedWithoutThrows(java.lang.Throwable e) {
+        if (e instanceof java.lang.RuntimeException) throw (java.lang.RuntimeException) e;
+        if (e instanceof java.lang.Error) throw (java.lang.Error) e;
+        java.lang.Thread.currentThread().stop(e); // FIXME this will throw UnsupportedOperationException since Java 8 
+    }
     
     /**
      * Time serialization/deserialization operations.
      */
-    public static final boolean PROF_SER = Boolean.getBoolean("x10.PROF_SER");
+    public static boolean PROF_SER = Boolean.getBoolean("x10.PROF_SER");
     
     /**
      * Minimum threshold in for reporting serialization/deserialization times.
      * The property is a value in milliseconds, we convert to nanoSeconds for efficiency when using System.nanoTime.
      * The default value is 10ms.
      */
-    public static final long PROF_SER_FILTER = 1000 * 1000 * Long.getLong("x10.PROF_SER_FILTER", 10);
+    public static long PROF_SER_FILTER = 1000 * 1000 * Long.getLong("x10.PROF_SER_FILTER", 10);
 
 
     /**
      * Enable OSGI framework support.
      */
     public static enum OSGI_MODES {DISABLED, EXACTVERSION, LATESTVERSION};
-    public static final OSGI_MODES OSGI = OSGI_MODES.valueOf(System.getProperty("X10_OSGI", "DISABLED"));
+    public static OSGI_MODES OSGI = OSGI_MODES.valueOf(System.getProperty("X10_OSGI", "DISABLED"));
 
 }

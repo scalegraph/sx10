@@ -14,8 +14,8 @@
     <property name="stdlib" location="${basedir}/stdlib"/>
     <property name="lpg.jar" value="lpg.jar"/>
     <property name="lpg.jar.url" value="dependencies/lpg.runtime.java_2.0.22.jar"/>
-    <property name="ecj.jar" value="ecj-4.4.1.jar"/>
-    <property name="ecj.jar.url" value="dependencies/ecj-4.4.1.jar"/>
+    <property name="ecj.jar" value="ecj-4.4.2.jar"/>
+    <property name="ecj.jar.url" value="dependencies/ecj-4.4.2.jar"/>
     <property name="hazelcast.jar" value="hazelcast-3.3.1.jar"/>
     <property name="hazelcast.jar.url" value="dependencies/hazelcast-3.3.1.jar"/>
     <property name="wala.jar" value="com.ibm.wala.cast.java_1.0.0.201101071300.jar"/>
@@ -28,8 +28,8 @@
     <property name="shrike.jar.url" value="dependencies/com.ibm.wala.shrike_1.3.1.201101071300.jar"/>
     <property name="equinox.jar" value="org.eclipse.equinox.common_3.6.0.v20100503.jar"/>
     <property name="equinox.jar.url" value="dependencies/org.eclipse.equinox.common_3.6.0.v20100503.jar"/>
-    <property name="math.jar" value="commons-math3-3.3.jar"/>
-    <property name="math.jar.url" value="dependencies/commons-math3-3.3.jar"/>
+    <property name="math.jar" value="commons-math3-3.4.1.jar"/>
+    <property name="math.jar.url" value="dependencies/commons-math3-3.4.1.jar"/>
     <property name="log.jar" value="commons-logging-1.2.jar"/>
     <property name="log.jar.url" value="dependencies/commons-logging-1.2.jar"/>
     <property name="logging.properties" value="logging.properties"/>
@@ -50,6 +50,7 @@
     <property name="bash.exe" value="bash"/>
     <property name="CROSS_COMPILE_BGQ" value="false" />
     <property name="CROSS_COMPILE_FX10" value="false" />
+    <property name="CROSS_COMPILE_MODULES" value="false" />
     <property name="X10RT_MPI" value="false" />
     <property name="X10RT_PAMI" value="false" />
     <property name="X10RT_PAMI_IS_DEFAULT" value="false" />
@@ -261,7 +262,7 @@
     </target>
 
     <target name="xrx-xdoc" depends="dist-x10doc">
-        <fileset id="xrx.files" dir="${xrx.src.dir}" includes="**/*.x10" excludes="**/compiler/ws/**,**/compiler/tests/**" />
+        <fileset id="xrx.files" dir="${xrx.src.dir}" includes="**/*.x10" excludes="**/compiler/ws/**,**/compiler/tests/**,**/managed/**" />
         <pathconvert property="xrx.list" refid="xrx.files" dirsep="/" pathsep=" ">
             <map from="${xrx.src.dir}${file.separator}" to=""/>
         </pathconvert>
@@ -631,6 +632,7 @@ LOG_JAR='${log.jar}'
 LOGGING_PROPERTIES='${logging.properties}'
 CROSS_COMPILE_BGQ='${CROSS_COMPILE_BGQ}'
 CROSS_COMPILE_FX10='${CROSS_COMPILE_FX10}'
+CROSS_COMPILE_MODULES='${CROSS_COMPILE_MODULES}'
 X10RT_PAMI_IS_DEFAULT='${X10RT_PAMI_IS_DEFAULT}'
 
 </echo>

@@ -11,6 +11,7 @@
 
 package apgas;
 
+import java.io.Serializable;
 import java.util.List;
 
 /**
@@ -61,8 +62,23 @@ public final class Constructs {
    * @param f
    *          the function to run
    */
-  public static void asyncat(Place p, Job f) {
+  public static void asyncat(Place p, SerializableJob f) {
     GlobalRuntime.getRuntime().asyncat(p, f);
+  }
+
+  /**
+   * Submits an uncounted task to the global runtime to be run at {@link Place}
+   * {@code p} with body {@code f} and returns immediately. The termination of
+   * this task is not tracked by the enclosing finish. If an exception is thrown
+   * by the task it is logged to System.err and ignored.
+   *
+   * @param p
+   *          the place of execution
+   * @param f
+   *          the function to run
+   */
+  public static void uncountedasyncat(Place p, SerializableJob f) {
+    GlobalRuntime.getRuntime().uncountedasyncat(p, f);
   }
 
   /**
@@ -76,7 +92,7 @@ public final class Constructs {
    * @param f
    *          the function to run
    */
-  public static void at(Place p, Job f) {
+  public static void at(Place p, SerializableJob f) {
     GlobalRuntime.getRuntime().at(p, f);
   }
 
@@ -92,7 +108,7 @@ public final class Constructs {
    *          the function to run
    * @return the result
    */
-  public static <T> T at(Place p, Fun<T> f) {
+  public static <T extends Serializable> T at(Place p, SerializableCallable<T> f) {
     return GlobalRuntime.getRuntime().at(p, f);
   }
 

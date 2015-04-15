@@ -12,12 +12,16 @@ package linreg;
 
 import x10.matrix.DenseMatrix;
 import x10.matrix.Vector;
+import x10.matrix.ElemType;
 
 /**
- * Sequential implementation of linear regression
+ * Sequential implementation of linear regression.
+ * Based on linear regression script in SystemML from Ghoting et al. (2011).
+ * @see Ghoting et al. (2011) SystemML: Declarative machine learning on
+ *      MapReduce. Proceedings of ICDE 2011 doi:10.1109/ICDE.2011.5767930
  */
 public class SeqLinearRegression {
-    static val lambda = 1e-6; // regularization parameter
+    static val lambda = 1e-6 as Float; // regularization parameter
 
     /** Matrix of training examples */
 	public val V:DenseMatrix;
@@ -45,7 +49,7 @@ public class SeqLinearRegression {
 		p  = Vector.make(V.N);
 		q  = Vector.make(V.N);
 		w  = Vector.make(V.N);
-		w.init(0.0);
+		w.init(0.0 as ElemType);
 	}
 	
 	public def run():Vector {
@@ -54,9 +58,9 @@ public class SeqLinearRegression {
         // 5: p=-r
         r.copyTo(p);
         // 4: r=-(t(V) %*% y)
-        r.scale(-1.0);
+        r.scale(-1.0 as ElemType);
         // 6: norm_r2=sum(r*r)
-        var norm_r2:Double = r.norm();
+        var norm_r2:ElemType = r.dot(r);
 
 		for (1..maxIterations) {
 			// 10: q=((t(V) %*% (V %*% p)) + lambda*p)
@@ -72,10 +76,11 @@ public class SeqLinearRegression {
 
 			// 14: r=r+alpha*q;
 			r.scaleAdd(alpha, q);
-			norm_r2 = r.norm();
-			// 15: beta=norm r2/old norm r2;
+            // 15: norm_r2=sum(r*r);
+			norm_r2 = r.dot(r);
+			// 16: beta=norm r2/old norm r2;
 			val beta = norm_r2/old_norm_r2;
-			// 16: p=-r+beta*p;
+			// 17: p=-r+beta*p;
 			p.scale(beta).cellSub(r);
 		}
 

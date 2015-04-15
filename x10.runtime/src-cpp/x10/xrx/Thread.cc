@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2014.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 /**
@@ -211,11 +211,7 @@ Thread::thread_init(String* name)
 
 void Thread::initAttributes(pthread_attr_t* attr) {
     // guardsize
-#ifdef _AIX
-    size_t guardsize = PAGESIZE;
-#else
     size_t guardsize = getpagesize();
-#endif
     pthread_attr_setguardsize(attr, guardsize);
     // inheritsched
     int inheritsched = PTHREAD_INHERIT_SCHED;

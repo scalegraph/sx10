@@ -14,6 +14,7 @@ package x10.matrix.comm;
 import x10.compiler.Ifdef;
 import x10.compiler.Ifndef;
 
+import x10.matrix.ElemType;
 import x10.matrix.comm.mpi.WrapMPI;
 
 /**
@@ -123,22 +124,23 @@ public class ArrayBcast extends ArrayRemoteCopy {
     protected static def binaryTreeCast(dmlist:DataArrayPLH, dataCnt:Long, pg:PlaceGroup, start:Long, end:Long): void {
         if (end < start) return;
         val src = dmlist();
-        val mid = start + (end-start) / 2;        
+        assert dataCnt <= src.size;
+        val srcbuf = new GlobalRail[ElemType](src as Rail[ElemType]{self!=null});
 
-        // Specify the remote buffer
-        val srcbuf = new GlobalRail[Double](src as Rail[Double]{self!=null});
-
+        val mid = (start+end+1) / 2;        
         finish {
-            at(pg(mid)) async {
-                val dstbuf = dmlist();
-                // remote get
-                finish Rail.asyncCopy[Double](srcbuf, 0, dstbuf, 0, dataCnt);     
-          
-                // right branch
-                binaryTreeCast(dmlist, dataCnt, pg, start, mid-1);
+            if (pg(mid) != here) {
+                at(pg(mid)) async {
+                    val dstbuf = dmlist();
+                    assert dataCnt <= dstbuf.size;
+                    // remote get
+                    finish Rail.asyncCopy[ElemType](srcbuf, 0, dstbuf, 0, dataCnt);
+                    // right branch
+                    binaryTreeCast(dmlist, dataCnt, pg, mid+1, end);
+                }
             }
             // left branch
-            binaryTreeCast(dmlist, dataCnt, pg, mid+1, end);
+            binaryTreeCast(dmlist, dataCnt, pg, start, mid-1);
         }
     }
 
@@ -148,7 +150,7 @@ public class ArrayBcast extends ArrayRemoteCopy {
     public static def bcast(duplist:DataArrayPLH, offset:Long, datCnt:Long, plcList:Rail[Long]) {
         for (var i:Long=0; i<plcList.size; i++) {
             val pid = plcList(i);
-            copy(duplist(), offset, duplist, pid, offset, datCnt);
+            copy(duplist() as Rail[ElemType]{self!=null}, offset, duplist, pid, offset, datCnt);
         }
     }
 
@@ -231,29 +233,32 @@ public class ArrayBcast extends ArrayRemoteCopy {
 
     protected static def binaryTreeCast(smlist:CompArrayPLH, dataCnt:Long, pg:PlaceGroup, start:Long, end:Long): void {        
         if (end < start) return;            
-        val mid = start + (end-start) / 2;    
 
         // Specify the remote buffer
         val srcca = smlist();
-        val idxbuf = srcca.index;
-        val valbuf = srcca.value;
-        val srcidx = new GlobalRail[Long  ](idxbuf as Rail[Long  ]{self!=null});
-        val srcval = new GlobalRail[Double](valbuf as Rail[Double]{self!=null});
+        assert dataCnt <= srcca.index.size : "dataCnt overruns srcca.index";
+        assert dataCnt <= srcca.value.size : "dataCnt overruns srcca.value";
+        val srcidx = new GlobalRail[Long    ](srcca.index);
+        val srcval = new GlobalRail[ElemType](srcca.value);
 
-        finish { 
-            at(pg(mid)) async {
-                //Need: smlist, srcidx, srcval, srcOff, colOff, colCnt and datasz
-                val dstca = smlist();
-                finish Rail.asyncCopy[Long  ](srcidx, 0, 
-                        dstca.index, 0, dataCnt);
-                finish Rail.asyncCopy[Double](srcval, 0, 
-                        dstca.value, 0, dataCnt);
-            
-                // right branch
-                binaryTreeCast(smlist, dataCnt, pg, start, mid-1);
+        val mid = (start+end+1) / 2;
+        finish {
+            if (pg(mid) != here) {
+                at(pg(mid)) async {
+                    //Need: smlist, srcidx, srcval, srcOff, colOff, colCnt and datasz
+                    val dstca = smlist();
+                    assert dataCnt <= dstca.index.size : "dataCnt overruns dstca.index";
+                    assert dataCnt <= dstca.value.size : "dataCnt overruns dstca.value";
+                    finish {
+                        Rail.asyncCopy[Long    ](srcidx, 0, dstca.index, 0, dataCnt);
+                        Rail.asyncCopy[ElemType](srcval, 0, dstca.value, 0, dataCnt);
+                    }
+                    // right branch
+                    binaryTreeCast(smlist, dataCnt, pg, mid+1, end);
+                }
             }
             // left branch
-            binaryTreeCast(smlist, dataCnt, pg, mid+1, end);
+            binaryTreeCast(smlist, dataCnt, pg, start, mid-1);
         }
     }
     

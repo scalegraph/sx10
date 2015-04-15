@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2014.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.x10rt;
@@ -255,12 +255,6 @@ public class SocketTransport {
     			return RETURNCODE.X10RT_ERR_INVALID.ordinal();
     		this.nplaces = 1;
     		this.myPlaceId = 0;
-    		if (localListenSocket != null) {
-    			try {
-    				if (DEBUG) System.err.println("Place "+myPlaceId+" closing local listen socket");
-					localListenSocket.close();
-				} catch (IOException e) {}
-    		}
     		return RETURNCODE.X10RT_ERR_OK.ordinal();
     	}
     	
@@ -282,9 +276,16 @@ public class SocketTransport {
 					}
 				} // connect to all lower places
 	    	}
-			for (int i=myPlaceId+1; i<nplaces; i++)
-				while (!shuttingDown && !channels.containsKey(i))
+	    	long cutoffTime = System.currentTimeMillis() + connectionTimeout;
+			for (int i=myPlaceId+1; i<nplaces; i++) {
+				while (!shuttingDown && !channels.containsKey(i) && System.currentTimeMillis() <= cutoffTime) {
 					x10rt_probe(PROBE_TYPE.ACCEPT, true); // wait for connections from all upper places
+				}
+				// anything not connected at this point is considered dead
+				if (!channels.containsKey(i) && System.currentTimeMillis() > cutoffTime) {
+					markPlaceDead(i);
+				}
+			}
 	    }
     	
     	return RETURNCODE.X10RT_ERR_OK.ordinal();
@@ -734,8 +735,8 @@ public class SocketTransport {
 								String linkString = new String(linkdata, UTF8);
 								X10RT.initDataStore(linkString);
 							}
-							else 
-								System.err.println("Unknown message type: "+msgType);
+							else
+								throw new IOException("Read in a corrupted message type: "+msgType);
 						}
 					}
 					catch (IOException e) {
@@ -923,7 +924,7 @@ public class SocketTransport {
 					Thread.sleep(100);
 					delay-=100;
 					if (delay <= 0 || shuttingDown) {
-						markPlaceDead(remotePlace); // mark it as dead
+						if (remotePlace >= 0) markPlaceDead(remotePlace); // mark it as dead
 						if (DEBUG) e.printStackTrace();
 						throw new IOException("Place "+myPlaceId+" unable to connect to place "+remotePlace);
 					}
@@ -1151,8 +1152,10 @@ public class SocketTransport {
             VoidFun_0_0 actObj = (VoidFun_0_0) deserializer.readObject();
             actObj.$apply();
         } catch (Throwable e) {
-            System.out.println("WARNING: Ignoring uncaught exception in @Immediate async.");
-            e.printStackTrace();
+            if (!x10.xrx.Configuration.silenceInternalWarnings$O()) {
+                System.out.println("WARNING: Ignoring uncaught exception in @Immediate async.");
+                e.printStackTrace();
+            }
         }
     }
     

@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2014.
+ *  (C) Copyright IBM Corporation 2006-2015.
  *
  *  This file was written by Ben Herta for IBM: bherta@us.ibm.com
  *
@@ -643,7 +643,6 @@ x10rt_error x10rt_net_init (int * argc, char ***argv, x10rt_msg_type *counter)
      *
      * On OSX (and presumably BSD) one can use OPT_NOSIGPIPE when creating the socket.
      * On Linux, one can use MSG_NOSIGNAL in the send() call.
-     * On AIX, neither of these options are available
      *
      * So we choose to catch SIGPIPE on all platforms.
      */
@@ -1180,7 +1179,6 @@ bool probe (bool onlyProcessAccept, bool block)
 				#endif
 
 				x10rt_msg_params mp;
-				mp.dest_endpoint = 0;
 				mp.dest_place = context.myPlaceId;
 				if (nonBlockingRead(context.socketLinks[whichPlaceToHandle].fd, &mp.type, sizeof(x10rt_msg_type)) < (int)sizeof(x10rt_msg_type))
 					return fatal_error("reading x10rt_msg_params.type"), false;

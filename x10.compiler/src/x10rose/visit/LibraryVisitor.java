@@ -517,13 +517,17 @@ public class LibraryVisitor extends NodeVisitor {
         }
     }
 
-    public void handleClassMembers(List<ClassMember> members, String package_name, String type_name) throws SemanticException {
+    public int handleClassMembers(List<ClassMember> members, String package_name, String type_name) throws SemanticException {
+        int final_member_size = members.size();
         for (int i = 0; i < members.size(); ++i) {
             JL m = members.get(i);
             if (m instanceof X10MethodDecl_c) {
                 X10MethodDecl_c methodDecl = (X10MethodDecl_c) m;
-                if (RoseTranslator.hasFunctionType(methodDecl))
+                // TODO: remove this condition when parsing closure is supported 
+                if (RoseTranslator.hasFunctionType(methodDecl)) {
+                    --final_member_size;
                     continue;
+                }
                 StringBuffer param = new StringBuffer();
                 for (Formal f : methodDecl.formals()) {
                     param.append(f.type().toString().toLowerCase());
@@ -532,8 +536,11 @@ public class LibraryVisitor extends NodeVisitor {
                 previsit(methodDecl, type_name);
             } else if (m instanceof X10ConstructorDecl_c) {
                 X10ConstructorDecl_c constructorDecl = (X10ConstructorDecl_c) m;
-                if (RoseTranslator.hasFunctionType(constructorDecl))
+                // TODO: remove this condition when parsing closure is supported 
+                if (RoseTranslator.hasFunctionType(constructorDecl)) {
+                    --final_member_size;
                     continue;
+                }
                 StringBuffer param = new StringBuffer();
                 for (Formal f : constructorDecl.formals()) {
                     param.append(f.type().toString().toLowerCase());
@@ -542,8 +549,11 @@ public class LibraryVisitor extends NodeVisitor {
                 previsit(constructorDecl, package_name, type_name);
             } else if (m instanceof X10FieldDecl_c) {
                 X10FieldDecl_c fieldDecl = (X10FieldDecl_c) m;
-                if (RoseTranslator.hasFunctionType(fieldDecl))
+                // TODO: remove this condition when parsing closure is supported 
+                if (RoseTranslator.hasFunctionType(fieldDecl)) {                    
+                    --final_member_size;
                     continue;  
+                }
                 RoseTranslator.memberMap.put(JNI.cactionGetCurrentClassName() + ":" + ((X10FieldDecl_c) m).name().toString(), RoseTranslator.uniqMemberIndex++);
                 previsit(fieldDecl, type_name);
             } else if (m instanceof TypeNode_c) {
@@ -555,7 +565,8 @@ public class LibraryVisitor extends NodeVisitor {
             } else if (m instanceof X10ClassDecl_c) {
                 if (RoseTranslator.DEBUG)
                     System.out.println("X10ClassDecl_c : " + m);
-                visitDeclarations((X10ClassDecl_c) m, (package_name == "") ? type_name : package_name + "." + type_name);
+                --final_member_size;
+//                visitDeclarationsOnly((X10ClassDecl_c) m, (package_name == "") ? type_name : package_name + "." + type_name);
             } else if (m instanceof ClassDecl_c) {
                 if (RoseTranslator.DEBUG)
                     System.out.println("ClassDecl_c : " + m);
@@ -564,6 +575,7 @@ public class LibraryVisitor extends NodeVisitor {
                     System.out.println("Unhandled node : " + m);
             }
         }
+        return final_member_size;
     }
 
     public void visit(FunctionTypeNode_c n) {
@@ -574,11 +586,12 @@ public class LibraryVisitor extends NodeVisitor {
     public void visitDeclarations(X10ClassDecl_c n) throws SemanticException {
         visitDeclarations(n, null);
     }
-
-    public void visitDeclarations(X10ClassDecl_c n, String parent) throws SemanticException {
+    
+    public void visitDeclarationsOnly(X10ClassDecl_c n, String parent) throws SemanticException {
         // public void visitDeclarations(Term_c n) {
-        toRose(n, "X10ClassDecl_c visitDeclarations in TypeVisitor:", n.toString());
+        toRose(n, "X10ClassDecl_c visitDeclarationsOnly in TypeVisitor:", n.toString());
         X10ClassDecl_c decl = (X10ClassDecl_c) n;
+        Flags flags = decl.flags().flags();
         List<TypeParamNode> typeParamList = decl.typeParameters();
         TypeNode superClass = decl.superClass();
         List<TypeNode> interfaces = decl.interfaces();
@@ -590,7 +603,7 @@ public class LibraryVisitor extends NodeVisitor {
 
         if (package_name.length() != 0)
             JNI.cactionPushPackage(package_name, RoseTranslator.createJavaToken(n, class_name));
-        JNI.cactionInsertClassStart(class_name, false, false, false, RoseTranslator.createJavaToken(n, class_name));
+        JNI.cactionInsertClassStart(class_name, false, false, false, flags.isStruct(), RoseTranslator.createJavaToken(n, class_name));
         // does not consider nested class so far
         JNI.cactionInsertClassEnd(class_name, RoseTranslator.createJavaToken(n, class_name));
 
@@ -605,7 +618,7 @@ public class LibraryVisitor extends NodeVisitor {
             JNI.cactionSetCurrentClassName(typeParam);
             // JNI.cactionSetCurrentClassName(package_name + "." +
             // class_name + "." + typeParam);
-            JNI.cactionInsertClassStart(typeParam, false, false, false, RoseTranslator.createJavaToken(n, typeParam));
+            JNI.cactionInsertClassStart(typeParam, false, false, false, false, RoseTranslator.createJavaToken(n, typeParam));
             JNI.cactionInsertClassEnd(typeParam, RoseTranslator.createJavaToken(n, typeParam));
             // JNI.cactionPushTypeParameterScope("", typeParam,
             // createJavaToken(n, typeParam));
@@ -669,8 +682,6 @@ public class LibraryVisitor extends NodeVisitor {
         }
         JNI.cactionBuildClassExtendsAndImplementsSupport(typeParamList.size(), typeParamNames, superClass != null, superClassName, interfaces == null ? 0 : interfaces.size(), interfaceNames, RoseTranslator.createJavaToken(n, n.toString()));
         
-        handleClassMembers(members, package_name, class_name);
-
         JNI.cactionBuildClassSupportEnd(class_name, members.size(), RoseTranslator.createJavaToken(n, class_name));
         if (package_name.length() != 0) {
             JNI.cactionPushPackage(package_name, RoseTranslator.createJavaToken(n, class_name));
@@ -681,7 +692,143 @@ public class LibraryVisitor extends NodeVisitor {
         // TODO: eliminate if-satement after removing the appearance of
         // ambiguous typesPlaceLocalHandle
 
+        // TODO: enum and interface type
+        JNI.cactionTypeDeclaration(package_name, class_name, 0, decl.superClass() != null, /* is_annotation_interface */false, flags.isInterface(),
+        /* is_enum */false, flags.isAbstract(), flags.isFinal(), flags.isPrivate(), flags.isPublic(), flags.isProtected(), flags.isStatic(), /* is_strictfp */false, RoseTranslator.createJavaToken(n, class_name));
+
+        List<PropertyDecl> propList = n.properties();
+        for (PropertyDecl prop : propList) {
+            visitChild(prop, prop.type());
+            boolean isRail = false;
+            TypeNode type = prop.type();
+            if (type instanceof AmbTypeNode_c) {
+                String ambTypeName = prop.toString().replaceAll("\\{amb\\}", "");
+                /**
+                 * Currently, eliminate GlobalRail
+                 */
+                isRail = (ambTypeName.indexOf("Rail[") >= 0 || ambTypeName.indexOf("GrowableRail[") >= 0)
+                        && ambTypeName.indexOf("GlobalRef") < 0;
+            }
+            else 
+                isRail = type.type().isRail();
+            
+            JNI.cactionAppendProperty(prop.name().id().toString(), isRail, 
+                                        prop.flags().flags().isFinal(), RoseTranslator.createJavaToken());
+        }
+        if (propList.size() > 0)
+            JNI.cactionSetProperties(propList.size(), RoseTranslator.createJavaToken());
+    }
+
+
+    public void visitDeclarations(X10ClassDecl_c n, String parent) throws SemanticException {
+        // public void visitDeclarations(Term_c n) {
+        toRose(n, "X10ClassDecl_c visitDeclarations in TypeVisitor:", n.toString());
+        X10ClassDecl_c decl = (X10ClassDecl_c) n;
         Flags flags = decl.flags().flags();
+        List<TypeParamNode> typeParamList = decl.typeParameters();
+        TypeNode superClass = decl.superClass();
+        List<TypeNode> interfaces = decl.interfaces();
+        if (RoseTranslator.DEBUG) System.out.println("PACKAGE_NAME=" + package_name);
+        SourceFile_c file = x10rose.ExtensionInfo.X10Scheduler.sourceList.get(RoseTranslator.fileIndex);
+
+        JNI.cactionSetCurrentClassName(((package_name.length() == 0)? "" : package_name + ".") + class_name);
+//        RoseTranslator.classMemberMap.put(((package_name.length() == 0)? "" : package_name + ".") + class_name, RoseTranslator.memberMap);
+
+        if (package_name.length() != 0)
+            JNI.cactionPushPackage(package_name, RoseTranslator.createJavaToken(n, class_name));
+        JNI.cactionInsertClassStart(class_name, false, false, false, flags.isStruct(), RoseTranslator.createJavaToken(n, class_name));
+        // does not consider nested class so far
+        JNI.cactionInsertClassEnd(class_name, RoseTranslator.createJavaToken(n, class_name));
+
+        List<ClassMember> members = ((X10ClassBody_c) ((X10ClassDecl_c) n).body()).members();
+
+        String[] typeParamNames = new String[typeParamList.size()];
+        for (int i = 0; i < typeParamList.size(); ++i) {
+            String typeParam = typeParamList.get(i).name().toString();
+            typeParamNames[i] = typeParam;
+            // typeParamNames[i] = package_name + "." + class_name + "." +
+            // typeParam;
+            JNI.cactionSetCurrentClassName(typeParam);
+            // JNI.cactionSetCurrentClassName(package_name + "." +
+            // class_name + "." + typeParam);
+            JNI.cactionInsertClassStart(typeParam, false, false, false, false, RoseTranslator.createJavaToken(n, typeParam));
+            JNI.cactionInsertClassEnd(typeParam, RoseTranslator.createJavaToken(n, typeParam));
+            // JNI.cactionPushTypeParameterScope("", typeParam,
+            // createJavaToken(n, typeParam));
+            JNI.cactionPushTypeParameterScope(package_name, class_name, RoseTranslator.createJavaToken(n, typeParam));
+            JNI.cactionInsertTypeParameter(typeParam, RoseTranslator.createJavaToken(n, typeParam));
+            JNI.cactionBuildTypeParameterSupport(package_name, class_name, -1, typeParam, 0, RoseTranslator.createJavaToken(n, typeParam));
+        }
+        if (typeParamList.size() > 0)
+            JNI.cactionSetCurrentClassName(((package_name.length() == 0)? "" : package_name + ".") + class_name);
+
+        JNI.cactionBuildClassSupportStart(class_name, "", true, 
+                false, false, false, false, RoseTranslator.createJavaToken(n, class_name));
+
+        // handling of a super class and interfaces
+        String superClassName = "";
+        if (superClass != null) {
+            if (superClass instanceof AmbTypeNode_c) {
+                handleAmbType((AmbTypeNode_c) superClass);
+                superClassName = ((AmbTypeNode_c) superClass).name().toString();
+                // superClassName =
+                // currently, not handle the function type
+                // TODO: handle function type
+            } else if (superClass instanceof AmbDepTypeNode_c) {
+                handleAmbType((AmbDepTypeNode_c) superClass);
+                superClassName = ((AmbDepTypeNode_c) superClass).toString();
+                if (RoseTranslator.DEBUG) System.out.println("SUEPRCLASSNAME=" + superClassName);
+            } else if (superClass instanceof FunctionTypeNode_c) {
+                superClass = null;
+            } else
+                visit((X10CanonicalTypeNode_c) superClass);
+        }
+
+        String[] interfaceNames = new String[interfaces.size()];
+        for (int i = 0; i < interfaces.size(); ++i) {
+            TypeNode intface = interfaces.get(i);
+            if (RoseTranslator.DEBUG) System.out.println("Interface=" + intface);
+            if (intface instanceof AmbTypeNode_c) {
+                System.out.println("111");
+                handleAmbType((AmbTypeNode_c) intface, interfaceNames, i);
+            }
+            // currently, not handle the function type
+            // for simplicity, just ignore interfaces
+            // TODO: handle function type
+            else if (intface instanceof FunctionTypeNode_c) {
+                FunctionTypeNode_c funcType = (FunctionTypeNode_c) intface;
+                // Currently, use only return type
+                TypeNode node = funcType.returnType();
+                if (node instanceof AmbTypeNode_c) {
+                    handleAmbType((AmbTypeNode_c) node, interfaceNames, i);
+                }
+                else {
+                    interfaceNames[i] = RoseTranslator.trimTypeParameterClause(node.toString());
+                }
+            } else {
+                interfaceNames[i] = RoseTranslator.trimTypeParameterClause(intface.toString());
+                if (RoseTranslator.DEBUG) System.out.println("name["+i+"]=" + interfaceNames[i] + ", " + intface.getClass());
+                // visit(intface);
+                visit(intface);
+            }
+            if (RoseTranslator.DEBUG) System.out.println("name["+i+"]=" + interfaceNames[i]);
+        }
+        JNI.cactionBuildClassExtendsAndImplementsSupport(typeParamList.size(), typeParamNames, superClass != null, superClassName, interfaces == null ? 0 : interfaces.size(), interfaceNames, RoseTranslator.createJavaToken(n, n.toString()));
+        
+        int member_size = handleClassMembers(members, package_name, class_name);
+
+      JNI.cactionBuildClassSupportEnd(class_name, member_size, RoseTranslator.createJavaToken(n, class_name));
+
+//        JNI.cactionBuildClassSupportEnd(class_name, members.size(), RoseTranslator.createJavaToken(n, class_name));
+        if (package_name.length() != 0) {
+            JNI.cactionPushPackage(package_name, RoseTranslator.createJavaToken(n, class_name));
+            JNI.cactionPopPackage();
+        }
+        // JNI.cactionPopTypeScope();
+
+        // TODO: eliminate if-satement after removing the appearance of
+        // ambiguous typesPlaceLocalHandle
+
         // TODO: enum and interface type
         JNI.cactionTypeDeclaration(package_name, class_name, 0, decl.superClass() != null, /* is_annotation_interface */false, flags.isInterface(),
         /* is_enum */false, flags.isAbstract(), flags.isFinal(), flags.isPrivate(), flags.isPublic(), flags.isProtected(), flags.isStatic(), /* is_strictfp */false, RoseTranslator.createJavaToken(n, class_name));
