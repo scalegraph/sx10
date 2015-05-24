@@ -1377,7 +1377,8 @@ struct TeamDB {
         for (x10rt_team t=0; t<teamc; t++) {
         	X10RT_NET_DEBUG("freeing t = %d", t);
         	LOCK_IF_MPI_IS_NOT_MULTITHREADED;
-        	MPI_Comm_free(&(this->teamv[t]));
+        	if(this->teamv[t] != MPI_COMM_NULL)
+               	MPI_Comm_free(&(this->teamv[t]));
         	UNLOCK_IF_MPI_IS_NOT_MULTITHREADED;
         }
     }
@@ -1437,7 +1438,7 @@ private:
                 teamv = safe_realloc(teamv, new_teamc);
                 if (iscleared) {
                 	for (x10rt_team j = 0; j < new_teamc - teamc; ++j)
-                		teamv[teamc + j] = MPI_COMM_NULL;
+                       	teamv[teamc + j] = MPI_COMM_NULL;
                 }
                 teamc = new_teamc;
             }
