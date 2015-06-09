@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.visit;
@@ -77,6 +77,7 @@ import polyglot.util.InternalCompilerError;
 import polyglot.util.Position;
 import polyglot.visit.ContextVisitor;
 import polyglot.visit.NodeVisitor;
+import x10.ExtensionInfo;
 import x10.ast.AssignPropertyCall;
 import x10.ast.Async;
 import x10.ast.AtEach;
@@ -113,9 +114,6 @@ import x10.util.AltSynthesizer;
 public final class ExpressionFlattener extends ContextVisitor {
 
     private static final boolean DEBUG = false;
-
-    private static final boolean XTENLANG_2055 = true; // bug work around: don't flatten Marshall.x10
-    private static final boolean XTENLANG_2336 = true; // bug work around: don't flatten Runtime.x10
 
     private final TypeSystem xts;
     private AltSynthesizer syn; // move functionality to Synthesizer
@@ -168,7 +166,7 @@ public final class ExpressionFlattener extends ContextVisitor {
             if (DEBUG) System.out.println("DEBUG: flattening: " +((X10ClassDecl) n).classDef()+ " (@" +((X10ClassDecl) n).position()+ ")");
             return null;
         }
-        if (cannotFlatten(n)) return n;
+        if (cannotFlatten(n, job)) return n;
         return null;
     }
 
@@ -185,18 +183,11 @@ public final class ExpressionFlattener extends ContextVisitor {
      * @param n an AST node that might be flattened
      * @return true if the node cannot be flattened, false otherwise
      */
-    public static boolean cannotFlatten(Node n) {
+    public static boolean cannotFlatten(Node n, Job job) {
         Position pos = n.position(); // for DEBUGGING
-        if (n instanceof SourceFile){
-            Source s = ((SourceFile) n).source();
-            if (XTENLANG_2336 && s.name().equals("Runtime.x10")) { // BUG: cannot flatten Runtime
-                return true;
-            }
-            if (XTENLANG_2055 && s.name().equals("Marshal.x10")) { // BUG: can't flatten Marshal
-                return true; 
-            }
-        }
-        if (n instanceof ConstructorDecl) { // can't flatten constructors unless local assignments can precede super() and this() in Java
+        boolean isManaged = ((x10.ExtensionInfo) job.extensionInfo()).isManagedX10();
+
+        if (n instanceof ConstructorDecl && isManaged) { // can't flatten constructors unless local assignments can precede super() and this() in Java
             ClassType type = ((ConstructorDecl) n).constructorDef().container().get().toClass();
             if (ConstructorSplitterVisitor.isUnsplittable(type))
                 return true;
@@ -216,16 +207,6 @@ public final class ExpressionFlattener extends ContextVisitor {
         return false;
     }
     
-    /**
-     * @param job
-     * @return
-     */
-    public static boolean javaBackend(Job job) {
-        if (job.extensionInfo() instanceof x10c.ExtensionInfo)
-            return true;
-        return false;
-    }
-
     @Override
     protected NodeVisitor enterCall(Node parent, Node child) {
         if (child instanceof Loop) {
@@ -1372,7 +1353,7 @@ public final class ExpressionFlattener extends ContextVisitor {
      * @return true if expr has no sub-expressions; otherwise, false
      * TODO: it may be expedient to consider other kinds of Expr primary on an interim basis.
      */
-    static boolean isPrimary(Expr expr) {
+    public static boolean isPrimary(Expr expr) {
         if (null == expr) return true; // DEBUG
         if (expr instanceof Lit) return true;
         if (expr instanceof Local) return ((Local) expr).flags().contains(Flags.FINAL);

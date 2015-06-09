@@ -37,9 +37,6 @@ endif
 override XRX_PROPS_LDLIBS += -lm -lpthread
 
 # -lrt
-ifeq ($(X10RT_PLATFORM),sunos)
-  override XRX_PROPS_LDLIBS += -lrt
-endif
 ifeq ($(shell uname -s),Linux)
   override XRX_PROPS_LDLIBS += -lrt
 endif
@@ -48,8 +45,10 @@ ifeq ($(shell uname -s),FreeBSD)
 endif
 
 # -ldl
-ifneq ($(shell uname -s),FreeBSD)
-  override XRX_PROPS_LDLIBS += -ldl
+ifndef X10_STATIC_LIB
+  ifneq ($(shell uname -s),FreeBSD)
+    override XRX_PROPS_LDLIBS += -ldl
+  endif
 endif
 
 override CXXFLAGS += $(INCLUDE_DIRS) -I$(GEN_DIR)
@@ -61,6 +60,12 @@ override CXXFLAGS += $(INCLUDE_DIRS) -I$(GEN_DIR)
 XRX_ARCHIVE = $(LIBPREFIX)x10$(LIBSUFFIX)
 ifeq ($(X10RT_PLATFORM),cygwin)
   XRX_DEP_LIBS = -L"$(DISTDIR)"/lib -L"$(INSTDIR)"/$(INST_LIB) -lx10rt_$(DEFAULT_X10RT_LIB)
+  ifdef ENABLE_GC
+    override XRX_DEP_LIBS += -lgc
+  endif
+endif
+ifeq ($(subst 64,,$(X10RT_PLATFORM)),darwin)
+  XRX_DEP_LIBS = -L"$(DISTDIR)"/lib
   ifdef ENABLE_GC
     override XRX_DEP_LIBS += -lgc
   endif
@@ -86,7 +91,10 @@ xrx: $(XRX_ARCHIVE)
 #
 # The sort is a workaround for XTENLANG-676.  The order in which files are listed on the x10c++ commandline
 # appears to affect the results of typechecking.  By sorting, we force a deterministic order of files.
-XRX_REL_SRCS  = $(shell $(FIND) ../src-x10 -name .svn -prune -o -name '*.x10' -print | sort )
+#
+# By convention, we also ignore all packages called 'managed' when compiling Native X10.
+#
+XRX_REL_SRCS  = $(shell $(FIND) ../src-x10 -name .svn -prune -o -name managed -prune -o -name '*.x10' -print | sort )
 XRX_SRCS = $(subst ../src-x10/,, $(XRX_REL_SRCS))
 
 #enable asserts, do not look in jar for x10 files
@@ -141,6 +149,8 @@ ALL_XRCPP_OBJECTS = \
 	x10aux/itables.o \
 	x10aux/lock.o \
 	x10aux/network.o \
+	x10aux/network_dispatcher.o \
+	x10aux/pcond.o \
 	x10aux/place_local.o \
 	x10aux/reference_logger.o \
 	x10aux/RTT.o \
@@ -162,6 +172,8 @@ ALL_XRCPP_OBJECTS = \
 	x10/lang/CheckedThrowable.o \
 	x10/lang/Closure.o \
 	x10/lang/Comparable.o \
+	x10/lang/Complex.o \
+	x10/lang/Condition.o \
 	x10/lang/Double.o \
 	x10/lang/Fun.o \
 	x10/lang/GlobalRef.o \
@@ -169,27 +181,25 @@ ALL_XRCPP_OBJECTS = \
 	x10/lang/Int.o \
 	x10/lang/Float.o \
 	x10/lang/Long.o \
+	x10/lang/Rail.o \
 	x10/lang/Reference.o \
 	x10/lang/RuntimeNatives.o \
 	x10/lang/Short.o \
 	x10/lang/String.o \
-	x10/lang/Deque.o \
 	x10/lang/Lock__ReentrantLock.o \
 	x10/lang/PlaceLocalHandle_Impl.o \
-	x10/lang/Thread.o \
 	x10/lang/UByte.o \
 	x10/lang/UInt.o \
 	x10/lang/ULong.o \
 	x10/lang/UShort.o \
 	x10/lang/X10Class.o \
-	x10/util/IndexedMemoryChunk.o \
 	x10/util/Ordered.o \
-	x10/util/RemoteIndexedMemoryChunk.o \
-	x10/util/Vec.o \
 	x10/util/concurrent/AtomicBooleanNatives.o \
 	x10/util/concurrent/AtomicIntegerNatives.o \
 	x10/util/concurrent/AtomicLongNatives.o \
-	x10/util/concurrent/AtomicReference.o
+	x10/util/concurrent/AtomicReference.o \
+	x10/xrx/Deque.o \
+	x10/xrx/Thread.o
 
 ALL_MANUAL_OBJECTS=$(ALL_XRCPP_OBJECTS)
 
@@ -203,17 +213,10 @@ $(XRX_ARCHIVE): $(GEN_DIR)/all-o-generated $(ALL_MANUAL_OBJECTS)
 	$(AR) $(ARFLAGS) $@ $(shell sed -e's@^\(.*\)\.cc$$@\1.o@' $(GEN_DIR)/all-cpp-generated) $(ALL_MANUAL_OBJECTS)
 else
 $(XRX_ARCHIVE): $(GEN_DIR)/all-o-generated $(ALL_MANUAL_OBJECTS)
-ifeq ($(X10RT_PLATFORM),aix_xlc)
-	$(SHLINK) $(CXXFLAGS) $(CXXFLAGS_SHARED) $(LDFLAGS_SHARED) -o $@ \
-	    $(shell sed -e's@^\(.*\)\.cc$$@\1.o@' $(GEN_DIR)/all-cpp-generated) \
-            $(ALL_MANUAL_OBJECTS) \
-	    $(XRX_DEP_LIBS)
-else
 	$(CXX) $(CXXFLAGS) $(CXXFLAGS_SHARED) $(LDFLAGS_SHARED) -o $@ \
-	    $(shell sed -e's@^\(.*\)\.cc$$@\1.o@' $(GEN_DIR)/all-cpp-generated) \
-            $(ALL_MANUAL_OBJECTS) \
-	    $(XRX_DEP_LIBS)
-endif
+	$(shell sed -e's@^\(.*\)\.cc$$@\1.o@' $(GEN_DIR)/all-cpp-generated) \
+	$(ALL_MANUAL_OBJECTS) \
+	$(XRX_DEP_LIBS)
 endif
 
 # The dummy files are needed to avoid rebuilds so must not be removed as
@@ -259,12 +262,6 @@ install: $(XRX_ARCHIVE) install_props
 %:%.o
 %:%.c
 %:%.cc
-
-ifdef USE_XLC
-# temporary workaround for xlC v11 bug (fixed by xlC development, but fix won't GA until 4Q2012)
-gen/x10/util/Team.o: gen/x10/util/Team.cc gen/x10/util/Team.h $(GEN_DIR)/all-cpp-generated 
-	$(CXX) $(CXXFLAGS)  $(CXX_WARNING_FLAGS) $(CXXFLAGS_SHARED) -qnoinline -c $< -o $@
-endif
 
 # depend on all-cpp-generated because we need to make sure the x10 code 
 # has been compiled to cc,h since the manually written code may include generated headers

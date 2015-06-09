@@ -9,11 +9,12 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.types;
 
+import polyglot.frontend.Source;
 import polyglot.util.Position;
 
 /**
@@ -42,6 +43,13 @@ public class NoClassException extends SemanticException {
         this.className = className;
     }
     
+    public NoClassException(String className, Source source) {
+        super("Class \"" + className + "\" not found"
+                + (source != null ? (" in " + source.toString())
+                                  : "."));
+        this.className = className;
+    }
+  
     public String getClassName() {
         return className;
     }

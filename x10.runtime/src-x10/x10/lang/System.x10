@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.lang;
@@ -15,10 +15,10 @@ import x10.compiler.Native;
 import x10.compiler.NativeCPPInclude;
 
 import x10.io.Console;
-import x10.util.HashMap;
 import x10.util.Map;
 import x10.util.Timer;
-import x10.util.Pair;
+
+import x10.xrx.Runtime;
 
 @NativeCPPInclude("x10/lang/RuntimeNatives.h")
 public class System {
@@ -40,37 +40,103 @@ public class System {
     public static def nanoTime():Long = Timer.nanoTime();
 
     /**
-     * Terminates the application with a given exit code, as quickly as possible.
-     * All finally blocks for the currently executing activities are executed.
-     * LIMITATION: will only work if invoked from the main thread in place 0 (see XTENLANG-874).
+     * Kills the current place, as if due to a hardware or low level software failure.  
+     * Behaviour is only well-defined if executed at a place other than Place.FIRST_PLACE 
+     * and the program is executing in one of the resilient modes
      *
-     * @deprecated
-     * @see #exit()
-     * @see #setExitCode(Int)
+     * @see Configuration#resilient_mode
      */
-    @Native("java", "java.lang.System.exit(#code)")
-    @Native("c++", "x10::lang::RuntimeNatives::exit(#code)")
-    static native def exit(code: Int): void;
+    @Native("java", "java.lang.System.exit(1)")
+    @Native("c++", "::x10::lang::RuntimeNatives::exit(1)")
+    public static native def killHere(): void;
+
 
     /**
-     * Terminates the application with exit code -1, as quickly as possible.
-     * Invoking this method is equivalent to invoking {@link #exit(Int)} with argument -1.
-     * LIMITATION: will only work if invoked from the main thread in place 0 (see XTENLANG-874).
+     * Asynchronously kills the victim place, as if due 
+     * to a hardware or low level software failure.  
+     * The victim should not be Place.FIRST_PLACE.
+     * The program ahould be executing in one of the resilient modes 
+     * for correct operation.
      *
-     * @deprecated
-     * @see #exit(Int)
-     * @see #setExitCode(Int)
+     * @see Configuration#resilient_mode
      */
-    static def exit():void { exit(-1); }
+    public static def killThere(victim:Place) {
+        at (victim) @x10.compiler.Immediate("killThere") async killHere();
+    }
+    
+    /**
+     * Requests the launcher to create N additional places asynchronously.
+     * Please note that since this is an asynchronous operation, a return 
+     * code greater than zero does not guarantee those places have actually
+     * started, as they may fail for reasons outside of the launcher's control
+     * 
+     * @param newPlaces the number of new places to add
+     * @return The number of new places that this request attempted to spawn.
+     * May be less than the number requested, if resources are not available, 
+     * or if the current launcher does not support adding places after startup.
+     */
+    
+    @Native("java", "x10.x10rt.X10RT.addPlaces(#newPlaces)")
+    public static def addPlaces(newPlaces:Long): Long {
+        return 0;
+    }
 
     /**
-     * Sets the system exit code.
-     * The exit code will be returned from the application when main() terminates.
-     * Can only be invoked in place 0.
+     * Requests the launcher to create N additional places synchronously, 
+     * waiting up to 'timeout' milliseconds for the places to join before 
+     * returning.
+     * 
+     * @param newPlaces the number of new places to add
+     * @param timeout how many milliseconds to wait for the places to join
+     * @return The number of new places that joined successfully.  This may be 
+     * fewer than the requested number of places if we timed out, or more than 
+     * the requested number of places if there were multiple overlapping calls
+     * to this method
      */
-    @Native("java", "x10.runtime.impl.java.Runtime.setExitCode(#exitCode)")
-    @Native("c++", "(x10aux::exitCode = (#exitCode))")
-    public static def setExitCode(exitCode: int){here==Place.FIRST_PLACE}: void {}
+    public static def addPlacesAndWait(newPlaces:Long, timeout:Long): Long {
+        val initialPlaceCount = Place.numPlaces();
+        val launcherAdded = addPlaces(newPlaces);
+        if (launcherAdded == 0) return 0; // the launcher can't add places.  Don't bother waiting.
+
+        // clumsy wait for newPlaces to join
+        val timePlacesRequested = currentTimeMillis();
+        while (Place.numPlaces() < initialPlaceCount + launcherAdded) {
+            if (currentTimeMillis() > timePlacesRequested+timeout) {
+                // timeout
+                return (Place.numPlaces() - initialPlaceCount);
+            }
+            System.sleep(100);
+        }
+        return launcherAdded;
+    }
+
+    /**
+     * Sets the exit code with which the X10 program will exit.
+     * However, calling this method has no effect on the timing
+     * of when the computation will exit.
+     * 
+     * This method is primarily intended for usage by testing 
+     * frameworks that use non-zero exit codes to encode testcase 
+     * failures.
+     *
+     * Implementation note: This method currently must internally
+     *   shift execution to Place.FIRST_PLACE and set the exitCode
+     *   there because exitCodes are intentionally not implicitly 
+     *   propagated back to Place.FIRST_PLACE when other Places 
+     *   exit.  Therefore the caller should be aware that calling this
+     *   method from within an <code>atomic</code> or <code>when</code>
+     *   will result in an exception being raised.
+     */
+    public static def setExitCode(exitCode:Int):void {
+        if (here != Place.FIRST_PLACE) {
+            at (Place.FIRST_PLACE) setExitCode(exitCode);
+        } else {
+            @Native("java", "x10.runtime.impl.java.Runtime.setExitCode(exitCode);")
+            @Native("c++", "::x10aux::exitCode = (exitCode);")
+            { 
+            }
+       }
+    }
 
     /**
      * Provides an estimate in bytes of the size of the X10 heap
@@ -83,14 +149,14 @@ public class System {
      * @return An upper bound in bytes on the size of the X10 heap allocated to the current place.
      */
     @Native("java", "java.lang.Runtime.getRuntime().totalMemory()")
-    @Native("c++", "x10aux::heap_size()")
-    public static native def heapSize():long;
+    @Native("c++", "::x10aux::heap_size()")
+    public static native def heapSize():Long;
 
     /**
      * Trigger a garbage collection.
      */
     @Native("java", "java.lang.System.gc()")
-    @Native("c++", "x10aux::trigger_gc()")
+    @Native("c++", "::x10aux::trigger_gc()")
     public static native def gc():void;
 
     /**
@@ -115,14 +181,20 @@ public class System {
     @Native("c++", "printf(\"not setting %s\\n\", (#p)->c_str())") // FIXME: Trivial definition to allow XRX compilation to go through.
     public static native def setProperty(p:String,v:String):void;
 
-
+    /** Get the type name of T as a string
+     * @param T a type
+     * @return The name of type T 
+     */
+    @Native("java", "#T$rtt.typeName()")
+    @Native("c++", "::x10aux::makeStringLit(x10aux::getRTT< #T>()->name())")
+    static native def typeName[T]():String;
 
     @Native("java", "x10.rtt.Types.typeName(#o)")
-    @Native("c++", "x10aux::type_name(#o)")
+    @Native("c++", "::x10aux::type_name(#o)")
     public static native def identityTypeName(o:Any) : String;
 
     @Native("java", "java.lang.System.identityHashCode(#o)")
-    @Native("c++", "x10aux::identity_hash_code(reinterpret_cast<x10::lang::Reference*>(#o))")
+    @Native("c++", "::x10aux::identity_hash_code(reinterpret_cast<x10::lang::Reference*>(#o))")
     public static native def identityHashCode(o:Any) : Int;
 
     public static def identityToString(o:Any) : String = o.typeName() + "@" + System.identityHashCode(o).toHexString();
@@ -135,16 +207,8 @@ public class System {
      * @param millis the number of milliseconds to sleep
      * @return true if completed normally, false if interrupted
      */
-    public static def sleep(millis:long):Boolean {
-        try {
-            Runtime.increaseParallelism();
-            Thread.sleep(millis);
-            Runtime.decreaseParallelism(1);
-            return true;
-        } catch (e:InterruptedException) {
-            Runtime.decreaseParallelism(1);
-            return false;
-        }
+    public static def sleep(millis:Long):Boolean {
+        return x10.xrx.Runtime.sleep(millis);
     }
 
     /**
@@ -152,12 +216,7 @@ public class System {
      * @param millis the number of milliseconds to sleep
      * @return true if completed normally, false if interrupted
      */
-    public static def threadSleep(millis:long):Boolean {
-        try {
-            Thread.sleep(millis);
-            return true;
-        } catch (e:InterruptedException) {
-            return false;
-        }
+    public static def threadSleep(millis:Long):Boolean {
+        return x10.xrx.Runtime.threadSleep(millis);
     }
 }

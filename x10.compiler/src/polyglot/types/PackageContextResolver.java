@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.types;
@@ -72,11 +72,14 @@ public class PackageContextResolver extends AbstractAccessControlResolver
                 if (! canAccess(n, context)) {
                     throw new SemanticException("Cannot access " + n + " from " + context.currentClassDef() + ".");
                 }
+                
                 try {
+                	// [DC] what is this for?  some sort of validity check?
                     n = matcher.instantiate(n);
                 } catch (SemanticException e) {
                     n = null;
                 }
+                
                 if (n != null)
                     newTL.add(n);
             }

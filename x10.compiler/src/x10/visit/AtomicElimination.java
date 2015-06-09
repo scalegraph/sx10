@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.visit;
@@ -48,6 +48,7 @@ import x10.ast.SettableAssign;
 public class AtomicElimination extends NodeVisitor {
     private final boolean DEBUG_ = false;
     
+    @Override
     public Node leave(Node old, Node n, NodeVisitor v) {
         Node ret = n;
 
@@ -147,6 +148,7 @@ public class AtomicElimination extends NodeVisitor {
     private int numFieldRefs_(Expr e) {
         final Ctr c = new Ctr(); 
         e.visit( new NodeVisitor() {
+            @Override
             public Node leave( Node old, Node n, NodeVisitor v) {
                 if ( n instanceof Field ||
                      n instanceof ArrayAccess ||

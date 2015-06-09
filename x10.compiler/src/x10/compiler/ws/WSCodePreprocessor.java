@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 
@@ -162,6 +162,7 @@ public class WSCodePreprocessor extends ContextVisitor {
             return found;
         }
         
+        @Override
         public Node leave(Node old, Node n, NodeVisitor v) {
             if(n instanceof Local){
                 LocalInstance li = ((Local) n).localInstance();
@@ -468,7 +469,7 @@ public class WSCodePreprocessor extends ContextVisitor {
         Name tmp = Context.getNewVarName(); //for the dist
         Expr domain = a.domain();
         Type dType = domain.type();
-        if (ts.isX10DistArray(dType)) {
+        if (ts.isX10RegionDistArray(dType)) {
             domain = altsynth.createFieldRef(pos, domain, DIST);
             dType = domain.type();
         }

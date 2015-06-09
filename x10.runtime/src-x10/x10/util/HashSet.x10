@@ -6,16 +6,20 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.util;
-import x10.io.CustomSerialization;
-import x10.io.SerialData;
-public class HashSet[T] extends MapSet[T] implements CustomSerialization {
-    public def this() { super(new HashMap[T,boolean]()); }
-    public def this(sz: int) { super(new HashMap[T,boolean](sz)); }
-    public def serialize():SerialData = (map as HashMap[T,boolean]).serialize(); // Warning: This is an unsound cast because the object or the target type might have constraints and X10 currently does not perform constraint solving at runtime on generic parameters.
-    def this(a:SerialData) { super(new HashMap[T,boolean](a)); }
-    public def clone(): HashSet[T] = new HashSet[T](serialize());
+
+public class HashSet[T] extends MapSet[T] {
+    public def this() { super(new HashMap[T,Boolean]()); }
+    public def this(sz:Int) { super(new HashMap[T,Boolean](sz)); }
+    public def this(map:HashMap[T,Boolean]) { super(map); }
+    public def clone():HashSet[T] {
+        val tmp = new HashMap[T,Boolean](map.size());
+        for (e in map.entries()) {
+           tmp.put(e.getKey(), e.getValue());
+        }
+        return new HashSet[T](tmp);
+    }
 }

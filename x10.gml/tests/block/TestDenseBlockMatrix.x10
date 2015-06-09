@@ -6,88 +6,69 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
-import x10.io.Console;
+import harness.x10Test;
 
-import x10.matrix.Debug;
 import x10.matrix.DenseMatrix;
+import x10.matrix.ElemType;
+
 import x10.matrix.block.Grid;
 import x10.matrix.block.DenseBlockMatrix;
 
-//import x10.matrix.block.SparseBlockMatrix;
-
-/**
-   <p>
-
-   <p>
- */
-public class TestDenseBlockMatrix {
-	
-    public static def main(args:Array[String](1)) {
-		val testcase = new TestDBMatrix(args);
-		testcase.run();
-	}
-}
-
-class TestDBMatrix {
-	public val M:Int;
-	public val N:Int;
-	public val R:Int;
-	public val C:Int;
+public class TestDenseBlockMatrix extends x10Test {
+    static def ET(a:Double)= a as ElemType;
+    static def ET(a:Float)= a as ElemType;
+	public val M:Long;
+	public val N:Long;
+	public val R:Long;
+	public val C:Long;
 	public val grid:Grid;
 
-    public def this(args:Array[String](1)) {
-		M = args.size > 0 ?Int.parse(args(0)):50;
-		N = args.size > 1 ?Int.parse(args(1)):M+1;
-		R = args.size > 2 ?Int.parse(args(2)):3;
-		C = args.size > 3 ?Int.parse(args(3)):R+1;
+    public def this(args:Rail[String]) {
+		M = args.size > 0 ? Long.parse(args(0)):50;
+		N = args.size > 1 ? Long.parse(args(1)):(M as Int)+1;
+		R = args.size > 2 ? Long.parse(args(2)):3;
+		C = args.size > 3 ? Long.parse(args(3)):(R as Int)+1;
 		grid = new Grid(M, N, R, C);
 	}
 
-    public def run (): void {
-		Console.OUT.println("Starting dense block matrix clone/add/sub/scaling tests");
+    public def run():Boolean {
+		Console.OUT.println("Dense block matrix clone/add/sub/scaling tests");
 		Console.OUT.printf("Matrix M:%d N:%d Row block:%d Column block:%d\n", M, N, R, C);
 
 		var ret:Boolean = true;
- 		// Set the matrix function
  		ret &= (testClone());
 		ret &= (testCopy());
 		ret &= (testScale());
 		ret &= (testAdd());
 		ret &= (testAddSub());
 		ret &= (testAddAssociative());
-// 		ret &= (testScaleAdd());
-// 		ret &= (testCellMult());
-// 		ret &= (testCellDiv());
+ 		ret &= (testScaleAdd());
+ 		ret &= (testCellMult());
+ 		ret &= (testCellDiv());
 
-		if (ret)
-			Console.OUT.println("Dense block matrix test passed!");
-		else
-			Console.OUT.println("----------------Dense block matrix test failed!----------------");
+		return ret;
 	}
 
 	public def testClone():Boolean{
 		var ret:Boolean = true;
-		Console.OUT.println("Starting dense block matrix clone test");
+		Console.OUT.println("Dense block matrix clone test");
 		val dbm = DenseBlockMatrix.make(grid);
 		dbm.initRandom();
 
-		//dm.printBlock("Dist dense");
 		val dbm1 = dbm.clone();
 		ret = dbm.equals(dbm1);
 
-		if (ret)
-			Console.OUT.println("Dense block matrix Clone and dense conversion test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Dense block matrix Clone test failed!--------");
 		return ret;
 	}
 
 	public def testCopy():Boolean{
 		var ret:Boolean = true;
-		Console.OUT.println("Starting dense block matrix copy To/From test");
+		Console.OUT.println("Dense block matrix copy To/From test");
 		val dbm = DenseBlockMatrix.make(grid);
 		val dm  = DenseMatrix.make(grid.M, grid.N);
 
@@ -101,77 +82,64 @@ class TestDBMatrix {
 
 		ret &= dbm2.equals(dm);
 
-		if (ret)
-			Console.OUT.println("Dense block matrix Clone and dense copy to/from  passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Dense block matrix copy to/from test failed!--------");
 
-                dbm(1, 1) = dbm(2,2) = 10.0;
+		dbm(1, 1) = dbm(2,2) = ET(10.0);
 
-                if ((dbm(1,1)==dbm(2,2)) && (dbm(1,1)==10.0)) {
-                        ret &= true;
-                        Console.OUT.println("Dense block Matrix chain assignment test passed!");
-                } else {
-                        ret &= false;
-                        Console.OUT.println("---------- Dense block Matrix chain assignment test failed!-------");
-                }
+        if ((dbm(1,1)==dbm(2,2)) && (dbm(1,1)==ET(10.0))) {
+                ret &= true;
+        } else {
+                ret &= false;
+                Console.OUT.println("---------- Dense block Matrix chain assignment test failed!-------");
+        }
 
 		return ret;
 	}
 
 	public def testScale():Boolean{
-		Console.OUT.println("Starting dense block matrix scaling test");
+		Console.OUT.println("Dense block matrix scaling test");
 		val dm = DenseBlockMatrix.make(grid);
 		dm.initRandom();
-		val dm1  = dm * 2.5;
+		val dm1  = dm * ET(2.5);
 		val m = dm.toDense();
-		m.scale(2.5);
+		m.scale(ET(2.5));
 		
 		val ret = m.equals(dm1);
-		if (ret)
-			Console.OUT.println("Dense block matrix scaling test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Dense block matrix Scaling test failed!--------");	
 		return ret;
 	}
 
 	public def testAdd():Boolean {
-		Console.OUT.println("Starting dense block matrix add test");
+		Console.OUT.println("Dense block matrix add test");
 		val dm = DenseBlockMatrix.make(grid);
 		dm.initRandom();
-		val dm1 = dm * -1.0;
+		val dm1 = dm * (ET(-1.0));
 		val dm0 = dm + dm1;
-		val ret = dm0.equals(0.0);
-		if (ret)
-			Console.OUT.println("Dense block matrix Add: dm + dm*-1 test passed");
-		else
+		val ret = dm0.equals(ET(0.0));
+		if (!ret)
 			Console.OUT.println("--------Dense block matrix Add: dm + dm*-1 test failed--------");
 		return ret;
 	}
 
 	public def testAddSub():Boolean {
-		Console.OUT.println("Starting dense block matrix add-sub test");
+		Console.OUT.println("Dense block matrix add-sub test");
 		val dm = DenseBlockMatrix.make(grid);
 		dm.initRandom();
 		val dm1= DenseBlockMatrix.make(grid);
 		dm.initRandom();
-		//sp.print("Input:");
 		val dm2= dm  + dm1;
-		//sp2.print("Add result:");
-		//
 		val dm_c  = dm2 - dm1;
 		val ret   = dm.equals(dm_c);
-		//sp_c.print("Another add result:");
-		if (ret)
-			Console.OUT.println("dense block matrix Add-sub test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Dense block matrix Add-sub test failed!--------");
 		return ret;
 	}
 
 
 	public def testAddAssociative():Boolean {
-		Console.OUT.println("Starting dense block matrix add associative test");
+		Console.OUT.println("Dense block matrix add associative test");
 
 		val a = DenseBlockMatrix.make(grid);
 		val b = DenseBlockMatrix.make(grid);
@@ -182,34 +150,30 @@ class TestDBMatrix {
 		val c1 = a + b + c;
 		val c2 = a + (b + c);
 		val ret = c1.equals(c2);
-		if (ret)
-			Console.OUT.println("Dense block matrix Add associative test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Dense block matrix Add associative test failed!--------");
 		return ret;
 	}
 
 	public def testScaleAdd():Boolean {
-		Console.OUT.println("Starting dense block Matrix scaling-add test");
+		Console.OUT.println("Dense block Matrix scale-add test");
 
 		val a = DenseBlockMatrix.make(grid);
 		a.initRandom();
 
 		val m = a.toDense();
-		val a1= a * 0.2;
-		val a2= 0.8 * a;
+		val a1= a * ET(0.2);
+		val a2= ET(0.8) * a;
 		var ret:Boolean = a.equals(a1+a2);
 		ret &= a.equals(m);
 
-		if (ret)
-			Console.OUT.println("Dense block Matrix scaling-add test passed!");
-		else
-			Console.OUT.println("--------Dense block matrix scaling-add test failed!--------");
+		if (!ret)
+			Console.OUT.println("--------Dense block matrix scale-add test failed!--------");
 		return ret;
 	}
 
 	public def testCellMult():Boolean {
-		Console.OUT.println("Starting dense block Matrix cellwise mult test");
+		Console.OUT.println("Dense block Matrix cellwise mult test");
 
 		val a = DenseBlockMatrix.make(grid);
 		val b = DenseBlockMatrix.make(grid);
@@ -225,15 +189,13 @@ class TestDBMatrix {
 		val dc= (da + db) * da;
 		ret &= dc.equals(c);
 
-		if (ret)
-			Console.OUT.println("Dense block Matrix cellwise mult passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Dense block matrix cellwise mult test failed!--------");
 		return ret;
 	}
 
 	public def testCellDiv():Boolean {
-		Console.OUT.println("Starting dense block matrix cellwise mult-div test");
+		Console.OUT.println("Dense block matrix cellwise mult-div test");
 
 		val a = DenseBlockMatrix.make(grid);
 		val b = DenseBlockMatrix.make(grid);
@@ -244,13 +206,12 @@ class TestDBMatrix {
 		val d =  c / (a + b);
 		var ret:Boolean = d.equals(a);
 
-		if (ret)
-			Console.OUT.println("Dense block Matrix cellwise mult-div passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Dense block matrix cellwise mult-div test failed!--------");
 		return ret;
 	}
 
-
-
+    public static def main(args:Rail[String]) {
+		new TestDenseBlockMatrix(args).execute();
+	}
 } 

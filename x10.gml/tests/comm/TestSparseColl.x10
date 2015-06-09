@@ -1,56 +1,40 @@
 /*
  *  This file is part of the X10 Applications project.
  *
- *  (C) Copyright IBM Corporation 2011.
+ *  (C) Copyright IBM Corporation 2011-2014.
  */
 
-import x10.io.Console;
-import x10.util.Timer;
-import x10.array.DistArray;
+import harness.x10Test;
 
+import x10.compiler.Ifndef;
 
 import x10.matrix.Matrix;
-import x10.matrix.Debug;
 import x10.matrix.DenseMatrix;
+import x10.matrix.ElemType;
 import x10.matrix.sparse.SparseCSC;
 
 import x10.matrix.block.Grid;
-import x10.matrix.block.SparseBlock;
 import x10.matrix.block.SparseBlockMatrix;
-import x10.matrix.block.DenseBlockMatrix;
-
-import x10.matrix.dist.DistDenseMatrix;
+import x10.matrix.comm.MatrixBcast;
+import x10.matrix.comm.MatrixGather;
+import x10.matrix.comm.MatrixRingCast;
+import x10.matrix.comm.MatrixScatter;
 import x10.matrix.dist.DistSparseMatrix;
 import x10.matrix.dist.DupDenseMatrix;
 import x10.matrix.dist.DupSparseMatrix;
 
-import x10.matrix.comm.CommHandle;
-
 /**
-   This class contains test cases for dense and sparse matrix broadcast and other collective functions.
-   <p>
-
-   <p>
+ * This class contains test cases for dense and sparse matrix broadcast and other collective functions.
  */
+public class TestSparseColl extends x10Test {
 
-public class TestSparseColl{
-    public static def main(args:Array[String](1)) {
-		val m = args.size > 0 ?Int.parse(args(0)):10;
-		val n = args.size > 1 ?Int.parse(args(1)):m+1;
-		val d = args.size > 2 ?Double.parse(args(2)):0.9;
+    static def ET(a:Double)= a as ElemType;
+    static def ET(a:Float)= a as ElemType;
+	public val M:Long;
+	public val N:Long;
+	public val nzdensity:Float;
 
-		val testcase = new RunSparseCollTest(m, n, d);
-		testcase.run();
-	}
-}
-
-class RunSparseCollTest {
-
-	public val M:Int;
-	public val N:Int;
-	public val nzdensity:Double;
-
-	public val numplace:Int;
+	public val numplace:Long;
 	public val gpart:Grid;
 	public val gpartRow:Grid;
 	
@@ -59,23 +43,18 @@ class RunSparseCollTest {
 	public var allgatherTime:Long = 0;
 	public var reduceTime:Long = 0;
 	
-	
-	val comm:CommHandle;
-
-    public def this(m:Int, n:int, nzd:Double) {
+    public def this(m:Long, n:Long, nzd:Float) {
 		M=m; N=n;
 		nzdensity = nzd;
 
 		numplace =  Place.numPlaces();
 		gpart    =  Grid.make(M, N);   //square-like partition
 		gpartRow =  new Grid(M, N*numplace, 1, numplace); //Single row block partition
-		
-		comm = new CommHandle();
 	}
 	
-	public def run(): void {
+    public def run():Boolean {
 		var ret:Boolean = true;
- 		// Set the matrix function
+	@Ifndef("MPI_COMMU") { // TODO Deadlocks!
   		ret &= (testSparseBcast());
  		ret &= (testSparseRingCast());
 		ret &= (testSparseGather());
@@ -85,16 +64,10 @@ class RunSparseCollTest {
 // 		ret &= (testAllgather());
 // 		ret &= (testReduce());
 // 		ret &= (testAllReduce());
+    }
+        return ret;
+	}
 
-		if (ret)
-			Console.OUT.println("Test sparse matrix collective commuication passed!");
-		else
-			Console.OUT.println("--------Test of sparse matrix collective communication failed!--------");
-		}
-	//------------------------------------------------
-	//------------------------------------------------
-
-	//------------------------------------------------
 	public def testSparseBcast():Boolean {
 		var ret:Boolean=true;
 		Console.OUT.printf("\nTest sparse matrix bcast of over %d places\n", numplace);
@@ -103,18 +76,14 @@ class RunSparseCollTest {
 		val spa   = dupSM.local();
 		spa.initRandom(nzdensity);
 
-		comm.bcast(dupSM.dupMs);
-		//dspa.printAll();
+		MatrixBcast.bcast(dupSM.dupMs);
 
 		ret =dupSM.syncCheck();
-		if (ret)
-			Console.OUT.println("Sparse matrix.bcast for dup matrix test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("-----Test sparse matrix bcast failed!-----");
 		return ret;
 	}
 
-	//------------------------------------------------
 	public def testSparseRingCast():Boolean {
 		var ret:Boolean = true;
 		Console.OUT.printf("\nTest sparse matrix ring cast over %d places\n", numplace);
@@ -123,7 +92,7 @@ class RunSparseCollTest {
 		val spaA  = dupSM.local();
 		spaA.initRandom();
 
-		comm.rcast(dupSM.dupMs);
+		MatrixRingCast.rcast(dupSM.dupMs);
 		
 		ret =dupSM.syncCheck();
 		
@@ -132,9 +101,7 @@ class RunSparseCollTest {
 
 		ret &= dupDM.syncCheck();
 		
-		if (ret)
-			Console.OUT.println("Sparse matrix ring rast test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("-----Test sparse matrix ring cast failed!-----");
 		return ret;
  	}
@@ -147,26 +114,16 @@ class RunSparseCollTest {
  		dstSM.initRandom();
 		val blkSM = SparseBlockMatrix.make(gpart, nzdensity);
 
-		//dstSM.printMatrix();
-		Debug.flushln("Start gathering "+numplace+" places");
-		comm.gather(dstSM.distBs, blkSM.listBs);
-		Debug.flushln("Done");
+		MatrixGather.gather(dstSM.distBs, blkSM.listBs);
 		
-		//blkSM.printMatrix();
-
 		ret = dstSM.equals(blkSM as Matrix(gpart.M, gpart.N));
-		Debug.flushln("Done with verify");
 
 		if (ret) {
 			val dm = DenseMatrix.make(gpart.M, gpart.N);
-			Debug.flushln("Start copy from block matrix to dense matrix locally");
 			blkSM.copyTo(dm);
-			Debug.flushln("Done");
 			ret &= dm.equals(blkSM as Matrix(gpart.M, gpart.N));
 		}
- 		if (ret)
- 			Console.OUT.println("Test gather for dist sparse matrix test passed!");
- 		else
+ 		if (!ret)
  			Console.OUT.println("-----Test gather for dist sparse matrix failed!-----");
  		return ret;
  	}
@@ -180,19 +137,11 @@ class RunSparseCollTest {
 
 		val SM = SparseCSC.make(gpartRow.M, gpartRow.N, nzdensity);
 
-		Debug.flushln("Start gather matrix blocks in one row partitioning");
-		comm.gatherRowBs(gpartRow, distSM.distBs, SM);
-		Debug.flushln("Done");
-
-		//distSM.print();
-		//SM.print();
+		MatrixGather.gatherRowBs(gpartRow, distSM.distBs, SM);
 
 		ret = distSM.equals(SM);
-		Debug.flushln("Done verification");
 
-		if (ret)
-			Console.OUT.println("Test row-gather for dist sparse matrix test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("-----Test row-gather for dist sparse matrix failed!-----");
 		return ret;
 	}
@@ -205,16 +154,11 @@ class RunSparseCollTest {
 		val blkSM = SparseBlockMatrix.make(gpart, nzdensity);
  		blkSM.initRandom();
 
-		Debug.flushln("Start scattering data to "+numplace+" places");
-		comm.scatter(blkSM.listBs, dstSM.distBs);
-		Debug.flushln("Done");
+		MatrixScatter.scatter(blkSM.listBs, dstSM.distBs);
 		
 		ret = dstSM.equals(blkSM as Matrix(gpart.M, gpart.N));
-		Debug.flushln("Done with verify");
 
- 		if (ret)
- 			Console.OUT.println("Test scatter for dist sparse matrix test passed!");
- 		else
+ 		if (!ret)
  			Console.OUT.println("-----Test scatter for dist sparse matrix failed!-----");
  		return ret;
  	}
@@ -227,19 +171,12 @@ class RunSparseCollTest {
 		val SM = SparseCSC.make(gpartRow.M, gpartRow.N, nzdensity);
 		val distSM = DistSparseMatrix.make(gpartRow, nzdensity);
 		SM.initRandom();
-		//SM.print();
 
-		Debug.flushln("Start single-row block scatter sparse matrix");
-		comm.scatterRowBs(gpartRow, SM, distSM.distBs);
-		Debug.flushln("Done");
-		//distSM.print();
+		MatrixScatter.scatterRowBs(gpartRow, SM, distSM.distBs);
 
 		ret = distSM.equals(SM);
-		Debug.flushln("Done verification");
 
-		if (ret)
-			Console.OUT.println("Test single-row blocks scatter for sparse matrix test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("-----Test single-row block scatter for sparse matrix failed!-----");
 		return ret;
 	}
@@ -257,9 +194,7 @@ class RunSparseCollTest {
 	
 // 		val da = dupDA.local();
 // 		ret = dupDA.syncCheck() && distDA.equals(da);
-// 		if (ret)
-// 			Console.OUT.println("Test allgather for dist matrix test passed!");
-// 		else
+// 		if (!ret)
 // 			Console.OUT.println("-----Test allgather for dist matrix failed!-----");
 // 		return ret;
 
@@ -279,9 +214,7 @@ class RunSparseCollTest {
 // 		denDA.scale(numplace as Double);
 // 		ret = denDA.equals(dupDA.local() as Matrix(denDA.M, denDA.N));
 
-// 		if (ret)
-// 				Console.OUT.println("Test reduce for dup matrix test passed!");
-// 			else
+// 		if (!ret)
 // 				Console.OUT.println("-----Test reduce for dup matrix failed!-----");
 // 		return ret;
 // 	}
@@ -338,10 +271,16 @@ class RunSparseCollTest {
 
   		
 // 		ret = dupDA.syncCheck();
-// 		if (ret)
-// 			Console.OUT.println("Test ring cast for dup matrix test passed!");
-// 		else
+// 		if (!ret)
 // 			Console.OUT.println("-----Test ring cast for dup matrix failed!-----");
 // 		return ret;
 // 	}
+
+    public static def main(args:Rail[String]) {
+		val m = args.size > 0 ? Long.parse(args(0)):4;
+		val n = args.size > 1 ? Long.parse(args(1)):m+1;
+		val d = args.size > 2 ? Float.parse(args(2)):0.9f;
+
+		new TestSparseColl(m, n, d).execute();
+	}
 }

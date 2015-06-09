@@ -6,20 +6,9 @@
 #  You may obtain a copy of the License at
 #      http://www.opensource.org/licenses/eclipse-1.0.php
 #
-#  (C) Copyright IBM Corporation 2006-2011.
+#  (C) Copyright IBM Corporation 2006-2014.
 #
 
-###################################################
-###################################################
-## Name:  	X10 application test
-## Created by: 	Juemin Zhang
-## Contact:   	zhangj@us.ibm.com
-###################################################
-###################################################
-
-# Build [mpi|sockets|lapi] transport: make [mpi|sock|lapi]
-# Build java backend: make java
-# Build all excutable and java backend: make all
 ###################################################
 # Source and target file
 ###################################################
@@ -33,9 +22,7 @@ depend_src  = PageRank.x10 SeqPageRank.x10
 #-------------------------------------
 # build path
 build_path	= build
-
-# GML path
-gml_path    = ../..
+gml_path    = $(X10_HOME)/x10.gml
 
 # compile options
 X10_FLAG	= -sourcepath ../.  -d $(build_path) -report postcompile=2 -v -errors 5 -VERBOSE_CHECKS -O -NO_CHECKS
@@ -43,7 +30,7 @@ X10_FLAG	= -sourcepath ../.  -d $(build_path) -report postcompile=2 -v -errors 5
 # runtime settings
 runtime_list = mpi sock java
 numplaces = 4
-test_args = 
+test_args = -m 100 --density 0.01 --iterations 20 --verify
 
 ###################################################
 # Build rules
@@ -76,4 +63,3 @@ help::
 	@echo " If runtime shows \"NoClassDefFoundError: x10/matrix/Matrix\"";
 	@echo " replace \"~\" by relative directory path or absolute explicit directory path name";
 	@echo "";
-	

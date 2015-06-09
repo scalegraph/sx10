@@ -1,40 +1,35 @@
 /*
- *  This file is part of the X10 Applications project.
+ *  This file is part of the X10 project (http://x10-lang.org).
  *
- *  (C) Copyright IBM Corporation 2011.
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2011-2014.
  */
-package pagerank;
 
-import x10.io.Console;
 import x10.util.Timer;
-//
-import x10.matrix.Debug;
-//
-import x10.matrix.Matrix;
+
+import x10.matrix.util.Debug;
 import x10.matrix.DenseMatrix;
-import x10.matrix.blas.DenseMatrixBLAS;
-//
 import x10.matrix.block.Grid;
 import x10.matrix.block.DenseBlockMatrix;
 import x10.matrix.dist.DupDenseMatrix;
 import x10.matrix.dist.DistDenseMatrix;
 import x10.matrix.dist.DistSparseMatrix;
 
-import x10.matrix.dist.DistMultDupToDist;
-//
-
 /**
  * Parallel Page Rank algorithm based on GML distributed
  * dense/sparse matrix
  */
 public class PageRank {
+	val rowG:Long;
+	val colP:Long;
 
-	val rowG:Int;
-	val colP:Int;
-
-	public val iteration:Int;
-	public val nzDensity:Double;
-	public val alpha:Double= 0.85;
+	public val iterations:Long;
+	public val nzDensity:Float;
+	public val alpha = 0.85 as ElemType;
 
 	public val G:DistSparseMatrix(rowG, rowG);
 	public val P:DupDenseMatrix(rowG, colP);
@@ -47,22 +42,17 @@ public class PageRank {
 	val distGP:DistDenseMatrix(rowG, colP); // Distributed version of G*P
 	val blckGP:DenseBlockMatrix(rowG, colP);// Used to collecte dist block of P
 	val GP:DenseMatrix(rowG, colP);
-	//val dupGP:DupDenseMatrix(rowG, colP);   // Duplicated version of G*P
 	val UP:DenseMatrix(colP, colP);
 
-	val ts:Long = Timer.milliTime();
-	var tt:Long = 0;
-
-	public def this(mg:Int, np:Int, nzd:Double, it:Int) {
-
+	public def this(mg:Long, np:Long, nzd:Float, it:Long) {
 		rowG = mg;
 		colP = np;
 
-		iteration = it;
+		iterations = it;
 		nzDensity=nzd;
 
-		gridG = new Grid(rowG, rowG, Place.MAX_PLACES, 1);
-		gridGP= new Grid(rowG, colP, Place.MAX_PLACES, 1);
+		gridG = new Grid(rowG, rowG, Place.numPlaces(), 1);
+		gridGP= new Grid(rowG, colP, Place.numPlaces(), 1);
 
 		G = DistSparseMatrix.make(gridG, nzDensity) as DistSparseMatrix(rowG, rowG);
 		P = DupDenseMatrix.make(rowG, colP);
@@ -72,12 +62,10 @@ public class PageRank {
 		distGP = DistDenseMatrix.make(gridGP) as DistDenseMatrix(rowG, colP);
 		blckGP = DenseBlockMatrix.make(gridGP) as DenseBlockMatrix(rowG, colP);
 		GP     = DenseMatrix.make(rowG, colP);
-		//dupGP  = DupDenseMatrix.make(rowG, colP); //Need to perform MPI_getherv
 		UP     = DenseMatrix.make(colP, colP);
 	}
 	
 	public def init():void {
-		//-----------------------------------------------
 		Debug.flushln("Start initialize input matrices");		
 		G.initRandom(nzDensity);
 		Debug.flushln("Dist sparse matrix initialization completes");		
@@ -90,43 +78,47 @@ public class PageRank {
 	}
 
 	public def run():DenseMatrix {
-		var startt:Long =0;
-		var pcompt:Long =0;
-		var scompt:Long =0;
-		Debug.flushln("Start parallel PageRank");	
-		val st = Timer.milliTime();
-				
-		for (var i:Int=0; i<iteration; i++) {
-			startt = Timer.milliTime();
-			distGP.mult(G, P)
-				.scale(alpha)
-				.copyTo(blckGP, GP);// dist -> dup
-			//blckGP.copyTo(GP);
-			pcompt += Timer.milliTime() - startt;
-			startt = Timer.milliTime();
+		var parTime:Long = 0;
+		var seqTime:Long = 0;
+        var bcastTime:Long = 0;
+        var gatherTime:Long = 0;
+        var totalTime:Long = 0;
 
+		totalTime -= Timer.milliTime();	
+		for (1..iterations) {
+			parTime -= Timer.milliTime();
+			distGP.mult(G, P).scale(alpha);
+			parTime += Timer.milliTime();
+
+			gatherTime -= Timer.milliTime();
+            distGP.copyTo(blckGP, GP);// dist -> dup
+			gatherTime += Timer.milliTime();
+
+			seqTime -= Timer.milliTime();
 			P.local()
 				.mult(E, UP.mult(U, P.local()))
 				.scale(1-alpha)
 				.cellAdd(GP);
-			scompt += Timer.milliTime() - startt;
-			P.sync(); // broadcast
-		}
-		tt = Timer.milliTime() - st;
-		val pcomtime = distGP.getCalcTime();
-		val commtime = blckGP.getCommTime() + P.getCommTime();
+			seqTime += Timer.milliTime();
 
-		Console.OUT.printf("G:%d PageRank total runtime for %d iter: %d ms, ", rowG, iteration, tt );
-		Console.OUT.printf("comm: %d ms, seq calc: %d ms\n", commtime, scompt);
+			bcastTime -= Timer.milliTime();
+			P.sync(); // broadcast
+			bcastTime += Timer.milliTime();
+		}
+		totalTime += Timer.milliTime();
+		val mulTime = distGP.getCalcTime();
+		val commTime = bcastTime + gatherTime;
+		Console.OUT.printf("Gather: %d ms Bcast: %d ms Mul: %d ms\n", gatherTime, bcastTime, mulTime);
+		Console.OUT.printf("G:%d PageRank total runtime for %d iter: %d ms, ", G.M, iterations, totalTime);
+		Console.OUT.printf("comm: %d ms, par calc: %d ms, seq calc: %d ms\n", commTime, parTime, seqTime);
 		Console.OUT.flush();
 		
 		return P.local();
 	}
 
 	public def printInfo() {
-		//
 		Console.OUT.printf("Place: %d, G:(%dx%d) P:(%dx%d))", 
-						   Place.MAX_PLACES, G.M, G.N, P.M, P.N);
+						   Place.numPlaces(), G.M, G.N, P.M, P.N);
 		Console.OUT.printf("distG(%dx%d)  nzDensity:%.3f\n",
 						   gridG.numRowBlocks, gridG.numColBlocks, nzDensity);
 		Console.OUT.flush();
@@ -142,5 +134,4 @@ public class PageRank {
 		//V.printBlockColumnSizeAvgStd();
 		Console.OUT.flush();
 	}
-
 }

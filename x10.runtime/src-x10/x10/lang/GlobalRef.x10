@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.lang;
@@ -25,20 +25,19 @@ import x10.compiler.Native;
  * arguments returns its encapsulated value.
  */
 @NativeRep("java", "x10.core.GlobalRef<#T$box>", null, "x10.rtt.ParameterizedType.make(x10.core.GlobalRef.$RTT, #T$rtt)")
-@NativeRep("c++", "x10::lang::GlobalRef<#T >", "x10::lang::GlobalRef<#T >", null)
+@NativeRep("c++", "x10::lang::GlobalRef< #T >", "x10::lang::GlobalRef< #T >", null)
 public struct GlobalRef[T](
     @Native("java", "(#this).home")
-    @Native("c++", "x10::lang::Place::place((#this)->location)")
-    home:Place) {T isref} {
-
-    //@Native("java", "(#this).home")
-    //@Native("c++", "x10::lang::Place::place((#this)->location)")
-    //public property home():Place = home;
+    @Native("c++", "::x10::lang::Place::_make((#this)->location)")
+    home:Place,
+    @Native("java", "(#this).epoch")
+    @Native("c++", "(#this)->epoch")
+    epoch:Long) {T isref} {
 
     /** 
      * Create a value encapsulating the given object of type T.
      */
-    @Native("c++", "x10::lang::GlobalRef(#this)")
+    @Native("c++", "::x10::lang::GlobalRef< #T >(#t)")
     public native def this(t:T):GlobalRef[T]{self.home==here}; 
 
     /** 
@@ -69,7 +68,7 @@ public struct GlobalRef[T](
      * method, it avoids a dynamic place check on the first branch.
      */
     @Native("java", "x10.core.GlobalRef.LocalEval.<#T$box,#U$box>evalAtHome(#T$rtt,#U$rtt,#this,#eval)")
-    @Native("c++", "x10::lang::GlobalRef__LocalEval::evalAtHome<#T,#U >(#this, #eval)")
+    @Native("c++", "::x10::lang::GlobalRef__LocalEval::evalAtHome< #T,#U >(#this, #eval)")
     public native def evalAtHome[U](eval:(T)=> U):U;
 
     /**
@@ -83,8 +82,20 @@ public struct GlobalRef[T](
      * method, it avoids a dynamic place check on the first branch.
      */
     @Native("java", "x10.core.GlobalRef.LocalEval.<#T$box>getLocalOrCopy(#T$rtt,#this)")
-    @Native("c++", "x10::lang::GlobalRef__LocalEval::getLocalOrCopy<#T >(#this)")
+    @Native("c++", "::x10::lang::GlobalRef__LocalEval::getLocalOrCopy< #T >(#this)")
     public native def getLocalOrCopy():T;
+
+    /** 
+     * Called when the object referred to by the GlobalRef is no 
+     * longer accesible from other places and therefore can
+     * be removed from the data sturctures that keep objects
+     * alive even when they are not live locally. 
+     * Can only be invoked at the place at which the value was
+     * created. 
+     */
+    @Native("java", "(#this).forget()")
+    @Native("c++", "(#this)->forget()")
+    public native def forget(){here == this.home}:void;
 
     /*
      * @Native methods from Any because the handwritten C++ code doesn't 100% match 
@@ -102,6 +113,10 @@ public struct GlobalRef[T](
     @Native("java", "(#this).hashCode()")
     @Native("c++", "(#this)->hashCode()")
     public native def hashCode():Int;
+
+    @Native("java", "(#this).isNull()")
+    @Native("c++", "(#this)->isNull()")
+    public native def isNull():Boolean;
 
     private static class LocalEval {
         /**

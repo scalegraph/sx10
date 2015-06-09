@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.optimizations.inlining;
@@ -78,7 +78,6 @@ import x10.types.X10ProcedureDef;
 import x10.types.constants.ConstantValue;
 import x10.types.constants.StringValue;
 import x10.types.constraints.ConstraintManager;
-
 import x10.util.AltSynthesizer;
 import x10.util.AnnotationUtils;
 import x10.visit.ConstantPropagator;
@@ -169,13 +168,14 @@ public class Inliner extends ContextVisitor {
      * @return null, if node is to be walked for inlinable calls, or 
      *         node, if inlining should not be performed within it
      */
+    @Override
     public Node override(Node node) {
         Position pos = node.position(); // DEBUG
         if (2 <= VERBOSITY && node instanceof SourceFile) {
             Source s = ((SourceFile) node).source();
             Warnings.issue(this.job, "(begin inlining)", pos);
         }
-        if (ExpressionFlattener.cannotFlatten(node)) { // TODO: check that flattening is actually required
+        if (ExpressionFlattener.cannotFlatten(node, job)) { // TODO: check that flattening is actually required
             if (DEBUG) debug("Cannot flatten: short-circuiting inlining for children of " + node, node);
             return node; // don't inline inside Nodes that cannot be Flattened
         }

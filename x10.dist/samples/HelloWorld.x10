@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 import x10.io.Console;
@@ -15,7 +15,7 @@ import x10.io.Console;
  * The classic hello world program, shows how to output to the console.
  */
 class HelloWorld {
-  public static def main(Array[String]) {
+  public static def main(Rail[String]) {
       Console.OUT.println("Hello World!" );
   }
 }

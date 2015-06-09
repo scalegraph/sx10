@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 
@@ -503,6 +503,7 @@ public abstract class AbstractWSClassGen implements ILocalToFieldContainerMap {
             return super.enter(n);
         }
 
+        @Override
         public Node leave(Node old, Node n, NodeVisitor v) {
 
             if(n instanceof Closure || n instanceof ClassBody){

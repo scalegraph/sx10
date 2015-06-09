@@ -6,16 +6,16 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.util;
 
 /** A mutable or immutable collection. */
 public interface Container[T]  extends Iterable[T] {
-  public def size(): Int;
+  public def size(): Long;
   public def isEmpty(): Boolean;
-  public def contains(T): Boolean;
-  public def containsAll(Container[T]): Boolean;
+  public def contains(y:T): Boolean;
+  public def containsAll(c:Container[T]): Boolean;
   public def clone(): Container[T];
 }

@@ -6,33 +6,20 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.rtt;
 
 import java.util.concurrent.ConcurrentHashMap;
 
+import x10.core.fun.Fun;
+
 // for static inner classes that are compiled from closures
 public final class StaticFunType<T> extends RuntimeType<T> {
     
-    private static final long serialVersionUID = 1L;
-
-    // not used
-//    protected StaticFunType(Class<?> javaClass) {
-//        super(javaClass);
-//    }
-//    
-//    protected StaticFunType(Class<?> javaClass, Variance[] variances) {
-//        super(javaClass, variances);
-//    }
-//
-//    protected StaticFunType(Class<?> javaClass, Type<?>[] parents) {
-//        super(javaClass, parents);
-//    }
-    
-    protected StaticFunType(Class<?> javaClass, Variance[] variances, Type<?>[] parents) {
-        super(javaClass, variances, parents);
+    protected StaticFunType(Class<?> javaClass, int numParams, Type<?>[] parents) {
+    	super(javaClass, numParams, parents);
     }
 
     private static final boolean useCache = true;
@@ -41,27 +28,27 @@ public final class StaticFunType<T> extends RuntimeType<T> {
         if (useCache) {
             StaticFunType<?> type = typeCache.get(javaClass);
             if (type == null) {
-                StaticFunType<?> type0 = new StaticFunType<T>(javaClass, null, null);
+                StaticFunType<?> type0 = new StaticFunType<T>(javaClass, 0, null);
                 type = typeCache.putIfAbsent(javaClass, type0);
                 if (type == null) type = type0;
             }
             return (StaticFunType<T>) type;
         } else {
-            return new StaticFunType<T>(javaClass, null, null);
+            return new StaticFunType<T>(javaClass, 0, null);
         }
     }
     
-    public static <T> StaticFunType/*<T>*/ make(Class<?> javaClass, Variance[] variances) {
+    public static <T> StaticFunType/*<T>*/ make(Class<?> javaClass, int numParams) {
         if (useCache) {
             StaticFunType<?> type = typeCache.get(javaClass);
             if (type == null) {
-                StaticFunType<?> type0 = new StaticFunType<T>(javaClass, variances, null);
+                StaticFunType<?> type0 = new StaticFunType<T>(javaClass, numParams, null);
                 type = typeCache.putIfAbsent(javaClass, type0);
                 if (type == null) type = type0;
             }
             return (StaticFunType<T>) type;
         } else {
-            return new StaticFunType<T>(javaClass, variances, null);
+            return new StaticFunType<T>(javaClass, numParams, null);
         }
     }
 
@@ -69,34 +56,34 @@ public final class StaticFunType<T> extends RuntimeType<T> {
         if (useCache) {
             StaticFunType<?> type = typeCache.get(javaClass);
             if (type == null) {
-                StaticFunType<?> type0 = new StaticFunType<T>(javaClass, null, parents);
+                StaticFunType<?> type0 = new StaticFunType<T>(javaClass, 0, parents);
                 type = typeCache.putIfAbsent(javaClass, type0);
                 if (type == null) type = type0;
             }
             return (StaticFunType<T>) type;
         } else {
-            return new StaticFunType<T>(javaClass, null, parents);
+            return new StaticFunType<T>(javaClass, 0, parents);
         }
     }
     
-    public static <T> StaticFunType/*<T>*/ make(Class<?> javaClass, Variance[] variances, Type<?>[] parents) {
+    public static <T> StaticFunType/*<T>*/ make(Class<?> javaClass, int numParams, Type<?>[] parents) {
         if (useCache) {
             StaticFunType<?> type = typeCache.get(javaClass);
             if (type == null) {
-                StaticFunType<?> type0 = new StaticFunType<T>(javaClass, variances, parents);
+                StaticFunType<?> type0 = new StaticFunType<T>(javaClass, numParams, parents);
                 type = typeCache.putIfAbsent(javaClass, type0);
                 if (type == null) type = type0;
             }
             return (StaticFunType<T>) type;
         } else {
-            return new StaticFunType<T>(javaClass, variances, parents);
+            return new StaticFunType<T>(javaClass, numParams, parents);
         }
     }
 
     @Override
     public String typeName(Object o) {
         // Note: assume that the first parent in this RuntimeType is the parameterized type which corresponds to the function type
-        assert o instanceof x10.core.fun.Fun;
+        assert o instanceof Fun;
         Type<?> parent = getParents()[0];
         String typeName;
         if (parent instanceof ParameterizedType<?>) {
@@ -107,5 +94,11 @@ public final class StaticFunType<T> extends RuntimeType<T> {
         }
         return typeName;
     }
+
+	@Override
+	protected RuntimeType.Variance getVariance(int i) {
+		if (i == numParams() - 1) return RuntimeType.Variance.COVARIANT; // return type is covarient
+		return RuntimeType.Variance.CONTRAVARIANT; // parameter types are contravarient
+	}
 
 }

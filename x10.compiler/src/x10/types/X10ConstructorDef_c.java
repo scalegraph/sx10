@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.types;
@@ -48,6 +48,7 @@ public class X10ConstructorDef_c extends ConstructorDef_c implements X10Construc
 
     Ref<? extends Type> returnType;
     protected Type supType;
+    protected Ref<CConstraint> sourceGuard;
     protected Ref<CConstraint> guard;
     protected Ref<TypeConstraint> typeGuard;
     List<LocalDef> formalNames;
@@ -66,7 +67,8 @@ public class X10ConstructorDef_c extends ConstructorDef_c implements X10Construc
         super(ts, pos, errorPos, container, flags, formalTypes, throwTypes);
         this.returnType = returnType;
         this.formalNames = TypedList.copyAndCheck(formalNames, LocalDef.class, true);
-        this.guard = guard;
+        this.sourceGuard = guard;
+        this.guard = guard; // assume no guard inference for now
         this.typeGuard = typeGuard;
         this.thisDef = thisDef;
         this.offerType = offerType;
@@ -83,6 +85,12 @@ public class X10ConstructorDef_c extends ConstructorDef_c implements X10Construc
     protected boolean derivedReturnType;
     public boolean derivedReturnType() { return derivedReturnType; }
     public void derivedReturnType(boolean r) { this.derivedReturnType = r; }
+
+    protected boolean inferGuard;
+    @Override
+    public boolean inferGuard() { return inferGuard; }
+    @Override
+    public void inferGuard(boolean r) { this.inferGuard = r; }
 
     // BEGIN ANNOTATION MIXIN
     List<Ref<? extends Type>> annotations;
@@ -167,6 +175,14 @@ public class X10ConstructorDef_c extends ConstructorDef_c implements X10Construc
         this.guard = s;
     }
 
+    public Ref<CConstraint> sourceGuard() {
+    	return sourceGuard;
+    }
+
+    public void setSourceGuard(Ref<CConstraint> s) {
+    	this.sourceGuard = s;
+    }
+
     /** Constraint on type parameters. */
     public Ref<TypeConstraint> typeGuard() {
         return typeGuard;
@@ -191,6 +207,21 @@ public class X10ConstructorDef_c extends ConstructorDef_c implements X10Construc
     }
 
     public String signature() {
-	    return TypeSystem.CONSTRUCTOR_NAME + "(" + CollectionUtil.listToString(formalTypes) + ")";
+    	StringBuilder sb = new StringBuilder(TypeSystem.CONSTRUCTOR_NAME);
+    	sb.append('(');
+        boolean first = true;
+        for (LocalDef l : formalNames()) {
+            if (!first) {
+                sb.append(", ");
+            }
+            first = false;
+            if (! ((X10LocalDef) l).isUnnamed()) {
+                sb.append(l.name().toString())
+                    .append(":");
+            }
+            sb.append(l.type().get().toString());
+        }
+    	sb.append(')');
+    	return sb.toString();
     }
 }

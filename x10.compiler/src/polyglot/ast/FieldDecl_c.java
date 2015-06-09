@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.ast;
@@ -200,6 +200,7 @@ public abstract class FieldDecl_c extends Term_c implements FieldDecl {
         final FieldDef mix = fi;
         
         FieldDecl_c n = (FieldDecl_c) this.visitSignature(new NodeVisitor() {
+            @Override
             public Node override(Node n) {
                 return FieldDecl_c.this.visitChild(n, tbx.pushDef(mix));
             }

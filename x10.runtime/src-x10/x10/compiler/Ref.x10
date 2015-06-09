@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.compiler;
@@ -14,7 +14,7 @@ package x10.compiler;
 import x10.lang.annotations.StatementAnnotation;
 
 /**
- * @Ref(v) may be used to annotate an async to specify that variable v should be captured by reference. */
+ * This annotation on an async specifies that variable v should be captured by reference. */
 public interface Ref[T]
     extends StatementAnnotation {
     public property id(): T;

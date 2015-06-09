@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 #include <x10/lang/Closure.h>
@@ -15,10 +15,6 @@
 
 x10_int x10::lang::Closure::hashCode() {
     return x10aux::hash_code(_get_serialization_id());
-}
-
-x10::lang::String* x10::lang::Closure::toString() {
-    return String::Lit(this->toNativeString());
 }
 
 const char* x10::lang::Closure::toNativeString() {

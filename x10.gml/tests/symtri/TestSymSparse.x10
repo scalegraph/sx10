@@ -1,80 +1,62 @@
 /*
- *  This file is part of the X10 Applications project.
+ *  This file is part of the X10 project (http://x10-lang.org).
  *
- *  (C) Copyright IBM Corporation 2011.
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2011-2014.
  */
 
-import x10.io.Console;
+import harness.x10Test;
 
 import x10.matrix.Matrix;
 import x10.matrix.DenseMatrix;
 import x10.matrix.TriDense;
+
 import x10.matrix.sparse.SparseCSC;
 import x10.matrix.builder.SparseCSCBuilder;
 import x10.matrix.builder.SymSparseBuilder;
 
-
 /**
-   This class contails test cases for dense matrix addition, scaling, and negative operations.
-   <p>
-
-   <p>
+ * This class contains test cases for symmetric sparse builders.
  */
-public class TestSymSparse{
-
-    public static def main(args:Array[String](1)) {
-		val m = (args.size > 0) ? Int.parse(args(0)):8;
-		val z = (args.size > 1) ? Double.parse(args(1)):0.5;
-		val testcase = new SymSpaTest(m, z);
-		testcase.run();
-	}
-}
-
-
-class SymSpaTest {
-
-	public val M:Int;
-	public val nzd:Double;
-
-	public def this(m:Int, z:Double) {
-		M = m;
-		nzd = z;
-	}
-
-    public def run (): void {
-		Console.OUT.println("Starting symmetric sparse builder tests on "+
-							M+"x"+ M + " matrices");
-		var ret:Boolean = true;
- 		// Set the matrix function
-		ret &= (testMake());
-		//ret &= (testInit());
-
-		if (ret)
-			Console.OUT.println("Test passed!");
-		else
-			Console.OUT.println("----------------Test failed!----------------");
-	}
-
+public class TestSymSparse extends x10Test {
+    public val M:Long;
+    public val nzd:Float;
     
-	public def testMake():Boolean{
-
-		Console.OUT.println("Starting Symmetric sparse Matrix random initialization method test");
-		val bd = SymSparseBuilder.make(M).initRandom(nzd);
-		val ss = bd.toSparseCSC();
-		ss.printMatrix();
-		//dm.printMatrix();
-		//Console.OUT.println(dm.d.toString());
-		val st = SparseCSCBuilder.make(M,M).initTransposeFrom(ss).toSparseCSC();
-		var ret:Boolean = st.equals(ss);
-		ret &= bd.checkSymmetric();
-		
-		if (ret)
-			Console.OUT.println("Symmetric sparse matrix initialization test passed!");
-		else
-			Console.OUT.println("--------Symmetric sparse matrix initialization test failed!--------");
-	
-		return ret;
-	}
-	
-		
+    public def this(m:Long, z:Float) {
+        M = m;
+        nzd = z;
+    }
+    
+    public def run():Boolean {
+        Console.OUT.println("Symmetric sparse builder tests on "+
+                            M+"x"+ M + " matrices");
+        var ret:Boolean = true;
+        ret &= (testMake());
+        
+        return ret;
+    }
+    
+    public def testMake():Boolean{
+        Console.OUT.println("Symmetric sparse Matrix random initialization method test");
+        val bd = SymSparseBuilder.make(M).initRandom(nzd);
+        val ss = bd.toSparseCSC();
+        val st = SparseCSCBuilder.make(M,M).initTransposeFrom(ss).toSparseCSC();
+        var ret:Boolean = st.equals(ss);
+        ret &= bd.checkSymmetric();
+        
+        if (!ret)
+            Console.OUT.println("--------Symmetric sparse matrix initialization test failed!--------");
+        
+        return ret;
+    }
+    
+    public static def main(args:Rail[String]) {
+        val m = (args.size > 0) ? Long.parse(args(0)):8;
+        val z = (args.size > 1) ? Float.parse(args(1)):0.5f;
+        new TestSymSparse(m, z).execute();
+    }
 }

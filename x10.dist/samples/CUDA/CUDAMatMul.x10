@@ -1,7 +1,17 @@
+/*
+ *  This file is part of the X10 project (http://x10-lang.org).
+ *
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2006-2014.
+ */
+
 import x10.io.Console;
 import x10.util.Random;
 import x10.util.CUDAUtilities;
-import x10.util.Vec;
 import x10.compiler.*;
 
 public class CUDAMatMul {
@@ -9,26 +19,26 @@ public class CUDAMatMul {
     //
     //  auxiliary routines
     //  
-    static def fill (A:Array[Float](1){rail}, n:Int, maxi:Int)
+    static def fill (A:Rail[Float], N:Long, maxi:Int)
     {
         val r = new Random();
-        for(j in 0..(n-1))
-            A(j) = (r.nextInt(maxi*2) - maxi) / (maxi + 1.0f);
+        for (j in 0n..(N-1n))
+            A(j) = (r.nextInt(maxi*2n) - maxi) / (maxi + 1.0f);
     }
 
-    static def diff (m:Int, n:Int, A:Array[Float](1){rail}, lda:Int, B:Array[Float](1){rail}, ldb:Int )
+    static def diff (m:Long, n:Long, A:Rail[Float], lda:Long, B:Rail[Float], ldb:Long)
     {
         var err:Float = 0;
-        for(j in 0..(n-1))
-            for(i in 0..(m-1))
+        for (j in 0..(n-1))
+            for (i in 0..(m-1))
                 err = Math.max( err, Math.abs( A(i+j*lda) - B(i+j*ldb) ) );
         return err;
     }
 
     static def ourSgemm (gpu:Place, transa:Char, transb:Char, m:Int, n:Int, k:Int, alpha:Float,
-                         A:RemoteArray[Float]{home==gpu, rank==1}, lda:Int,
-                         B:RemoteArray[Float]{home==gpu, rank==1}, ldb:Int, beta:Float,
-                         C:RemoteArray[Float]{home==gpu, rank==1}, ldc:Int)
+                         A:GlobalRail[Float]{home==gpu}, lda:Long,
+                         B:GlobalRail[Float]{home==gpu}, ldb:Long, beta:Float,
+                         C:GlobalRail[Float]{home==gpu}, ldc:Long)
     {
         assert transa == 'N' || transa == 'n' : "unsupported value of 'transa' in ourSgemm()";
         assert transb == 'N' || transb == 'n' || transb == 'T' || transb == 't' || transb == 'C' || transb == 'c' :
@@ -36,40 +46,40 @@ public class CUDAMatMul {
         assert (m%64) == 0 && (n%16) == 0: "unsupported dimensions of matrix C in ourSgemm()";
 
         //dim3 grid( m/64, n/16 ), threads( 16, 4 );
-        if( transb == 'N' || transb == 'n' )
+        if ( transb == 'N' || transb == 'n' )
         {
             assert (k%16) == 0 && k > 0 : "unsupported shared dimension in ourSgemm( 'N', 'N', ... )";
             //sgemmNN<<<grid, threads>>>( A, lda, B, ldb, C, ldc, k, alpha, beta );
             finish async at (gpu) @CUDA @CUDADirectParams {
-                finish for (block in 0..(((m*n)/64/16)-1)) async {
-                    val bs = new Array[Float](16*17, 0);
-                    clocked finish for (thread in 0..63) clocked async {
-                        val inx = thread % 16;
-                        val iny = thread / 16;
-                        val ibx = (block%(m/64)) * 64;
-                        val iby = (block/(m/64)) * 16;
-                        val id = inx + iny*16;
+                finish for (block in 0n..(((m*n)/64n/16n)-1n)) async {
+                    val bs = new Rail[Float](16*17, 0.0f);
+                    clocked finish for (thread in 0n..63n) clocked async {
+                        val inx = thread % 16n;
+                        val iny = thread / 16n;
+                        val ibx = (block%(m/64n)) * 64n;
+                        val iby = (block/(m/64n)) * 16n;
+                        val id = inx + iny*16n;
 
-                        var A_idx:Int = ibx + id;
-                        var B_idx:Int = inx + ( iby + iny) * ( ldb );
-                        var C_idx:Int = ibx + id  + ( iby * ldc );
+                        var A_idx:Long = ibx + id;
+                        var B_idx:Long = inx + ( iby + iny ) * ( ldb );
+                        var C_idx:Long = ibx + id + ( iby * ldc );
 
                         val Blast_idx = B_idx + k;
 
-                        var c : Vec[Float]{size==16} = Vec.make[Float](16);
+                        @StackAllocate val c = @StackAllocate new Rail[Float](16);
 
                         do
                         {
                             Clock.advanceAll();
 
-                            @Unroll(4) for (i in 0..(4-1)) {
+                            @Unroll(4) for (i in 0..3) {
                                 bs(inx*17+iny+4*i) = B(B_idx + (4*i)*ldb);
                             }
 
                             Clock.advanceAll();
 
-                            @Unroll(16)for (i in 0..(16-1)) {
-                                @Unroll(16) for (j in 0..(16-1)) {
+                            @Unroll(16) for (i in 0..15) {
+                                @Unroll(16) for (j in 0..15) {
                                     c(j) = c(j) + A(A_idx + i*lda) * bs(i*17 + j);
                                 }
                             }
@@ -79,9 +89,9 @@ public class CUDAMatMul {
                             A_idx += 16*lda;
                             B_idx += 16;
 
-                        } while( B_idx < Blast_idx );
+                        } while ( B_idx < Blast_idx );
 
-                        @Unroll(16) for (i in 0..(16-1)) {
+                        @Unroll(16) for (i in 0..15) {
                             C(C_idx + i*ldc) = alpha*c(i) + beta*C(C_idx + i*ldc);
                         }
                     }
@@ -96,40 +106,35 @@ public class CUDAMatMul {
     }
 
 
-    public static def main (args : Rail[String]) {
+    public static def main (args:Rail[String]) {
 
-        var N_ : Int;
-        if (args.size >= 1) {
-            N_ = Int.parseInt(args(0));
-        } else {
-            N_ = 4096;
-        }
-        val N = N_;
+        val N = args.size >= 1 ? Long.parse(args(0)) : 4096;
 
         //
         //  init arrays
         //
-        val gpu = here.children().size==0 ? here : here.child(0);
+        val topo = PlaceTopology.getTopology();
+        val gpu = topo.numChildren(here)==0 ? here : topo.getChild(here, 0);
 
-        val dA = CUDAUtilities.makeRemoteArray(gpu, N*N, 0 as Float);
-        val dB = CUDAUtilities.makeRemoteArray(gpu, N*N, 0 as Float);
-        val dC = CUDAUtilities.makeRemoteArray(gpu, N*N, 0 as Float);
+        val dA = CUDAUtilities.makeGlobalRail[Float](gpu, N*N);
+        val dB = CUDAUtilities.makeGlobalRail[Float](gpu, N*N);
+        val dC = CUDAUtilities.makeGlobalRail[Float](gpu, N*N);
 
-        val A = new Array[Float](N*N);
-        val B = new Array[Float](N*N);
-        val C = new Array[Float](N*N);
+        val A = new Rail[Float](N*N);
+        val B = new Rail[Float](N*N);
+        val C = new Rail[Float](N*N);
 
-        fill( A, N*N, 31 );
-        fill( B, N*N, 31 );
-        fill( C, N*N, 31 );
+        fill( A, N*N, 31n );
+        fill( B, N*N, 31n );
+        fill( C, N*N, 31n );
 
         finish {
-            Array.asyncCopy(A, 0, dA, 0, N*N);
-            Array.asyncCopy(B, 0, dB, 0, N*N);
+            Rail.asyncCopy(A, 0, dA, 0, N*N);
+            Rail.asyncCopy(B, 0, dB, 0, N*N);
         }
 
-        val cublas_result = new Array[Float](N*N);
-        val our_result = new Array[Float](N*N);
+        val cublas_result = new Rail[Float](N*N);
+        val our_result = new Rail[Float](N*N);
 
         //
         //  bench square matrices
@@ -142,7 +147,7 @@ public class CUDAMatMul {
             Console.OUT.println("\ntesting sgemm( '"+transa+"', '"+transb+"', n, n, n, ... )\n");
 
             val nb = 64;
-            //for(var idim:Int = 1; idim <= N/nb; idim = ((idim+1)*1.1) as Int )
+            //for (var idim:Int = 1n; idim <= N/nb; idim = ((idim+1)*1.1) as Int)
             val idim = N/nb;
             {
                 val dim = idim*nb;
@@ -170,7 +175,7 @@ public class CUDAMatMul {
                 var start_time : Long = System.currentTimeMillis();
                 val iters = 10;
                 finish for (iter in 0..(iters-1)) {
-                    ourSgemm(gpu, transa, transb, m, n, k, alpha, dA, lda, dB, ldb, beta, dC, ldc );
+                    ourSgemm(gpu, transa, transb, m as Int, n as Int, k as Int, alpha, dA, lda as Int, dB, ldb as Int, beta, dC, ldc as Int);
                 }
                 val elapsed_time = (System.currentTimeMillis() - start_time)/1E3/iters;
 
@@ -184,11 +189,10 @@ public class CUDAMatMul {
             }
         }
 
-        CUDAUtilities.deleteRemoteArray( dA );
-        CUDAUtilities.deleteRemoteArray( dB );
-        CUDAUtilities.deleteRemoteArray( dC );
+        CUDAUtilities.deleteGlobalRail(dA);
+        CUDAUtilities.deleteGlobalRail(dB);
+        CUDAUtilities.deleteGlobalRail(dC);
     }
 }
 
 // vim: shiftwidth=4:tabstop=4:expandtab
-

@@ -1,3 +1,14 @@
+/*
+ *  This file is part of the X10 project (http://x10-lang.org).
+ *
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2006-2014.
+ */
+
 package x10.visit;
 
 import java.util.Comparator;
@@ -46,6 +57,7 @@ public class PositionInvariantChecker extends NodeVisitor
         }
     }
 
+    @Override
     public Node visitEdgeNoOverride(Node parent, Node n) {
         if (performOverlapCheck) {
             children.push(new HashSet<Node>());
@@ -146,9 +158,9 @@ public class PositionInvariantChecker extends NodeVisitor
 
         E.g., after "ReassembleAST" stage in Array.x10:
         original source is:  Point(reg.rank)
-        parent=x10.array.Point{self.rank==reg.rank}
-        n={[x10.array.Point.self.rank == reg.rank]}
-        parentPos=C:\cygwin\home\Yoav\intellij\sourceforge\x10.runtime\src-x10\x10\array\Array.x10:132,12-26
+        parent=x10.lang.Point{self.rank==reg.rank}
+        n={[x10.lang.Point.self.rank == reg.rank]}
+        parentPos=C:\cygwin\home\Yoav\intellij\sourceforge\x10.runtime\src-x10\x10.regionarray\Array.x10:132,12-26
         nPos=C:\cygwin\home\Yoav\intellij\sourceforge\x10.runtime\src-x10\x10\lang\_.x10:73,45-58
 
         A simple example that causes it:

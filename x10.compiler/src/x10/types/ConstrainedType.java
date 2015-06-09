@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.types;
@@ -434,8 +434,8 @@ public class ConstrainedType extends ReferenceType_c implements ObjectType, X10T
 		 * @param x
 		 * @return
 		 */
-		public ConstrainedType addRank(int x) {
-		    return addRank(ConstraintManager.getConstraintSystem().makeLit(x, ts.Int()));
+		public ConstrainedType addRank(long x) {
+		    return addRank(ConstraintManager.getConstraintSystem().makeLit(x, ts.Long()));
 		}
 		public ConstrainedType addSize(int x) {
 		    return addIntProperty(x, Name.make("size"));
@@ -516,7 +516,7 @@ public class ConstrainedType extends ReferenceType_c implements ObjectType, X10T
 		    }
             if (val!=null) {                   
                 // expand it in order to handle Dist.rank()
-                val = XTypeTranslator.expandSelfPropertyMethod(val);
+                val = XTypeTranslator.expandPropertyMethod(val,false,null,null);
             }
 		    return val; // todo: val can be null! if we build a synthetic term, then why not always build it???
 		}

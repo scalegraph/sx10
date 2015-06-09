@@ -1,9 +1,4 @@
 ###################################################
-###################################################
-## Name:  	X10 application test
-## Created by: 	Juemin Zhang
-## Contact:   	zhangj@us.ibm.com
-###################################################
 #This make file is used for building native backend
 #running on MPI transport.
 ###################################################
@@ -18,40 +13,35 @@
 #$(target)      ## application target name
 #$(target_list) ## list of targets
 #$(X10_FLAG)    ## X10 compiling option flags
-#$(XC)          ## X10 compiler
-#$(MCC)         ## Post MPI compiler
+#$(X10CXX)      ## X10 compiler
 #$(POST_PATH)   ## Post compiling include path
 #$(POST_LIBS)   ## Post compiling include libs.
+#$(GML_ELEM_TYPE) ## float or double
 
 ###################################################
 # Source files and paths
 ###################################################
 x10src		= $(target).x10
 
-cgml_prop	= $(gml_path)/cgml.so.properties
 ###################################################
 ## Compiler settings
 ###################################################
 
 
-###################################################
-##### Dependent library setting Atlas BLAS lib
-###################################################
-
 ##----------------------------------
 
 MPI_FLAG    = -define MPI_COMMU -cxx-prearg -DMPI_COMMU
-MPI_GML_LIB	= -classpath $(gml_lib)/native_mpi_gml.jar -x10lib $(gml_path)/native_mpi_gml.properties
+MPI_GML_LIB	= -classpath $(base_dir_elem)/native_mpi_gml_$(GML_ELEM_TYPE).jar -x10lib $(base_dir_elem)/native_mpi_gml.properties
 
 ###################################################
 # X10 file build rules
 ################################################### 
-$(target)_mpi	: $(x10src) $(depend_src) $(gml_inc)
-		$(XC)  -x10rt mpi $(MPI_GML_LIB) $(X10_FLAG) $(MPI_FLAG) $< -o $@ \
-		-post '$(MCC) # $(POST_PATH) # $(POST_LIBS)'
+$(target)_mpi_$(GML_ELEM_TYPE)	: $(x10src) $(depend_src) $(gml_inc)
+		$(X10CXX)  -x10rt mpi $(MPI_GML_LIB) $(X10_FLAG) $(MPI_FLAG) $< -o $@ \
+		-post ' \# $(POST_PATH) \# $(POST_LIBS)'
 
 ###----------
-mpi		: $(target)_mpi
+mpi		: $(target)_mpi_$(GML_ELEM_TYPE)
 
 all_mpi	:
 		$(foreach src, $(target_list), $(MAKE) target=$(src) mpi; )
@@ -59,10 +49,10 @@ all_mpi	:
 ###---------
 
 clean	::
-		rm -f $(target)_mpi
+		rm -f $(target)_mpi_$(GML_ELEM_TYPE)
 
 clean_all ::
-		$(foreach f, $(target_list), rm -f $(f)_mpi; )
+		$(foreach f, $(target_list), rm -f $(f)_mpi_$(GML_ELEM_TYPE); )
 
 ###-----------
 help	::

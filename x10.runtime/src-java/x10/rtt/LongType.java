@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.rtt;
@@ -17,12 +17,6 @@ import x10.serialization.SerializationConstants;
 
 public final class LongType extends RuntimeType<x10.core.Long> {
 
-    private static final long serialVersionUID = 1L;
-
-    // make sure deserialized RTT object is not duplicated
-    private Object readResolve() throws java.io.ObjectStreamException {
-        return Types.LONG;
-    }
     @Override
     public short $_get_serialization_id() {
         return SerializationConstants.RTT_LONG_ID;
@@ -94,21 +88,4 @@ public final class LongType extends RuntimeType<x10.core.Long> {
     public boolean isref() {
         return false;
     }
-
-//    public void $_serialize(X10JavaSerializer serializer) throws IOException {
-//    }
-//
-//    public short $_get_serialization_id() {
-//        return _serialization_id;
-//    }
-//
-//    public static X10JavaSerializable $_deserializer(X10JavaDeserializer deserializer) throws IOException {
-//		return $_deserialize_body(null, deserializer);
-//	}
-//
-//    public static X10JavaSerializable $_deserialize_body(LongType t, X10JavaDeserializer deserializer) throws IOException {
-//        LongType longType = (LongType) Types.LONG;
-//        deserializer.record_reference(longType);
-//        return longType;
-//    }
 }

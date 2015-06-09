@@ -6,13 +6,13 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.rtt;
 
 
-public interface Type<T> extends java.io.Serializable, x10.serialization.X10JavaSerializable {
+public interface Type<T> extends x10.serialization.X10JavaSerializable {
     boolean isInstance(Object o);
     
     boolean equals(Object o);

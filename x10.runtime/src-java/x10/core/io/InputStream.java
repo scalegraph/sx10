@@ -6,27 +6,30 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.core.io;
 
+import x10.core.Rail;
 import x10.core.Ref;
 import x10.rtt.NamedType;
 import x10.rtt.RuntimeType;
 import x10.rtt.Type;
 
 public class InputStream extends Ref {
-  
-    private static final long serialVersionUID = 1L;
  
+    private Object writeReplace() throws java.io.ObjectStreamException {
+        return new x10.serialization.SerializationProxy(this);
+    }
+
     public void $_serialize(x10.serialization.X10JavaSerializer $serializer) throws java.io.IOException {
         // TODO need check
         $serializer.write(stream);
     }
     public static x10.serialization.X10JavaSerializable $_deserialize_body(InputStream $_obj, x10.serialization.X10JavaDeserializer $deserializer) throws java.io.IOException {
         // TODO need check
-        $_obj.stream = (java.io.InputStream) $deserializer.readRef();
+        $_obj.stream = (java.io.InputStream) $deserializer.readObject();
         return $_obj;
     }
     public static x10.serialization.X10JavaSerializable $_deserializer(x10.serialization.X10JavaDeserializer $deserializer) throws java.io.IOException {
@@ -36,6 +39,10 @@ public class InputStream extends Ref {
     }
 
     private java.io.InputStream stream;
+    
+    public java.io.InputStream getJavaInputStream() {
+        return stream;
+    }
 
     // constructor just for allocation
     public InputStream(java.lang.System[] $dummy) {
@@ -87,32 +94,33 @@ public class InputStream extends Ref {
     }
 
     // XTENLANG-2680
-    public int read__0$1x10$lang$Byte$2$O(x10.array.Array r, int off, int len) {
+    // LONG_RAIL: unsafe int cast
+    public void read__0$1x10$lang$Byte$2(Rail r, long off, long len) {
         try {
-            return stream.read(r.raw().getByteArray(), off, len);
+            stream.read(r.getByteArray(), (int)off, (int)len);
         } catch (java.io.IOException e) {
             throw new x10.io.IOException(e.getMessage());
         }
     }
     
-    public int available() {
+    public long available() {
         try {
-            return stream.available();
+            return (long) stream.available();
         } catch (java.io.IOException e) {
             throw new x10.io.IOException(e.getMessage());
         }
     }
     
     // XTENLANG-2680
-    public int available$O() {
+    public long available$O() {
         try {
-            return stream.available();
+            return (long) stream.available();
         } catch (java.io.IOException e) {
             throw new x10.io.IOException(e.getMessage());
         }
     }
 
-    public void skip(int n) {
+    public void skip(long n) {
         try {
             stream.skip(n);
         } catch (java.io.IOException e) {
@@ -120,8 +128,9 @@ public class InputStream extends Ref {
         }
     }
     
-    public void mark(int readlimit) {
-        stream.mark(readlimit);
+    // LONG_RAIL: unsafe int cast
+    public void mark(long readlimit) {
+        stream.mark((int) readlimit);
     }
     
     public void reset() {

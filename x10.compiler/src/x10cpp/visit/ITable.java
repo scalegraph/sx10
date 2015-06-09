@@ -6,12 +6,13 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10cpp.visit;
 
 import static x10cpp.visit.SharedVarsMethods.chevrons;
+import static x10cpp.visit.SharedVarsMethods.CLASS_TYPE;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,10 +24,12 @@ import java.util.List;
 import polyglot.ast.Expr;
 import polyglot.types.Context;
 import polyglot.types.LocalInstance;
+import polyglot.types.SemanticException;
 import polyglot.types.Type;
 import polyglot.types.Types;
 import polyglot.util.CodeWriter;
 import polyglot.util.Position;
+import x10.ast.ClosureCall;
 import x10.types.ParameterType;
 import x10.types.X10ClassDef;
 import x10.types.X10ClassType;
@@ -166,18 +169,19 @@ public final class ITable {
 		X10ClassDef cd = cls.x10Def();
 		boolean doubleTemplate = cd.typeParameters().size() > 0 && interfaceType.x10Def().typeParameters().size() > 0;
 		h.write("static "+(doubleTemplate ? "typename ":"")+interfaceCType+
-				(doubleTemplate ? "::template itable<":"::itable<")+Emitter.translateType(cls, false)+" > _itable_"+itableNum+";");
+				(doubleTemplate ? "::template itable< ":"::itable< ")+Emitter.translateType(cls, false)+" > _itable_"+itableNum+";");
 		h.newline();
 	}
 
-	public void emitITableInitialization(X10ClassType cls, int itableNum, MessagePassingCodeGenerator cg, CodeWriter h, CodeWriter sw) {
+	public void emitITableInitialization(X10ClassType cls, int itableNum, MessagePassingCodeGenerator cg, 
+	                                     CodeWriter h, CodeWriter sw, boolean emittedUsingDecl, X10CPPContext_c context) {
 	    X10ClassDef cd = cls.x10Def();
 	    if (cls.isX10Struct()) {
 	        // For an interface implemented by a struct, we need to generate 
 	        // an additional thunk class and itable for use by the IBox of the
 	        // struct.
             String interfaceCType = Emitter.translateType(interfaceType, false);
-            String clsCType = Emitter.translateType(cls, false);
+            String clsCType = Emitter.translateType(cls, false, true);
             String thunkBaseType = Emitter.mangled_non_method_name(cd.name().toString());
             String thunkParams = "";
             if (cd.typeParameters().size() != 0) {
@@ -197,14 +201,14 @@ public final class ITable {
             }            
 
             String thunkType = thunkBaseType + "_ibox"+itableNum;
-            String parentCType = "x10::lang::IBox"+chevrons(clsCType);
+            String parentCType = "::x10::lang::IBox"+chevrons(clsCType);
             String recvArg = "this->value";
 
             cg.emitter.printTemplateSignature(cd.typeParameters(), sw);
             sw.write("class "+thunkType+" : public "+parentCType+" {"); sw.newline();
             sw.write("public:"); sw.newline(4); sw.begin(0);
             sw.write("static "+(doubleTemplate ? "typename ":"")+interfaceCType+
-                     (doubleTemplate ? "::template itable<":"::itable<")+thunkType+thunkParams+" > itable;");
+                     (doubleTemplate ? "::template itable< ":"::itable< ")+thunkType+thunkParams+" > itable;");
             sw.newline();
 
             for (MethodInstance meth : methods) {
@@ -237,7 +241,7 @@ public final class ITable {
             sw.write("};"); sw.newline();
 
             cg.emitter.printTemplateSignature(cd.typeParameters(), sw);
-            sw.write((doubleTemplate ? "typename " : "")+interfaceCType+(doubleTemplate ? "::template itable<" : "::itable<")+
+            sw.write((doubleTemplate ? "typename " : "")+interfaceCType+(doubleTemplate ? "::template itable< " : "::itable< ")+
                      thunkType+thunkParams+" > "+" "+thunkType+thunkParams+"::itable");
             if (!isEmpty()) {
                 int methodNum = 0;
@@ -257,18 +261,30 @@ public final class ITable {
 	    }
 	    
 	    String interfaceCType = Emitter.translateType(interfaceType, false);
-	    String clsCType = Emitter.translateType(cls, false);
+	    String clsCType = Emitter.translateType(cls, false, false);
 	    boolean doubleTemplate = cd.typeParameters().size() > 0 && interfaceType.x10Def().typeParameters().size() > 0;
 
 	    cg.emitter.printTemplateSignature(cd.typeParameters(), sw);
-	    sw.write((doubleTemplate ? "typename " : "")+interfaceCType+(doubleTemplate ? "::template itable<" : "::itable<")+
+	    sw.write((doubleTemplate ? "typename " : "")+interfaceCType+(doubleTemplate ? "::template itable< " : "::itable< ")+
 	             Emitter.translateType(cls, false)+" > "+" "+clsCType+"::_itable_"+itableNum+"");
+	    TypeSystem xts = cls.typeSystem();
 	    if (!isEmpty()) {
 	        int methodNum = 0;
 	        sw.write("(");
 	        for (MethodInstance meth : methods) {
+	            String containerType = clsCType;
 	            if (methodNum > 0) sw.write(", ");
-	            sw.write("&"+clsCType+"::"+Emitter.mangled_method_name(meth.name().toString()));
+                try {
+                    MethodInstance ami = xts.findMethod(cls, xts.MethodMatcher(cls, meth.name(), meth.formalTypes(), context));
+                    if (ami.container().isAny()) {
+                        containerType = CLASS_TYPE;
+                    } else if (!xts.hasSameClassDef(ami.container(), cls) && !ami.flags().isAbstract()) {
+                        containerType = Emitter.translateType(ami.container(), false);
+                    }
+                } catch (SemanticException e) {
+                    // Ignore exception, just use clsCType
+                }
+	            sw.write("&"+containerType+"::"+Emitter.mangled_method_name(meth.name().toString()));
 	            methodNum++;
 	        }
 	        sw.write(")");

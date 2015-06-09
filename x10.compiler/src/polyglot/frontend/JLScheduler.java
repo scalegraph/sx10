@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.frontend;
@@ -113,6 +113,7 @@ public class JLScheduler extends Scheduler {
     public Goal ReassembleAST(final Job job) {
     	final Map<Node, Node> memo = job.nodeMemo();
     	return new VisitorGoal("ReassembleAST", job, new NodeVisitor() {
+    		@Override
     		public Node leave(Node old, Node n, NodeVisitor v) {
     			Node m = memo.get(old);
     			

@@ -1,3 +1,14 @@
+/*
+ *  This file is part of the X10 project (http://x10-lang.org).
+ *
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2006-2014.
+ */
+
 package x10cpp.visit;
 
 import static x10cpp.visit.Emitter.mangled_field_name;
@@ -52,7 +63,7 @@ import x10.types.X10FieldInstance;
 import x10.types.checker.Converter;
 import x10.util.AltSynthesizer;
 import x10.util.Synthesizer;
-import x10.visit.Desugarer.ClosureCaptureVisitor;
+import x10.visit.ClosureCaptureVisitor;
 
 /**
  * A pass to run right before final C++ codegeneration
@@ -125,14 +136,19 @@ public class CastInjector extends ContextVisitor {
             return newInit == init ? ld : ld.init(newInit);
         } else if (n instanceof Call_c) {
             Call_c call = (Call_c)n;
-            List<Expr> args = call.arguments();
-            List<Type> formals = call.methodInstance().formalTypes();
-            List<Expr> newArgs = castActualsToFormals(args, formals);
             MethodInstance mi = call.methodInstance();
-            if (!mi.flags().isStatic() && ts.isParameterType(call.target().type()) && !ts.isHandOptimizedInterface(mi.container())) {
-                call = (Call_c)call.target(makeCast(call.target().position(), (Expr)call.target(), mi.container()));
-             }
-            return null == newArgs ? call : call.arguments(newArgs);            
+            if (ts.isHandOptimizedInterface(mi.container())) {
+                return call;
+            } else {               
+                List<Expr> args = call.arguments();
+                List<Type> formals = call.methodInstance().formalTypes();
+                List<Expr> newArgs = castActualsToFormals(args, formals);
+                if (!mi.flags().isStatic() && ts.isParameterType(call.target().type())
+                        && !(mi.container().isClass() && mi.container().toClass().flags().isInterface())) {
+                    call = (Call_c)call.target(makeCast(call.target().position(), (Expr)call.target(), mi.container()));
+                }
+                return null == newArgs ? call : call.arguments(newArgs);
+            }
         } else if (n instanceof New_c) {
             New_c asNew = (New_c)n;
             List<Expr> args = asNew.arguments();

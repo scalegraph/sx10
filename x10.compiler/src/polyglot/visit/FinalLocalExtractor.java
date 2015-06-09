@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.visit;
@@ -43,11 +43,13 @@ public class FinalLocalExtractor extends NodeVisitor {
         super();
     }
 
+    @Override
     public NodeVisitor begin() {
         isFinal = CollectionFactory.newHashSet();
         return super.begin();
     }
     
+    @Override
     public void finish() {
         isFinal = null;
     }
@@ -62,6 +64,7 @@ public class FinalLocalExtractor extends NodeVisitor {
     // is assigned, rather than marking the original as final.  If a local
     // requires a phi-function, just mark it non-final rather than generating
     // the phi.
+    @Override
     public NodeVisitor enter(Node parent, Node n) {
         if (n instanceof Formal) {
             Formal d = (Formal) n;
@@ -109,6 +112,7 @@ public class FinalLocalExtractor extends NodeVisitor {
     }
     
     protected static class LocalDeclFixer extends NodeVisitor {
+        @Override
         public Node leave(Node old, Node n, NodeVisitor v) {
             if (n instanceof Formal) {
                 Formal d = (Formal) n;
@@ -125,6 +129,7 @@ public class FinalLocalExtractor extends NodeVisitor {
         }
     }
     
+    @Override
     public Node leave(Node old, Node n, NodeVisitor v) {
         // Revisit everything to ensure the local decls' flags agree with
         // their local instance's.

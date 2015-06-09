@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.main;
@@ -166,7 +166,7 @@ public class Reporter {
     public void addTopic(String topic, int level) {
         Integer i = (Integer) reportTopics.get(topic);
         if (i == null || i.intValue() < level) {
-            reportTopics.put(topic, new Integer(level));
+            reportTopics.put(topic, Integer.valueOf(level));
         }
         noReporting = false;
     }

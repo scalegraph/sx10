@@ -6,12 +6,13 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 #include <x10/io/FileWriter__FileOutputStream.h>
 
-#include <x10/util/IndexedMemoryChunk.h>
+#include <x10/lang/Rail.h>
+
 #include <x10/io/FileNotFoundException.h>
 #include <x10/io/NotSerializableException.h>
 
@@ -31,10 +32,8 @@ void FileWriter__FileOutputStream::_constructor(x10::lang::String* name, bool ap
 
     const char *filename = name->c_str();
     FMGL(file) = fopen(filename, (append ? "a" : "w"));
-#ifndef NO_EXCEPTIONS
     if (NULL == FMGL(file))
         throwException(FileNotFoundException::_make(name));
-#endif
 }
 
 void FileWriter__FileOutputStream::_constructor(FILE* file) {
@@ -50,8 +49,13 @@ void FileWriter__FileOutputStream::write(x10_int i) {
     ::fputc((char)i, FMGL(file));
 }
 
-void FileWriter__FileOutputStream::write(x10::util::IndexedMemoryChunk<x10_byte> b, x10_int off, x10_int len) {
-    ::fwrite(((x10_byte*)b->raw())+off*sizeof(x10_byte), sizeof(x10_byte), len*sizeof(x10_byte), FMGL(file));
+void FileWriter__FileOutputStream::write(x10::lang::String* s) {
+    x10aux::nullCheck(s);
+    ::fwrite(s->c_str(), sizeof(char), s->length(), FMGL(file));
+}
+
+void FileWriter__FileOutputStream::write(x10::lang::Rail<x10_byte>* b, x10_long off, x10_long len) {
+    ::fwrite(&b->raw[off], sizeof(x10_byte), len, FMGL(file));
 }
 
 void FileWriter__FileOutputStream::flush() {
@@ -63,7 +67,7 @@ void FileWriter__FileOutputStream::close() {
 }
 
 const x10aux::serialization_id_t FileWriter__FileOutputStream::_serialization_id = 
-    x10aux::DeserializationDispatcher::addDeserializer(FileWriter__FileOutputStream::_deserializer, x10aux::CLOSURE_KIND_NOT_ASYNC);
+    x10aux::DeserializationDispatcher::addDeserializer(FileWriter__FileOutputStream::_deserializer);
 
 void FileWriter__FileOutputStream::_serialize_body(x10aux::serialization_buffer& buf) {
     x10aux::throwException(NotSerializableException::_make(String::Lit("FileWriter.FileOutputStream")));

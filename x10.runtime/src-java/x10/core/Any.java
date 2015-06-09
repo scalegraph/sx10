@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.core;
@@ -17,7 +17,7 @@ import x10.rtt.Types;
 import x10.serialization.X10JavaSerializable;
 
 // Base interface of all X10 entities.
-public interface Any extends java.io.Serializable, X10JavaSerializable {
+public interface Any extends X10JavaSerializable {
     public static final RuntimeType<Object> $RTT = Types.ANY;
     public RuntimeType<?> $getRTT();
     public Type<?> $getParam(int i);

@@ -6,21 +6,16 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.matrix.comm;
 
-import x10.io.Console;
-import x10.util.Timer;
-
 import x10.compiler.Ifdef;
 import x10.compiler.Ifndef;
-import x10.compiler.Uninitialized;
 
-import x10.matrix.Debug;
-import x10.matrix.sparse.CompressArray;
-
+import x10.matrix.ElemType;
+import x10.matrix.comm.mpi.WrapMPI;
 
 /**
  * This class broadcasts data in double-precision or CompressArray to all places
@@ -34,251 +29,246 @@ import x10.matrix.sparse.CompressArray;
  * run command "make help" at the root directory of GML library.
  */
 public class ArrayBcast extends ArrayRemoteCopy {
+    /**
+     * Broadcast data array from here to all other places.
+     * Remote places are accessed via PlaceLocalHandle.
+     * 
+     * @param dmat    distributed storage for source and its copies in all places
+     */
+    public static def bcast(duplist:DataArrayPLH) {
+        val data = duplist();
+        bcast(duplist, data.size);
+    }
 
-	
-	//=================================================
-	//=================================================
-	// Broadcast array data in place local handle
-	//=================================================
-	//=================================================
+    /**
+     * Broadcast data array from here to a place group.
+     * Remote places are accessed via PlaceLocalHandle.
+     */
+    public static def bcast(duplist:DataArrayPLH, pg: PlaceGroup) {
+        @Ifdef("MPI_COMMU") {
+            throw new UnsupportedOperationException("No MPI implementation");
+        }
+        @Ifndef("MPI_COMMU") {
+            val data = duplist();
+            x10Bcast(duplist, data.size, pg);
+        }
+    }
 
-	/**
-	 * Broadcast data array from here to all other places.
-	 * Remote places are accessed via PlaceLocalHandle.
-	 * 
-	 * @param dmat    distributed storage for source and its copies in all places
-	 */
-	public static def bcast(duplist:DataArrayPLH) {
-		val data:Array[Double](1) = duplist();
-		bcast(duplist, data.size);
-	}
+    /**
+     * Broadcast data array from here to all other places.
+     * 
+     * @param duplist     distributed storage for source and its copies in all places
+     * @param dataCnt     count of double-precision data to broadcast
+     */
+    public static def bcast(duplist:DataArrayPLH, dataCnt:Long) : void {
+        assert (dataCnt <= duplist().size) : "Data overflow in data buffer";
+        
+        @Ifdef("MPI_COMMU") {
+            mpiBcast(duplist, dataCnt);
+        }
+        @Ifndef("MPI_COMMU") {
+            x10Bcast(duplist, dataCnt);
+        }
+    } 
 
-	/**
-	 * Broadcast data array from here to all other places.
-	 * 
-	 * @param duplist     distributed storage for source and its copies in all places
-	 * @param dataCnt     count of double-precision data to broadcast
-	 */
-	public static def bcast(duplist:DataArrayPLH, dataCnt:Int) : void {
-		Debug.assure(dataCnt <= duplist().size, "Data overflow in data buffer");
-		
-		@Ifdef("MPI_COMMU") {
-			mpiBcast(duplist, dataCnt);
-		}
-		@Ifndef("MPI_COMMU") {
-			//Debug.flushln("start bcast to "+numPlaces);
-			x10Bcast(duplist, dataCnt);
-		}
-	} 
+    /**
+     * Broadcast data array from here to 
+     * to all other places.
+     * 
+     * @param dmlist     distributed storage for source and its broadcast copies in all places
+     * @param dataCnt    count of double-precision data to broadcast
+     */
+    protected static def mpiBcast(dmlist:DataArrayPLH, dataCnt:Long):void {
+        @Ifdef("MPI_COMMU") {
+            
+            if (Place.numPlaces() <= 1) return;
+            
+            val root   = here.id();
+            finish ateach([p] in WrapMPI.world.dist) {
+                //Need: dmlist, dataCnt, root
+                val dstbuf = dmlist();
+                WrapMPI.world.bcast(dstbuf, 0, dataCnt, root);
+            }
+        }
+    }
 
-	//=================================================================
-	/**
-	 * Broadcast data array from here to 
-	 * to all other places.
-	 * 
-	 * @param dmlist     distributed storage for source and its broadcast copies in all places
-	 * @param dataCnt    count of double-precision data to broadcast
-	 */
-	protected static def mpiBcast(dmlist:DataArrayPLH, dataCnt:Int):void {
-		@Ifdef("MPI_COMMU") {
-			
-			if (Place.MAX_PLACES <= 1) return;
-			
-			val root   = here.id();
-			finish ateach (val [p]:Point in WrapMPI.world.dist) {
-				//Need: dmlist, dataCnt, root
-				val dstbuf = dmlist();
-				WrapMPI.world.bcast(dstbuf, 0, dataCnt, root);
-			}
-		}
-	}
-	
-	//--------------------------------------------------------------------------
-	
-	/**
-	 *  Broadcast data to number of places from here
-	 */
-	protected static def x10Bcast(dmlist:DataArrayPLH, dataCnt:Int): void {
+    /**
+     *  Broadcast data to number of places from here
+     */
+    protected static def x10Bcast(dmlist:DataArrayPLH, dataCnt:Long): void {
+        val pcnt = Place.numPlaces();
 
-		val pcnt   = Place.MAX_PLACES;
+        if (pcnt <= 1 || dataCnt == 0L) return;
+        
+        binaryTreeCast(dmlist, dataCnt, pcnt);
+    }
 
-		if (pcnt <= 1 || dataCnt == 0) return;
-		
-		binaryTreeCast(dmlist, dataCnt, pcnt);
-	}
+    /**
+     *  Broadcast data to number of places from here
+     */
+    protected static def x10Bcast(dmlist:DataArrayPLH, dataCnt:Long, pg: PlaceGroup): void {            
+        binaryTreeCast(dmlist, dataCnt, pg, 0, pg.size()-1);
+    }
 
-	//----------------------------------------------------------------
-	
-	/**
-	 * X10 implementation of broadcast data via Binary tree structure.
-	 * 
-	 */
-	protected static def binaryTreeCast(dmlist:DataArrayPLH, dataCnt:Int, pcnt:Int): void {		
-		val root   = here.id();
-		val src = dmlist();
-
-		val lfcnt:Int = (pcnt+1) / 2; // make sure left part is larger, if cnt is odd 
-		val rtcnt  = pcnt - lfcnt;
-		val rtroot = root + lfcnt;
-
-		// Specify the remote buffer
-		val srcbuf = new RemoteArray[Double](src as Array[Double](1){self!=null});
-		
-		finish {
-			at (new Place(rtroot)) {
-				val dstbuf = dmlist();
-				// Using copyFrom style
-				finish Array.asyncCopy[Double](srcbuf, 0, dstbuf, 0, dataCnt);
-				
-				// Perform binary bcast on the right brank
-				if (rtcnt > 1 ) async {
-					binaryTreeCast(dmlist, dataCnt, rtcnt);
-				}
-			}
-			// Perform binary bcast on the left branch
-			if (lfcnt > 1) async {
-				binaryTreeCast(dmlist, dataCnt, lfcnt); 
-			}
-		}
-	}
-	//=================================================
-	/**
-	 * Bcast a segment of data to specified list of places
-	 */
-	public static def bcast(duplist:DataArrayPLH, offset:Int, datCnt:Int, plcList:Array[Int](1){rail}) {
-		for (var i:Int=0; i<plcList.size; i++) {
-			val pid = plcList(i);
-			copy(duplist(), offset, duplist, pid, offset, datCnt);
-		}
-	}
+    /**
+     * X10 implementation of broadcast data via Binary tree structure.
+     */
+    protected static def binaryTreeCast(dmlist:DataArrayPLH, dataCnt:Long, pcnt:Long): void {        
+        binaryTreeCast(dmlist, dataCnt, Place.places(), 0, pcnt-1);
+    }
 
 
-	//=================================================
-	// Broadcast SparseCSC matrix to all
-	//=================================================
+    /**
+     * Broadcast to specified list of places
+     */
+    protected static def binaryTreeCast(dmlist:DataArrayPLH, dataCnt:Long, pg:PlaceGroup, start:Long, end:Long): void {
+        if (end < start) return;
+        val src = dmlist();
+        assert dataCnt <= src.size;
+        val srcbuf = new GlobalRail[ElemType](src as Rail[ElemType]{self!=null});
 
-	/**
-	 * Broadcast compress array stored in DistArray
-	 * at here to all other places. 
-	 * 
-	 * @param smlist     compress array data buffer in all places
-	 */
-	public static def bcast(smlist:CompArrayPLH) {
-		val data = smlist();
-		bcast(smlist, data.storageSize());
-	}
+        val mid = (start+end+1) / 2;        
+        finish {
+            if (pg(mid) != here) {
+                at(pg(mid)) async {
+                    val dstbuf = dmlist();
+                    assert dataCnt <= dstbuf.size;
+                    // remote get
+                    finish Rail.asyncCopy[ElemType](srcbuf, 0, dstbuf, 0, dataCnt);
+                    // right branch
+                    binaryTreeCast(dmlist, dataCnt, pg, mid+1, end);
+                }
+            }
+            // left branch
+            binaryTreeCast(dmlist, dataCnt, pg, start, mid-1);
+        }
+    }
 
-	/**
-	 * Broadcast compress array stored in dist array from here
-	 * to all other places. 
-	 * 
-	 * @param smlist    compress array date buffer in all places
-	 * @param dataCnt   number of data to broadcast
-	 */
-	public static def bcast(smlist:CompArrayPLH, dataCnt:Int): void {
-		Debug.assure(dataCnt <= smlist().storageSize(), "Data overflow in bcast");
-		
-		@Ifdef("MPI_COMMU") {
-			mpiBcast(smlist, dataCnt);
-		}
-		@Ifndef("MPI_COMMU") {
-			//Debug.flushln("start bcast to "+numPlaces);
-			x10Bcast(smlist, dataCnt);
-		}
-	} 
+    /**
+     * Bcast a segment of data to specified list of places
+     */
+    public static def bcast(duplist:DataArrayPLH, offset:Long, datCnt:Long, plcList:Rail[Long]) {
+        for (var i:Long=0; i<plcList.size; i++) {
+            val pid = plcList(i);
+            copy(duplist() as Rail[ElemType]{self!=null}, offset, duplist, pid, offset, datCnt);
+        }
+    }
 
-	//===================================
-	/**
-	 * Broadcast compress array in the PlaceLocalHandle here 
-	 * to all other places.
-	 * 
-	 * @param smlist     source and target compress array
-	 * @param dataCnt    number of data to broadcast
-	 */
 
-	/**
-	 * Using MPI routine to implement sparse matrix broadcast
-	 * 
-	 */
-	protected static def mpiBcast(smlist:CompArrayPLH, dataCnt:Int):void {
-		@Ifdef("MPI_COMMU") {
-			
-			if (Place.MAX_PLACES <= 1) return;
-			
-			val root   = here.id();
-			finish ateach (val [p]:Point in WrapMPI.world.dist) {
-				//Need: root, smlist, datasz, colOff, colCnt,
-				val ca = smlist();	
-				
-				WrapMPI.world.bcast(ca.index, 0, dataCnt, root);
-				WrapMPI.world.bcast(ca.value, 0, dataCnt, root);
-				
-			}
-		}
-	}
-	
-	//-------------------------------------------------------
-	/**
-	 *  Broadcast compress array among the pcnt number of places followed from here
-	 */
-	protected static def x10Bcast(smlist:CompArrayPLH, dataCnt:Int): void {
+    // Broadcast SparseCSC matrix to all
 
-		val pcnt = Place.MAX_PLACES;
-		if (pcnt <= 1 || dataCnt == 0) return;
-		
-		binaryTreeCast(smlist, dataCnt, pcnt);
-	}
-	
+    /**
+     * Broadcast compress array stored in DistArray
+     * at here to all other places. 
+     * 
+     * @param smlist     compress array data buffer in all places
+     */
+    public static def bcast(smlist:CompArrayPLH) {
+        val data = smlist();
+        bcast(smlist, data.storageSize());
+    }
 
-	/**
-	 * Broadcast compress array using remote array copy in X10
-	 */
-	protected static def binaryTreeCast(smlist:CompArrayPLH, dataCnt:Int, pcnt:Int): void {		
-		val myid = here.id();
+    /**
+     * Broadcast compress array stored in dist array from here
+     * to all other places. 
+     * 
+     * @param smlist    compress array date buffer in all places
+     * @param dataCnt   number of data to broadcast
+     */
+    public static def bcast(smlist:CompArrayPLH, dataCnt:Long): void {
+        assert (dataCnt <= smlist().storageSize()) : "Data overflow in bcast";
+        
+        @Ifdef("MPI_COMMU") {
+            mpiBcast(smlist, dataCnt);
+        }
+        @Ifndef("MPI_COMMU") {
+            x10Bcast(smlist, dataCnt);
+        }
+    } 
 
-		val lfcnt:Int = (pcnt+1) / 2; // make sure left part is larger, if cnt is odd 
-		val rtcnt  = pcnt - lfcnt;
-		val rtroot = myid + lfcnt;
+    /**
+     * Broadcast compress array in the PlaceLocalHandle here 
+     * to all other places.
+     * 
+     * @param smlist     source and target compress array
+     * @param dataCnt    number of data to broadcast
+     */
 
-		// Specify the remote buffer
-		val srcca = smlist();
-		val idxbuf:Array[Int](1)    = srcca.index;
-		val valbuf:Array[Double](1) = srcca.value;
-		val srcidx = new RemoteArray[Int   ](idxbuf as Array[Int   ]{self!=null});
-		val srcval = new RemoteArray[Double](valbuf as Array[Double]{self!=null});
-		
-		finish {		
-			at (new Place(rtroot)) {
-				//Need: smlist, srcidx, srcval, srcOff, colOff, colCnt and datasz
-				val dstca = smlist();
-				finish Array.asyncCopy[Int   ](srcidx, 0, 
-						dstca.index, 0, dataCnt);
-				finish Array.asyncCopy[Double](srcval, 0, 
-						dstca.value, 0, dataCnt);
+    /**
+     * Using MPI routine to implement sparse matrix broadcast
+     */
+    protected static def mpiBcast(smlist:CompArrayPLH, dataCnt:Long):void {
+        @Ifdef("MPI_COMMU") {
+            if (Place.numPlaces() <= 1) return;
+            
+            val root   = here.id();
+            finish ateach([p] in WrapMPI.world.dist) {
+                //Need: root, smlist, datasz, colOff, colCnt,
+                val ca = smlist();    
+                
+                WrapMPI.world.bcast(ca.index, 0, dataCnt, root);
+                WrapMPI.world.bcast(ca.value, 0, dataCnt, root);
+            }
+        }
+    }
+    
+    /**
+     *  Broadcast compress array among the pcnt number of places followed from here
+     */
+    protected static def x10Bcast(smlist:CompArrayPLH, dataCnt:Long): void {
+        val pcnt = Place.numPlaces();
+        if (pcnt <= 1 || dataCnt == 0L) return;
+        
+        binaryTreeCast(smlist, dataCnt, pcnt);
+    }
+    
 
-				// Perform binary bcast on the right brank
-				if (rtcnt > 1 ) async {
-					binaryTreeCast(smlist, dataCnt, rtcnt);
-				}
-			}
-			// Perform binary bcast on the left branch
-			if (lfcnt > 1) async {
-				binaryTreeCast(smlist, dataCnt, lfcnt); 
-			}
-		}
-	}
-	
-	//=======================================
-	//util
-	//=======================================
-	public static def verify(srcplh:DataArrayPLH, dataCnt:Int):Boolean {
-		var ret:Boolean = true;
-		val buf=srcplh();
-		//for (val [p]:Point in Place.places()) {
-		for (val [p]:Point in Dist.makeUnique()) {
-			val rmt= at (new Place(p)) srcplh();//remote capture
-			for (var i:Int=0; i<dataCnt; i++) ret &= (buf(i)==rmt(i));
-		}
-		return ret;
-	}
+    /**
+     * Broadcast compress array using remote array copy in X10
+      * TODO: pcnt not required 
+     */
+    protected static def binaryTreeCast(smlist:CompArrayPLH, dataCnt:Long, pcnt:Long): void {        
+        binaryTreeCast(smlist, dataCnt, Place.places(), 0, pcnt-1);
+    }
+
+    protected static def binaryTreeCast(smlist:CompArrayPLH, dataCnt:Long, pg:PlaceGroup, start:Long, end:Long): void {        
+        if (end < start) return;            
+
+        // Specify the remote buffer
+        val srcca = smlist();
+        assert dataCnt <= srcca.index.size : "dataCnt overruns srcca.index";
+        assert dataCnt <= srcca.value.size : "dataCnt overruns srcca.value";
+        val srcidx = new GlobalRail[Long    ](srcca.index);
+        val srcval = new GlobalRail[ElemType](srcca.value);
+
+        val mid = (start+end+1) / 2;
+        finish {
+            if (pg(mid) != here) {
+                at(pg(mid)) async {
+                    //Need: smlist, srcidx, srcval, srcOff, colOff, colCnt and datasz
+                    val dstca = smlist();
+                    assert dataCnt <= dstca.index.size : "dataCnt overruns dstca.index";
+                    assert dataCnt <= dstca.value.size : "dataCnt overruns dstca.value";
+                    finish {
+                        Rail.asyncCopy[Long    ](srcidx, 0, dstca.index, 0, dataCnt);
+                        Rail.asyncCopy[ElemType](srcval, 0, dstca.value, 0, dataCnt);
+                    }
+                    // right branch
+                    binaryTreeCast(smlist, dataCnt, pg, mid+1, end);
+                }
+            }
+            // left branch
+            binaryTreeCast(smlist, dataCnt, pg, start, mid-1);
+        }
+    }
+    
+    public static def verify(srcplh:DataArrayPLH, dataCnt:Long):Boolean {
+        var ret:Boolean = true;
+        val buf=srcplh();
+        for (place in Place.places()) {
+            val rmt= at(place) srcplh();//remote capture
+            for (var i:Long=0; i<dataCnt; i++) ret &= (buf(i)==rmt(i));
+        }
+        return ret;
+    }
 }

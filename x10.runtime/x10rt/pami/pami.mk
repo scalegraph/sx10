@@ -6,7 +6,7 @@
 #  You may obtain a copy of the License at
 #      http://www.opensource.org/licenses/eclipse-1.0.php
 #
-#  (C) Copyright IBM Corporation 2006-2010.
+#  (C) Copyright IBM Corporation 2006-2014.
 #
 
 
@@ -27,11 +27,6 @@ endif
 
 PAMI_MPCC=mpCC
 
-ifeq ($(X10RT_PLATFORM), aix_xlc)
-  MOV_LDFLAGS_PAMI     += -L/opt/ibmhpc/pecurrent/ppe.poe/lib64
-  MOV_LDLIBS_PAMI     += -lmpi_r -lvtd_r -lpami_r -lpthread -lm
-  APP_LDFLAGS_PAMI   += -Wl,-binitfini:poe_remote_main 
-endif
 ifeq ($(X10RT_PLATFORM), linux_x86_64)
   MOV_LDFLAGS_PAMI    += -L/opt/ibmhpc/pecurrent/ppe.pami/gnu/lib64/pami64
   MOV_LDLIBS_PAMI    += -lpoe -lmpi_ibm -lpami
@@ -42,11 +37,6 @@ ifeq ($(X10RT_PLATFORM), linux_x86_32)
   MOV_LDLIBS_PAMI    += -lpoe -lmpi_ibm -lpami
   PAMI_MPCC += -pami
 endif
-ifeq ($(X10RT_PLATFORM), aix_gcc)
-  MOV_LDFLAGS_PAMI     += -L/opt/ibmhpc/pecurrent/ppe.poe/lib64
-  MOV_LDLIBS_PAMI     += -lmpi_r -lvtd_r -lpami_r -lpthread -lm
-  APP_LDFLAGS_PAMI   += -Wl,-binitfini:poe_remote_main 
-endif
 ifeq ($(X10RT_PLATFORM), linux_ppc_64_gcc)
   MOV_LDFLAGS_PAMI    += -L/opt/ibmhpc/pecurrent/ppe.pami/gnu/lib64/pami64
   MOV_LDLIBS_PAMI    += -lpoe -lmpi_ibm -lpami
@@ -55,15 +45,22 @@ ifeq ($(X10RT_PLATFORM), linux_ppc_64_xlc)
   MOV_LDFLAGS_PAMI    += -L/opt/ibmhpc/pecurrent/ppe.pami/gnu/lib64/pami64
   MOV_LDLIBS_PAMI    += -lpoe -lmpi_ibm -lpami
 endif
-ifeq ($(X10RT_PLATFORM), bgq)
+ifeq ($(X10RT_PLATFORM), bgq_gcc)
   override CXXFLAGS += -I/bgsys/drivers/ppcfloor/comm/sys/include
-  MOV_LDFLAGS_PAMI  += -L/bgsys/drivers/ppcfloor/comm/sys/lib -L/bgsys/drivers/ppcfloor/spi/lib
-  MOV_LDLIBS_PAMI   += -lpami -lSPI_cnk -lrt -lstdc++ -lpthread -lm
+  MOV_LDFLAGS_PAMI  += -L/bgsys/drivers/ppcfloor/comm/lib -L/bgsys/drivers/ppcfloor/comm/sys/lib -L/bgsys/drivers/ppcfloor/spi/lib
+  MOV_LDLIBS_PAMI   += -lpami-gcc -lSPI_cnk -lrt -lstdc++ -lpthread -lm
+  PAMI_MPCC = $(CC)
+endif
+ifeq ($(X10RT_PLATFORM), bgq_xlc)
+  override CXXFLAGS += -I/bgsys/drivers/ppcfloor/comm/sys/include
+  MOV_LDFLAGS_PAMI  += -L/bgsys/drivers/ppcfloor/comm/lib -L/bgsys/drivers/ppcfloor/comm/sys/lib -L/bgsys/drivers/ppcfloor/spi/lib
+  # note, libpami is always compiled with gcc
+  MOV_LDLIBS_PAMI   += -lpami-gcc -lSPI_cnk -lrt -lstdc++ -lpthread -lm
   PAMI_MPCC = $(CC)
 endif
 
 
-TESTS += $(patsubst test/%,test/%.pami,$(BASE_TESTS))
+TESTS += $(patsubst test/%,test/%.pami,$(BASE_TESTS)) pami/list_collectives pami/bench_collectives
 LIB_FILE_PAMI = lib/$(LIBPREFIX)x10rt_pami$(LIBSUFFIX)
 LIBS += $(LIB_FILE_PAMI)
 PROPERTIES += etc/x10rt_pami.properties
@@ -73,6 +70,12 @@ PROPERTIES += etc/x10rt_pami.properties
 
 pami/x10rt_pami.o: pami/x10rt_pami.cc
 	$(PAMI_MPCC) $(CXXFLAGS) $(CXXFLAGS_SHARED) $< -c -o $@
+
+pami/list_collectives:	pami/ListCollectiveOptions.c
+	$(PAMI_MPCC) $(CXXFLAGS) -std=gnu99 $< $(APP_LDFLAGS_PAMI) $(APP_LDLIBS_PAMI)  $(X10RT_TEST_LDFLAGS) -o $@
+
+pami/bench_collectives:	pami/BenchmarkCollectiveOptions.c
+	$(PAMI_MPCC) $(CXXFLAGS) -std=gnu99 $< $(APP_LDFLAGS_PAMI) $(APP_LDLIBS_PAMI)  $(X10RT_TEST_LDFLAGS) -o $@
 
 $(LIB_FILE_PAMI): pami/x10rt_pami.o $(COMMON_OBJS)
 ifdef X10_STATIC_LIB

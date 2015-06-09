@@ -6,11 +6,15 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2013.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 #ifndef __int64
 #define __int64 __int64_t
+#endif
+
+#if defined(__CYGWIN__) || defined(__FreeBSD__)
+#undef __STRICT_ANSI__ // Strict ANSI mode is too strict in Cygwin and FreeBSD
 #endif
 
 #include <unistd.h>
@@ -34,8 +38,6 @@
 static methodDescription runClosure;
 static methodDescription runSimpleAsync;
 
-#define DEBUG 0
-
 /*************************************************************************
  *
  * Support for receiving messages
@@ -47,34 +49,38 @@ void jni_messageReceiver_runClosure(const x10rt_msg_params *msg) {
     MessageReader reader(msg);
 
     jint numElems = msg->len;
-    int type = msg->type;
-    jint jtype = type;
     jbyteArray arg = env->NewByteArray(numElems);
     if (NULL == arg) {
-        jniHelper_abort("OOM from NewByteArray (num elements = %d)\n", (int)numElems);
+        char msg[64];
+        snprintf(msg, 64, "OOM from NewByteArray (num elements = %d)", (int)numElems);
+        jniHelper_oom(env, msg);
+        return;
     }
 
     env->SetByteArrayRegion(arg, 0, numElems, (jbyte*)reader.cursor);
 
-    env->CallStaticVoidMethod(runClosure.targetClass, runClosure.targetMethod, arg, jtype);
+    env->CallStaticVoidMethod(runClosure.targetClass, runClosure.targetMethod, arg);
 }
+    
 
 void jni_messageReceiver_runSimpleAsync(const x10rt_msg_params *msg) {
     JNIEnv *env = jniHelper_getEnv();
     MessageReader reader(msg);
 
     jint numElems = msg->len;
-    int type = msg->type;
-    jint jtype = type;
     jbyteArray arg = env->NewByteArray(numElems);
     if (NULL == arg) {
-        jniHelper_abort("OOM from NewByteArray (num elements = %d)\n", (int)numElems);
+        char msg[64];
+        snprintf(msg, 64, "OOM from NewByteArray (num elements = %d)", (int)numElems);
+        jniHelper_oom(env, msg);
+        return;
     }
 
     env->SetByteArrayRegion(arg, 0, numElems, (jbyte*)reader.cursor);
 
-    env->CallStaticVoidMethod(runSimpleAsync.targetClass, runSimpleAsync.targetMethod, arg, jtype);
+    env->CallStaticVoidMethod(runSimpleAsync.targetClass, runSimpleAsync.targetMethod, arg);
 }
+
 
 /*************************************************************************
  *
@@ -92,20 +98,10 @@ JNIEXPORT void JNICALL Java_x10_x10rt_MessageHandlers_sendMessage(JNIEnv *env, j
                                                                   jint place,
                                                                   jint msg_id,
                                                                   jint arrayLen, jbyteArray array) {
-
-
-#if DEBUG
-    fprintf(stdout, "MessageHandlers.sendMessage is invoked from jni_message.cc\n");
-    //FILE *fp;
-    //fp = fopen("/tmp/jnilog.txt","a");
-    fprintf(stdout, "jni_message:cc: sendMessage is called\n");
-    fprintf(stdout, "jni_message:cc: messagewriter: placeId=%d, arraylen=%d\n", place, arrayLen);
-#endif
-    
     unsigned long numBytes = arrayLen * sizeof(jbyte);
-    void *buffer;
+    void* buffer;
 
-    // GetPrimitiveArrayCritical pauses the GC if its possible and returns a pointer to
+    // GetPrimitiveArrayCritical pauses the GC if it is possible and returns a pointer to
     // the actual byte array while GetByteArrayElements will return a pointer to the
     // actual array if the underlying GC supports pinning, if it does not it creates a
     // copy and returns it. On both hotspot and J9 GetByteArrayElements returns a copy
@@ -116,23 +112,21 @@ JNIEXPORT void JNICALL Java_x10_x10rt_MessageHandlers_sendMessage(JNIEnv *env, j
     // configurable via a environment variable.
 
     if (X10_PAUSE_GC_ON_SEND) {
-        buffer = (void *) env->GetPrimitiveArrayCritical(array, 0);
+        buffer = (void*)env->GetPrimitiveArrayCritical(array, 0);
     } else {
-        buffer = (void *) env->GetByteArrayElements(array, 0);
+        buffer = (void*)env->GetByteArrayElements(array, 0);
     }
-    // Byte array, so no need to endian swap
 
-    x10rt_msg_params msg = {place, msg_id, buffer, numBytes, 0};
+    // buffer is a byte array, so no need to endian swap
+    x10rt_msg_params msg = {place, msg_id, buffer, numBytes};
     x10rt_send_msg(&msg);
+
     if (X10_PAUSE_GC_ON_SEND) {
         env->ReleasePrimitiveArrayCritical(array, (jbyte*)buffer, JNI_ABORT);;
     } else {
         env->ReleaseByteArrayElements(array, (jbyte*)buffer, JNI_ABORT);
     }
-
-    //fclose(fp);
 }
-
 
 /*************************************************************************
  *
@@ -156,14 +150,17 @@ JNIEXPORT void JNICALL Java_x10_x10rt_MessageHandlers_registerHandlers(JNIEnv *e
     jmethodID receiveId1 = env->GetStaticMethodID(klazz, "runClosureAtReceive", "([B)V");
     if (NULL == receiveId1) {
         jniHelper_abort("Unable to resolve methodID for MessageHandlers.runClosureAtReceive\n");
+        return;
     }
     jmethodID receiveId2 = env->GetStaticMethodID(klazz, "runSimpleAsyncAtReceive", "([B)V");
     if (NULL == receiveId1) {
         jniHelper_abort("Unable to resolve methodID for MessageHandlers.runSimpleAsyncAtReceive\n");
+        return;
     }
     jclass globalClass = (jclass)env->NewGlobalRef(klazz);
     if (NULL == globalClass) {
         jniHelper_abort("OOM while attempting to allocate global reference for MessageHandlers class\n");
+        return;
     }
     runClosure.targetClass  = globalClass;
     runClosure.targetMethod = receiveId1;
@@ -174,16 +171,19 @@ JNIEXPORT void JNICALL Java_x10_x10rt_MessageHandlers_registerHandlers(JNIEnv *e
     jint closureId = x10rt_register_msg_receiver(&jni_messageReceiver_runClosure, NULL, NULL, NULL, NULL);
     jint simpleAsyncId = x10rt_register_msg_receiver(&jni_messageReceiver_runSimpleAsync, NULL, NULL, NULL, NULL);
 
+
     jfieldID clsFieldId = env->GetStaticFieldID(klazz, "closureMessageID", "I");
     if (NULL == clsFieldId) {
         jniHelper_abort("Unable to resolve fieldID for MessageHandlers.closureMessageID\n");
+        return;
     }
 
     jfieldID asyncFieldId = env->GetStaticFieldID(klazz, "simpleAsyncMessageID", "I");
     if (NULL == asyncFieldId) {
         jniHelper_abort("Unable to resolve fieldID for MessageHandlers.simpleAsyncMessageID\n");
+        return;
     }
-    
+
     env->SetStaticIntField(klazz, clsFieldId, closureId);
     env->SetStaticIntField(klazz, asyncFieldId, simpleAsyncId);
     

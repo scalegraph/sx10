@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.compiler.ws.util;
@@ -52,6 +52,7 @@ public class AddIndirectLocalDeclareVisitor extends ContextVisitor {
         this.refToDeclMap = refToDeclMap;
     }
     
+    @Override
     public Node override(Node parent, Node child) {
         //in the first step, we need decide the target block
         if (child instanceof Block && targetBlock == null) {
@@ -107,6 +108,7 @@ public class AddIndirectLocalDeclareVisitor extends ContextVisitor {
             return localList;
         }
 
+        @Override
         public Node leave(Node parent, Node old, Node n, NodeVisitor v) {
             if (n instanceof Local) {
                 localList.add((Local) n);

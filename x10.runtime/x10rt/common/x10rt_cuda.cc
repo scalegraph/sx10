@@ -6,8 +6,12 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2013.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
+
+#ifdef __CYGWIN__
+#undef __STRICT_ANSI__ // Strict ANSI mode is too strict in Cygwin
+#endif
 
 #include <cstdlib>
 #include <cstdio>
@@ -24,7 +28,7 @@
 
 #include <cuda.h> // Proprietary nvidia header
 
-//#define TRACE 1
+//#define TRACE 2
 
 namespace {
 
@@ -138,6 +142,63 @@ namespace {
             #if CUDA_VERSION >= 3020
             case CUDA_ERROR_OPERATING_SYSTEM:
                 errstr = "CUDA_ERROR_OPERATING_SYSTEM"; break;
+            #endif
+
+            #if CUDA_VERSION >= 5050
+            case CUDA_ERROR_PROFILER_DISABLED:
+                errstr = "CUDA_ERROR_PROFILER_DISABLED"; break;
+            case CUDA_ERROR_PROFILER_NOT_INITIALIZED:
+                errstr = "CUDA_ERROR_PROFILER_NOT_INITIALIZED"; break;
+            case CUDA_ERROR_PROFILER_ALREADY_STARTED:
+                errstr = "CUDA_ERROR_PROFILER_ALREADY_STARTED"; break;
+            case CUDA_ERROR_PROFILER_ALREADY_STOPPED:
+                errstr = "CUDA_ERROR_PROFILER_ALREADY_STOPPED"; break;
+            case CUDA_ERROR_CONTEXT_ALREADY_IN_USE:
+                errstr = "CUDA_ERROR_CONTEXT_ALREADY_IN_USE"; break;
+            case CUDA_ERROR_PEER_ACCESS_UNSUPPORTED:
+                errstr = "CUDA_ERROR_PEER_ACCESS_UNSUPPORTED"; break;
+            case CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED:
+                errstr = "CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED"; break;
+            case CUDA_ERROR_PEER_ACCESS_NOT_ENABLED:
+                errstr = "CUDA_ERROR_PEER_ACCESS_NOT_ENABLED"; break;
+            case CUDA_ERROR_PRIMARY_CONTEXT_ACTIVE:
+                errstr = "CUDA_ERROR_PRIMARY_CONTEXT_ACTIVE"; break;
+            case CUDA_ERROR_CONTEXT_IS_DESTROYED:
+                errstr = "CUDA_ERROR_CONTEXT_IS_DESTROYED"; break;
+            case CUDA_ERROR_ASSERT:
+                errstr = "CUDA_ERROR_ASSERT"; break;
+            case CUDA_ERROR_TOO_MANY_PEERS:
+                errstr = "CUDA_ERROR_TOO_MANY_PEERS"; break;
+            case CUDA_ERROR_HOST_MEMORY_ALREADY_REGISTERED:
+                errstr = "CUDA_ERROR_HOST_MEMORY_ALREADY_REGISTERED"; break;
+            case CUDA_ERROR_HOST_MEMORY_NOT_REGISTERED:
+                errstr = "CUDA_ERROR_HOST_MEMORY_NOT_REGISTERED"; break;
+            case CUDA_ERROR_NOT_PERMITTED:
+                errstr = "CUDA_ERROR_NOT_PERMITTED"; break;
+            case CUDA_ERROR_NOT_SUPPORTED:
+                errstr = "CUDA_ERROR_NOT_SUPPORTED"; break;
+            #endif
+
+            #if CUDA_VERSION >= 6000
+            case CUDA_ERROR_INVALID_PTX:
+                errstr = "CUDA_ERROR_INVALID_PTX"; break;
+            case CUDA_ERROR_ILLEGAL_ADDRESS:
+                errstr = "CUDA_ERROR_ILLEGAL_ADDRESS"; break;
+            case CUDA_ERROR_HARDWARE_STACK_ERROR:
+                errstr = "CUDA_ERROR_HARDWARE_STACK_ERROR"; break;
+            case CUDA_ERROR_ILLEGAL_INSTRUCTION:
+                errstr = "CUDA_ERROR_ILLEGAL_INSTRUCTION"; break;
+            case CUDA_ERROR_MISALIGNED_ADDRESS:
+                errstr = "CUDA_ERROR_MISALIGNED_ADDRESS"; break;
+            case CUDA_ERROR_INVALID_ADDRESS_SPACE:
+                errstr = "CUDA_ERROR_INVALID_ADDRESS_SPACE"; break;
+            case CUDA_ERROR_INVALID_PC:
+                errstr = "CUDA_ERROR_INVALID_PC"; break;
+            #endif
+
+            #if CUDA_VERSION >= 6050
+            case CUDA_ERROR_INVALID_GRAPHICS_CONTEXT:
+                errstr = "CUDA_ERROR_INVALID_GRAPHICS_CONTEXT"; break;
             #endif
         }
         fprintf(stderr,"%s (At %s:%d)\n",errstr,file,line);
@@ -698,8 +759,8 @@ void x10rt_cuda_blocks_threads (x10rt_cuda_ctx *ctx, x10rt_msg_type type, int dy
     // round up to 512 bytes (the granularity of shm allocation)
     int shm = round_up(dyn_shm + static_shm, 512);
 
-    int alloc_size = (minor>=2) ? 512 : 256;
-    int max_threads = (minor>=2) ? 1024 : 768;
+    int alloc_size = (major>=2) ? 512 : 256;
+    int max_threads = (major>=2) ? 1024 : 512;
 
     while (*cfg) {
         int b = *(cfg++);
@@ -723,9 +784,29 @@ void x10rt_cuda_blocks_threads (x10rt_cuda_ctx *ctx, x10rt_msg_type type, int dy
 }
 
 
-void x10rt_cuda_probe (x10rt_cuda_ctx *ctx)
+void x10rt_cuda_device_sync (x10rt_cuda_ctx *ctx)
 {
 #ifdef ENABLE_CUDA
+    big_lock_of_doom.acquire();
+    CU_SAFE(cuCtxPushCurrent(ctx->ctx));
+
+    CU_SAFE(cuCtxSynchronize());
+    //CU_SAFE(cuStreamSynchronize(ctx->kernel_q.stream));
+
+    CU_SAFE(cuCtxPopCurrent(NULL));
+    big_lock_of_doom.release();
+#else
+    (void)ctx;
+    abort();
+#endif
+}
+
+
+// returns true if something is active in the GPU, or false if the GPU is idle
+bool x10rt_cuda_probe (x10rt_cuda_ctx *ctx)
+{
+#ifdef ENABLE_CUDA
+    bool isAnythingActive = false;
     big_lock_of_doom.acquire();
     CU_SAFE(cuCtxPushCurrent(ctx->ctx));
 
@@ -734,6 +815,7 @@ void x10rt_cuda_probe (x10rt_cuda_ctx *ctx)
         if (ctx->kernel_q.current == NULL) {
             BaseOpKernel *kop = ctx->kernel_q.pop();
             if (kop != NULL) {
+                isAnythingActive = true;
                 assert(kop->is_kernel());
                 assert(!kop->begun);
                 x10rt_msg_type type = kop->p.type;
@@ -743,17 +825,20 @@ void x10rt_cuda_probe (x10rt_cuda_ctx *ctx)
                 CUdeviceptr cmem = ctx->cbs[type].kernel_cbs.cmem;
                 if (kop->cmemc > 0 && cmem!=0)
                     CU_SAFE(cuMemcpyHtoD(cmem, kop->cmemv, kop->cmemc));
+                void *kernel_params[5] =
+                {
+                    CU_LAUNCH_PARAM_BUFFER_POINTER, &kop->argv[0],
+                    CU_LAUNCH_PARAM_BUFFER_SIZE,    &kop->argc,
+                    CU_LAUNCH_PARAM_END
+                };
                 // y and z params we leave as 1, as threads can vary from 1 to 512
-                CU_SAFE(cuFuncSetBlockShape(k, kop->threads, 1, 1));
-                CU_SAFE(cuParamSetv(k, 0, &kop->argv[0], kop->argc));
-                CU_SAFE(cuParamSetSize(k, kop->argc));
-                CU_SAFE(cuFuncSetSharedSize(k, kop->shm));
-                CU_SAFE(cuLaunchGridAsync(k, kop->blocks, 1, ctx->kernel_q.stream));
+                CU_SAFE(cuLaunchKernel(k, kop->blocks, 1, 1, kop->threads, 1, 1, kop->shm, ctx->kernel_q.stream, NULL, kernel_params));
                 kop->begun = true;
                 assert(ctx->kernel_q.current == NULL);
                 ctx->kernel_q.current = kop;
             }
         } else {
+           	isAnythingActive = true;
             BaseOpKernel *kop = ctx->kernel_q.current;
             ctx->kernel_q.current = NULL;
             assert(kop->is_kernel());
@@ -773,6 +858,8 @@ void x10rt_cuda_probe (x10rt_cuda_ctx *ctx)
             free(kop);
         }
     }
+    else
+    	isAnythingActive = true;
 
     // spool DMAs
     if (stream_ready(ctx->dma_q.stream)) {
@@ -786,7 +873,7 @@ void x10rt_cuda_probe (x10rt_cuda_ctx *ctx)
             cop->begun = true;
             ctx->dma_q.current = cop;
         }
-
+       	isAnythingActive = true;
         assert(cop->begun);
         char *&src = reinterpret_cast<char*&>(cop->src);
         char *&dst = reinterpret_cast<char*&>(cop->dst);
@@ -808,6 +895,7 @@ void x10rt_cuda_probe (x10rt_cuda_ctx *ctx)
             if (started > 0) ctx->swapBuffers();
             // invoke async copy into back buffer
             if (dma_sz > 0) {
+                DEBUG(3,"cuMemcpyDtoHAsync(%p,0x%llX,%llu, ...)\n", ctx->back, src+started, dma_sz);
                 CU_SAFE(cuMemcpyDtoHAsync(ctx->back,
                                           (CUdeviceptr)(size_t)(src+started),
                                           dma_sz,
@@ -824,6 +912,7 @@ void x10rt_cuda_probe (x10rt_cuda_ctx *ctx)
             // back buffer has now been copied to device... available for re-use
             if (started > 0) {
                 ctx->swapBuffers();
+                DEBUG(3,"cuMemcpyHtoDAsync(0x%llX,%p,%llu, ...)\n", dst+finished, ctx->back, started-finished);
                 CU_SAFE(cuMemcpyHtoDAsync((CUdeviceptr)(size_t)(dst+finished),
                                           ctx->back,
                                           started-finished,
@@ -849,16 +938,18 @@ void x10rt_cuda_probe (x10rt_cuda_ctx *ctx)
             safe_free(cop->p.msg);
             cop->~BaseOpCopy();
             free(cop);
-            return;
+            return isAnythingActive; // always true
         }
-
     }
+    else
+    	isAnythingActive = true;
 
     landingzone:
 
     CU_SAFE(cuCtxPopCurrent(NULL));
     big_lock_of_doom.release();
 
+    return isAnythingActive;
 #else
     (void) ctx;
     abort();

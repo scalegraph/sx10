@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 
@@ -34,8 +34,7 @@ import x10.types.EnvironmentCapture;
 import x10.types.ThisDef;
 import x10.types.X10ClassType;
 import x10.types.X10MemberDef;
-import x10.visit.Desugarer;
-import x10.visit.Desugarer.ClosureCaptureVisitor;
+import x10.visit.ClosureCaptureVisitor;
 import polyglot.types.TypeSystem;
 import polyglot.util.InternalCompilerError;
 
@@ -82,7 +81,7 @@ public class ClosureDefReinstantiator extends ContextVisitor {
 //            }
             
             //Now set the CapturedEnvironment
-            NodeVisitor captureEnvVisitor = new Desugarer.ClosureCaptureVisitor(context, c.closureDef());
+            NodeVisitor captureEnvVisitor = new ClosureCaptureVisitor(context, c.closureDef());
             c.visit(captureEnvVisitor);
 //            for(VarInstance<? extends VarDef> vi : cdc.capturedEnvironment()){
 //                WSUtil.debug("afer-process var:"+ vi.toString());

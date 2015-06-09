@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.visit;
@@ -299,6 +299,7 @@ public class DeadCodeEliminator extends DataFlow {
 	    this.use = use;
 	}
 	
+    @Override
 	public Node override(Node parent, Node n) {
 		if (parent instanceof LocalAssign) {
 			LocalAssign a = (LocalAssign) parent;
@@ -310,6 +311,7 @@ public class DeadCodeEliminator extends DataFlow {
 		return null;
 	}
 
+    @Override
 	public Node leave(Node old, Node n, NodeVisitor v) {
 	    if (n instanceof Local) {
 		use.add(((Local)n).localInstance().def());
@@ -336,6 +338,7 @@ public class DeadCodeEliminator extends DataFlow {
 	final Position pos = Position.COMPILER_GENERATED;
 
 	NodeVisitor v = new NodeVisitor() {
+		@Override
 		public Node override(Node parent, Node n) {
 			if (n instanceof Assign || n instanceof ProcedureCall) {
 				return leave(parent, n, n, this);
@@ -355,6 +358,7 @@ public class DeadCodeEliminator extends DataFlow {
 		return n;
 	    }
 
+	    @Override
 	    public Node leave(Node old, Node n, NodeVisitor v) {
 		if (n instanceof Assign || n instanceof ProcedureCall) {
 		    result.add(nf.Eval(pos, (Expr)n));

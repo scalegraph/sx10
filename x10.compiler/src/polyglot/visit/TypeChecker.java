@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.visit;
@@ -33,6 +33,7 @@ public class TypeChecker extends ContextVisitor
         this.memo = memo;
     }
     
+    @Override
     public Node override(Node parent, Node n) {
     	Node n_ = memo.get(n);
 		if (n_ != null) {
@@ -64,6 +65,7 @@ public class TypeChecker extends ContextVisitor
         // Check for expressions with unknown type.  This avoids reporting too many type errors.
         class AmbChecker extends NodeVisitor {
         	boolean amb;
+            @Override
         	public Node override(Node n) {
         		if (n instanceof Expr) {
         			Expr e = (Expr) n;

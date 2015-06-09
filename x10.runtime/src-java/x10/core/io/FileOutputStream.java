@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.core.io;
@@ -15,10 +15,11 @@ import x10.rtt.NamedType;
 import x10.rtt.RuntimeType;
 import x10.rtt.Type;
 
+/*
+ * NOTE: In X10, all FileOutputStreams are buffered (matches libC)
+ */
 public class FileOutputStream extends OutputStream {
     
-    private static final long serialVersionUID = 1L;
-
     // constructor just for allocation
     public FileOutputStream(java.lang.System[] $dummy) {
         super($dummy);
@@ -26,18 +27,13 @@ public class FileOutputStream extends OutputStream {
 
     public final FileOutputStream x10$io$FileReader$FileOutputStream$$init$S(String name, boolean append) {
         try {
-            super.x10$io$OutputStreamWriter$OutputStream$$init$S(new java.io.FileOutputStream(name, append));
+            super.x10$io$OutputStreamWriter$OutputStream$$init$S(new java.io.BufferedOutputStream(new java.io.FileOutputStream(name, append)));
             return this;
         } catch (java.io.FileNotFoundException e) {
             throw new x10.io.FileNotFoundException(e.getMessage());
         }
     }
 
-    // not used
-//    // creation method for java code (factory method)
-//    public static FileOutputStream $make(String name, boolean append) {
-//        return new FileOutputStream((java.lang.System[]) null).$init(name, append);
-//    }
     // creation method for java code (1-phase java constructor)
     public FileOutputStream(String name, boolean append) {
         this((java.lang.System[]) null);

@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.core.concurrent;
@@ -22,8 +22,6 @@ import x10.serialization.X10JavaSerializable;
 import x10.serialization.X10JavaSerializer;
 
 public final class AtomicLong extends java.util.concurrent.atomic.AtomicLong implements Any, X10JavaSerializable {
-
-    private static final long serialVersionUID = 1L;
 
     // constructor just for allocation
     public AtomicLong(java.lang.System[] $dummy) {
@@ -55,6 +53,10 @@ public final class AtomicLong extends java.util.concurrent.atomic.AtomicLong imp
     );
     public RuntimeType<AtomicLong> $getRTT() {return $RTT;}
     public Type<?> $getParam(int i) { return null; }
+
+    private Object writeReplace() throws java.io.ObjectStreamException {
+        return new x10.serialization.SerializationProxy(this);
+    }
 
 	public void $_serialize(X10JavaSerializer serializer) throws IOException {
 		serializer.write(this.get());

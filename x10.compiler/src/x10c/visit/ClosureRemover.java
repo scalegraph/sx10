@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 package x10c.visit;
 
@@ -33,6 +33,7 @@ import polyglot.ast.FieldDecl;
 import polyglot.ast.Formal;
 import polyglot.ast.Id;
 import polyglot.ast.Local;
+import polyglot.ast.LocalAssign;
 import polyglot.ast.MethodDecl;
 import polyglot.ast.NamedVariable;
 import polyglot.ast.Node;
@@ -255,6 +256,7 @@ public class ClosureRemover extends ContextVisitor {
             private Block rewriteClosureBody(Block closureBody,final List<VarInstance<? extends VarDef>> capturedEnv, final List<NamedVariable> capturedVarsExThis, final Map<String, X10LocalDef> nameToLocalDef, final List<Formal> formals) {
                 final Position pos = Position.COMPILER_GENERATED;
                 return (Block) closureBody.visit(new ContextVisitor(job, ts, nf){
+                    @Override
                     public Node override(Node parent, Node n) {
                         if (n instanceof Closure) {
                             return n;
@@ -271,6 +273,10 @@ public class ClosureRemover extends ContextVisitor {
                             }
                             for (VarInstance<? extends VarDef> var : capturedEnv) {
                                 if (!var.flags().isFinal()) {
+                                    continue;
+                                }
+                                // XTENLANG-3362: skip transient fields to give chance to initialize with @TransientInitExpr
+                                if (var.flags().isTransient()) {
                                     continue;
                                 }
                                 // because of coming not the same VarInstance
@@ -340,7 +346,10 @@ public class ClosureRemover extends ContextVisitor {
                     
                     Block closureBody = (Block) cl.body();
                     
-                    List<X10ClassType> riAnnotations = AnnotationUtils.annotationsMatching(closureBody, xts.RemoteInvocation());
+                    List<X10ClassType> riAnnotations = AnnotationUtils.annotationsMatching(cl, xts.RemoteInvocation());
+                    if (riAnnotations == null || riAnnotations.isEmpty()) {
+                        riAnnotations = AnnotationUtils.annotationsMatching(closureBody, xts.RemoteInvocation());
+                    }
                     Id staticNestedClassName = null;
                     if (!riAnnotations.isEmpty()) {
                         assert riAnnotations.size() == 1;
@@ -550,6 +559,34 @@ public class ClosureRemover extends ContextVisitor {
             ) {
                 final Position pos = Position.COMPILER_GENERATED;
                 return (Block) closureBody.visit(new ContextVisitor(job, ts, nf){
+                    @Override
+                    public Node override(Node n) {
+                        if (n instanceof LocalAssign) {
+                            Local local = ((LocalAssign) n).local();
+                            for (VarInstance<? extends VarDef> var : capturedEnv) {
+                                if (var.def().equals(local.localInstance().def())) {
+                                    X10FieldDef fd;
+                                    if (!contains(capturedVarsExThis, var.def())) {
+                                        capturedVarsExThis.add((NamedVariable) local);
+                                        Flags ff = Flags.FINAL.Private();
+                                        if (local.flags().isTransient()) {
+                                            ff = ff.Transient();
+                                        }
+                                        fd = xts.fieldDef(pos, Types.ref(staticNestedClassDef.asType()), ff, Types.ref(local.type()), local.name().id());
+                                        nameToFieldDef.put(var.def(), fd);
+                                    } else {
+                                        fd = nameToFieldDef.get(var.def());
+                                    }
+                                    return xnf.FieldAssign(pos, xnf.This(pos).type(staticNestedClassDef.asType()), 
+                                                           xnf.Id(pos, fd.name()),
+                                                           ((LocalAssign) n).operator(),
+                                                           ((LocalAssign) n).right()).fieldInstance(fd.asInstance()).type(var.type());
+                                }
+                            } 
+                        }
+                        return super.override(n);
+                    }
+                    
                     protected Node leaveCall(Node parent, Node old, Node n, NodeVisitor v) throws SemanticException {
                         if (n instanceof Field) {
                             Field field = (Field) n;
@@ -559,6 +596,10 @@ public class ClosureRemover extends ContextVisitor {
                             }
                             for (VarInstance<? extends VarDef> var : capturedEnv) {
                                 if (!var.flags().isFinal()) {
+                                    continue;
+                                }
+                                // XTENLANG-3362: skip transient fields to give chance to initialize with @TransientInitExpr
+                                if (var.flags().isTransient()) {
                                     continue;
                                 }
                                 // because of coming not the same VarInstance

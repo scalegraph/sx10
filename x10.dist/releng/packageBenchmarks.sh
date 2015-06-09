@@ -51,9 +51,17 @@ echo
 echo "getting PERCS benchmarks "
 for i in FT KMEANS LU RA SSCA1 SSCA2 STREAM UTS
 do
-    svn $svn_command https://x10.svn.sourceforge.net/svnroot/x10/benchmarks/tags/$X10_TAG/PERCS/$i
+    svn $svn_command svn://svn.code.sourceforge.net/p/x10/code/benchmarks/tags/$X10_TAG/PERCS/$i
+done
+
+echo
+echo "getting proxy and mini applications"
+for i in lulesh2
+do
+    svn $svn_command svn://svn.code.sourceforge.net/p/x10/code/applications/tags/$X10_TAG/$i
 done
 )
+
 
 tarfile="x10-benchmarks-$X10_VERSION"".tar.bz2"
 echo "The benchmarks are now exported to the directory $workdir"

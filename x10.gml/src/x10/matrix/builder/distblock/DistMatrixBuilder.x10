@@ -6,189 +6,172 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2012.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.matrix.builder.distblock;
 
-import x10.compiler.Inline;
-import x10.io.Console;
-import x10.util.Timer;
-import x10.util.StringBuilder;
+import x10.regionarray.Dist;
 
 import x10.matrix.Matrix;
-import x10.matrix.RandTool;
-import x10.matrix.DenseMatrix;
-import x10.matrix.SymDense;
+import x10.matrix.ElemType;
 
-import x10.matrix.Debug;
+import x10.matrix.util.RandTool;
+
 import x10.matrix.block.Grid;
 import x10.matrix.block.MatrixBlock;
-import x10.matrix.block.SparseBlock;
-import x10.matrix.sparse.SparseCSC;
-import x10.matrix.comm.BlockSetRemoteCopy;
 import x10.matrix.distblock.DistBlockMatrix;
 import x10.matrix.distblock.DistMap;
 import x10.matrix.distblock.DistGrid;
 import x10.matrix.distblock.BlockSet;
-
 import x10.matrix.builder.MatrixBuilder;
 
 public type DistMatrixBuilder(b:DistMatrixBuilder)=DistMatrixBuilder{self==b};
-public type DistMatrixBuilder(m:Int,n:Int)=DistMatrixBuilder{self.M==m,self.N==n};
+public type DistMatrixBuilder(m:Long,n:Long)=DistMatrixBuilder{self.M==m,self.N==n};
 
-/*
- * 
- */
-public class DistMatrixBuilder(M:Int,N:Int) implements MatrixBuilder {
- 
-	public val dmat:DistBlockMatrix(M,N);
-
-	//-------------------------------------
-	/**
-	 * Creat distributed block matrix and using specified to store output
-	 * @param  dm    Distributed block matrix to store the output
-	 */
-	public def this(dm:DistBlockMatrix) {
-		property(dm.M,dm.N);
-		dmat = dm;
-	}
-	
-	//=====================================
-	/**
-	 * Creat distributed block matrix builder with given partitioning and block distribution map. 
-	 * The actual memory spaces are not allocated.
-	 */
-	public static def make(pg:Grid, dp:DistMap):DistMatrixBuilder(pg.M,pg.N) {
-		//Remote capture: partitioning and distribution
-		val dm = DistBlockMatrix.make(pg, dp);
-		val bld =  new DistMatrixBuilder(dm);
-		return bld as DistMatrixBuilder(pg.M,pg.N);
-	}
-	
-	/**
-	 * Creat symmetric distributed block matrix with given leading dimension and its partitioning blocks.
-	 */
-	public static def make(m:Int, n:Int, bM:Int, bN:Int):DistMatrixBuilder(m,n) {
-		val grid = new Grid(m, n, bM, bN);
-		val dgrid = DistGrid.make(grid);
-		val bdr = make(grid, dgrid.dmap);
-		return bdr as DistMatrixBuilder(m,n);
-	}
-	
-	//===============================
-	public def allocAllDenseBlocks(): DistMatrixBuilder(this) {
-		finish ateach (d:Point in Dist.makeUnique()) {
-			dmat.handleBS().allocDenseBlocks();
-		}
-		return this;
-	}
-	
-	public def allocAllSparseBlocks(nzd:Double): DistMatrixBuilder(this) {
-		finish ateach (d:Point in Dist.makeUnique()) {
-			dmat.handleBS().allocSparseBlocks(nzd);
-		}
-		return this;
-	}
-
-	//======================
-	public def init(initFun:(Int,Int)=>Double) : DistMatrixBuilder(this) {
-		finish ateach (d:Point in Dist.makeUnique()) {
-			val itr = dmat.handleBS().iterator();
-			while (itr.hasNext()) {
-				itr.next().init(initFun);
-			}
-		}
-		return this;
-	}
-		
-	public def initRandom(nonZeroDensity:Double):DistMatrixBuilder(this) {
-		finish ateach (d:Point in Dist.makeUnique()) {
-			val itr = dmat.handleBS().iterator();
-			while (itr.hasNext()) {
-				itr.next().initRandom(nonZeroDensity, (Int,Int)=>RandTool.getRandGen().nextDouble());
-			}
-		}
-		return this;
-	}
-	
-	public def initRandom(nzDensity:Double, initFun:(Int,Int)=>Double) : DistMatrixBuilder(this) {
-		finish ateach (d:Point in Dist.makeUnique()) {
-			val itr = dmat.handleBS().iterator();
-			while (itr.hasNext()) {
-				itr.next().initRandom(nzDensity, initFun);
-			}
-		}
-		return this;
-	}
-
-	//==============================
-	public def initRandom() : DistMatrixBuilder(this) {
-		finish ateach (d:Point in Dist.makeUnique()) {
-			val itr = dmat.handleBS().iterator();
-			while (itr.hasNext()) {
-				itr.next().initRandom();
-			}
-		}
-		return this;
-	}
-
-
-	//=====================================
-	public def set(r:Int, c:Int, value:Double): void{
-		val grid = dmat.handleBS().getGrid();
-		val loc = grid.find(r, c);
-		val bid = grid.getBlockId(loc(0), loc(1));
-		val bx  = loc(2);
-		val by  = loc(3);
-		val pid = dmat.handleBS().getDistMap().findPlace(bid);
-		//Remote capture: bid, bx, by, 
-		at (Place.place(pid)) {
-			val blkset:BlockSet = dmat.handleBS();
-			val blk:MatrixBlock = blkset.find(bid);
-			if (blk == null) 
-				Debug.exit("Error in search block in block set");
-			
-			blk.getBuilder().set(bx, by, value);
-		}
-	}
-	
-	public def reset(r:Int, c:Int):Boolean {
-		val grid = dmat.handleBS().getGrid();
-		val loc = grid.find(r, c);
-		val bid = grid.getBlockId(loc(0), loc(1));
-		val bx  = loc(2);
-		val by  = loc(3);
-		val pid = dmat.handleBS().getDistMap().findPlace(bid);
-		//Remote capture: bid, bx, by, 
-		val ret = at (Place.place(pid)) {
-			val blkset:BlockSet = dmat.handleBS();
-			val blk:MatrixBlock = blkset.find(bid);
-			if (blk == null) 
-				Debug.exit("Error in searching block in block set");
-			
-			blk.getBuilder().reset(bx, by)
-		};
-		return ret;
-	}
-	
-	//=====================================
-	//=====================================
-
-	public def toDistBlockMatrix():DistBlockMatrix(M,N) {
-		finish ateach (d:Point in Dist.makeUnique()) {
-			val itr = dmat.handleBS().iterator();
-			while (itr.hasNext()) {
-				val blk = itr.next();
-				val bdr = blk.getBuilder();
-				//if (blk instanceof SparseBlock)
-				bdr.toMatrix();	//Output is written back dense/sparse
-			}
-		}
-		return dmat;
-	}
-		
-	
-	public def toMatrix():Matrix(M,N) = 
-		toDistBlockMatrix() as Matrix(M,N);	
+public class DistMatrixBuilder(M:Long,N:Long) implements MatrixBuilder {
+    public val dmat:DistBlockMatrix(M,N);
+    
+    /**
+     * Create distributed block matrix and using specified to store output
+     * @param  dm    Distributed block matrix to store the output
+     */
+    public def this(dm:DistBlockMatrix) {
+        property(dm.M,dm.N);
+        dmat = dm;
+    }
+    
+    /**
+     * Create distributed block matrix builder with given partitioning and block distribution map. 
+     * The actual memory spaces are not allocated.
+     */
+    public static def make(pg:Grid, dp:DistMap):DistMatrixBuilder(pg.M,pg.N) =
+						make(pg, dp, Place.places());
+    
+    public static def make(pg:Grid, dp:DistMap, places:PlaceGroup):DistMatrixBuilder(pg.M,pg.N) {
+        //Remote capture: partitioning and distribution
+        val dm = DistBlockMatrix.make(pg, dp, places);
+        val bld =  new DistMatrixBuilder(dm);
+        return bld as DistMatrixBuilder(pg.M,pg.N);
+    }
+    
+    /**
+     * Create symmetric distributed block matrix with given leading dimension and its partitioning blocks.
+     */
+    public static def make(m:Long, n:Long, bM:Long, bN:Long):DistMatrixBuilder(m,n) =
+							     make(m, n, bM, bN, Place.places());
+    
+    public static def make(m:Long, n:Long, bM:Long, bN:Long, places:PlaceGroup):DistMatrixBuilder(m,n) {
+        val grid = new Grid(m, n, bM, bN);
+        val dgrid = DistGrid.make(grid, places.size());
+        val bdr = make(grid, dgrid.dmap, places);
+        return bdr as DistMatrixBuilder(m,n);
+    }
+    
+    public def allocAllDenseBlocks(): DistMatrixBuilder(this) {
+        finish ateach(d in Dist.makeUnique(dmat.getPlaces())) {
+            dmat.handleBS().allocDenseBlocks();
+        }
+        return this;
+    }
+    
+    public def allocAllSparseBlocks(nzd:Float): DistMatrixBuilder(this) {
+        finish ateach(d in Dist.makeUnique(dmat.getPlaces())) {
+            dmat.handleBS().allocSparseBlocks(nzd);
+        }
+        return this;
+    }
+    
+    public def init(initFun:(Long,Long)=>ElemType) : DistMatrixBuilder(this) {
+        finish ateach(d in Dist.makeUnique(dmat.getPlaces())) {
+            val itr = dmat.handleBS().iterator();
+            while (itr.hasNext()) {
+                itr.next().init(initFun);
+            }
+        }
+        return this;
+    }
+    
+    public def initRandom(nonZeroDensity:Float):DistMatrixBuilder(this) {
+        finish ateach(d in Dist.makeUnique(dmat.getPlaces())) {
+            val itr = dmat.handleBS().iterator();
+            while (itr.hasNext()) {
+                itr.next().initRandom(nonZeroDensity, (Long,Long)=>RandTool.nextElemType[ElemType]());
+            }
+        }
+        return this;
+    }
+    
+    public def initRandom(nzDensity:Float, initFun:(Long,Long)=>ElemType) : DistMatrixBuilder(this) {
+        finish ateach(d in Dist.makeUnique(dmat.getPlaces())) {
+            val itr = dmat.handleBS().iterator();
+            while (itr.hasNext()) {
+                itr.next().initRandom(nzDensity, initFun);
+            }
+        }
+        return this;
+    }
+    
+    public def initRandom() : DistMatrixBuilder(this) {
+        finish ateach(d in Dist.makeUnique(dmat.getPlaces())) {
+            val itr = dmat.handleBS().iterator();
+            while (itr.hasNext()) {
+                itr.next().initRandom();
+            }
+        }
+        return this;
+    }
+    
+    public def set(r:Long, c:Long, value:ElemType): void{
+        val grid = dmat.handleBS().getGrid();
+        val loc = grid.find(r, c);
+        val bid = grid.getBlockId(loc(0), loc(1));
+        val bx  = loc(2);
+        val by  = loc(3);
+        val pIndex = dmat.handleBS().getDistMap().findPlaceIndex(bid);
+        //Remote capture: bid, bx, by, 
+        at(dmat.getPlaces()(pIndex)) {
+            val blkset:BlockSet = dmat.handleBS();
+            val blk:MatrixBlock = blkset.find(bid);
+            if (blk == null) 
+                throw new UnsupportedOperationException("Error in search block in block set");
+	    
+            blk.getBuilder().set(bx, by, value);
+        }
+    }
+    
+    public def reset(r:Long, c:Long):Boolean {
+        val grid = dmat.handleBS().getGrid();
+        val loc = grid.find(r, c);
+        val bid = grid.getBlockId(loc(0), loc(1));
+        val bx  = loc(2);
+        val by  = loc(3);
+        val pIndex = dmat.handleBS().getDistMap().findPlaceIndex(bid);
+        //Remote capture: bid, bx, by, 
+        val ret = at(dmat.getPlaces()(pIndex)) {
+            val blkset:BlockSet = dmat.handleBS();
+            val blk:MatrixBlock = blkset.find(bid);
+            if (blk == null) 
+                throw new UnsupportedOperationException("Error in searching block in block set");
+	    
+            blk.getBuilder().reset(bx, by)
+        };
+        return ret;
+    }
+    
+    public def toDistBlockMatrix():DistBlockMatrix(M,N) {
+        finish ateach(d in Dist.makeUnique(dmat.getPlaces())) {
+            val itr = dmat.handleBS().iterator();
+            while (itr.hasNext()) {
+                val blk = itr.next();
+                val bdr = blk.getBuilder();
+                //if (blk instanceof SparseBlock)
+                bdr.toMatrix();    //Output is written back dense/sparse
+            }
+        }
+        return dmat;
+    }
+    
+    public def toMatrix():Matrix(M,N) = 
+			  toDistBlockMatrix() as Matrix(M,N);
 }

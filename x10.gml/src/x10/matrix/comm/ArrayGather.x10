@@ -6,21 +6,17 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.matrix.comm;
 
-import x10.io.Console;
-import x10.util.Timer;
-import x10.util.Pair;
-
 import x10.compiler.Ifdef;
 import x10.compiler.Ifndef;
-import x10.compiler.Uninitialized;
 
-import x10.matrix.Debug;
-import x10.matrix.sparse.CompressArray;
+import x10.matrix.ElemType;
+
+import x10.matrix.comm.mpi.WrapMPI;
 
 /**
  * Gather operations collects data arrays distributed in all places to
@@ -36,163 +32,189 @@ import x10.matrix.sparse.CompressArray;
  * run command "make help" at the root directory of GML library.
  */
 public class ArrayGather extends ArrayRemoteCopy {
-	//==============================================
-	// Constructor
-	//==============================================
-	public def this() {
-		super();
-	}
+    /**
+     * Gather distributed arrays from all places to here
+     * at here.
+     * 
+     * @param src    distributed storage of source arrays on PlaceLocalHandle
+     * @param dst    storage of list arrays for gather result
+     */
+    public static def gather(
+            src:DataArrayPLH, 
+            dst:Rail[Rail[ElemType]{self!=null}]) : void {
+        
+        val nb = Place.numPlaces();
+        assert (nb==dst.size) :
+            "Number of blocks in dist and local array do not match";
+        
+        finish for (var bid:Long=0; bid<nb; bid++) {
+            val dstbuf = dst(bid);
+            
+            if (bid == here.id()) {
+                val srcbuf = src();
+                Rail.copy(srcbuf, 0L, dstbuf, 0L, dstbuf.size);
 
-	//==============================================
-	// Remote data access via PlaceLocalHandle
-	//==============================================
-	/**
-	 * Gather distributed arrays from all places to here
-	 * at here.
-	 * 
-	 * @param src    distributed storage of source arrays on PlaceLocalHandle
-	 * @param dst    storage of list arrays for gather result
-	 */
-	public static def gather(
-			src:DataArrayPLH, 
-			dst:Array[Array[Double](1)](1)) : void {
-		
-		val nb = Place.MAX_PLACES;
-		Debug.assure(nb==dst.size, 
-		"Number blocks in dist and local array not match");
-		
-		finish for (var bid:Int=0; bid<nb; bid++) {
-			val dstbuf = dst(bid);
-			
-			if (bid == here.id()) {
-				val srcbuf = src();
-				Array.copy(srcbuf, 0, dstbuf, 0, dstbuf.size);
+            } else {
 
-			} else {
+                @Ifdef("MPI_COMMU") { 
+                    mpiCopy(src, bid, 0, dstbuf, 0, dstbuf.size);    
+                }
+                @Ifndef("MPI_COMMU") {
+                    x10Copy(src, bid, 0, dstbuf, 0, dstbuf.size);
+                }
+            }
+            
+        }
+    }
 
-				@Ifdef("MPI_COMMU") { 
-					mpiCopy(src, bid, 0, dstbuf, 0, dstbuf.size);	
-				}
-				@Ifndef("MPI_COMMU") {
-					x10Copy(src, bid, 0, dstbuf, 0, dstbuf.size);
-				}
-			}
-			
-		}
-	}
+    /**
+     * Gather distributed arrays from all places to here and store 
+     * in a continuous memory space
+     *
+     * @param src    distributed storage of source arrays on PlaceLocalHandle
+     * @param dst    storage array for gather result
+     * @param gp     list of array sizes
+     */
+    public static def gather( 
+            src:DataArrayPLH, 
+            dst:Rail[ElemType]{self!=null},
+            gp:Rail[Long]) : void {
 
+        @Ifdef("MPI_COMMU") {
+            mpiGather(src, dst, gp);
+        }
+        @Ifndef("MPI_COMMU") {
+            x10Gather(src, dst, gp);
+        }
+    }
 
-	//------------------------------------------------------------
-	// Gather from single row blocks partitioning
-	//------------------------------------------------------------
+    /**
+     * Gather distributed arrays from a place group to here and store 
+     * in a continuous memory space
+     * 
+     * @param src     distributed storage of source arrays on PlaceLocalHandle
+     * @param dst     storage array for gather result
+     * @param gp      list of array sizes
+    * @param places  the place group to gather from
+     */
+    public static def gather( 
+            src:DataArrayPLH, 
+            dst:Rail[ElemType]{self!=null},
+            gp:Rail[Long],
+            places:PlaceGroup) : void {
+        
+        @Ifdef("MPI_COMMU") {
+            throw new UnsupportedOperationException("No MPI implementation");
+        }
+        @Ifndef("MPI_COMMU") {
+            x10Gather(src, dst, gp, places);
+        }
+    }
 
-	/**
-	 * Gather distributed arrays from all places to here and store 
-	 * in a continous memory space
-	 *
-	 * @param src    distributed storage of source arrays on PlaceLocalHandle
-	 * @param dst    storage array for gather result
-	 * @param gp     list of array sizes
-	 */
-	public static def gather( 
-			src:DataArrayPLH, 
-			dst:Array[Double](1),
-			gp:Array[Int](1)) : void {
+    /**
+     * Gather distributed arrays from all places to here
+     * by using mpi gather routine.
+     * 
+     * @param src     distributed storage of data arrays 
+     * @param dst     storage array for gather result at here
+     * @param szlist  list of array sizes.
+     */
+    public static def mpiGather(
+            src:DataArrayPLH, 
+            dst:Rail[ElemType],
+            szlist:Rail[Long]):void {
+        
+        @Ifdef("MPI_COMMU") {
+            val root = here.id();
+            finish { 
+                for([p] in WrapMPI.world.dist) {
+                    val datcnt = szlist(p);
+                    if (p != root) {
+                        at(WrapMPI.world.dist(p)) async {
+                            val srcbuf = src();
+                            /*******************************************/
+                            // Not working
+                            //val tmpbuf= null; //fake
+                            //val tmplst=null;//   //fake
+                            /*******************************************/
+                            val tmpbuf = new Rail[ElemType](0); //fake
+                            val tmplst = new Rail[Long](0);   //fake
+                            WrapMPI.world.gatherv(srcbuf, 0, datcnt, tmpbuf, 0, tmplst, root);
+                        }
+                    } 
+                }
 
-		@Ifdef("MPI_COMMU") {
-			mpiGather(src, dst, gp);
-		}
-		@Ifndef("MPI_COMMU") {
-			x10Gather(src, dst, gp);
-		}
-	}
+                async {
+                    /**********************************************/
+                    // DO NOT move this block into for loop block
+                    // MPI process will hang, Cause is not clear
+                    /**********************************************/    
+                    val srcbuf = src();
+                
+                    WrapMPI.world.gatherv(srcbuf, 0, szlist(root), dst, 0, szlist, root);
+                }
+            
+            }
+        }
+    }
+    
+    /**
+     * Gather distributed arrays from all places to here by using x10 remote array copy.
+     * 
+     * @param src     distributed storage of data arrays in all places.
+     * @param dstbuf  storage array for gather result
+     * @param gp      list of array sizes
+     */
+    public static def x10Gather(
+            src:DataArrayPLH, 
+            dstbuf:Rail[ElemType]{self!=null},
+            gp:Rail[Long]): void {
 
-	//
-	/**
-	 * Gather distributed arrays from all places to here
-	 * by using mpi gather routine.
-	 * 
-	 * @param src     distributed storage of data arrays 
-	 * @param dst     storage array for gather result at here
-	 * @param szlist  list of array sizes.
-	 */
-	public static def mpiGather(
-			src:DataArrayPLH, 
-			dst:Array[Double](1),
-			szlist:Array[Int](1)):void {
-		
-		@Ifdef("MPI_COMMU") {
+        x10Gather(src, dstbuf, gp, Place.places());        
+    }
 
-			val root = here.id();
-			finish 	{ 
-				for(val [p] in WrapMPI.world.dist) {
-					val datcnt = szlist(p);
-					if (p != root) {
-						at (WrapMPI.world.dist(p)) async {
-							val srcbuf = src();
-							/*******************************************/
-							// Not working
-							//val tmpbuf:Array[Double](1)= null; //fake
-							//val tmplst:Array[Int](1)=null;//   //fake
-							/*******************************************/
-							val tmpbuf = new Array[Double](0); //fake
-							val tmplst = new Array[Int](0);   //fake
-							//Debug.flushln("P"+p+" starting non root gather :"+datcnt);
-							WrapMPI.world.gatherv(srcbuf, 0, datcnt, tmpbuf, 0, tmplst, root);
-						}
-					} 
-				}
+    /**
+     * Gather distributed arrays from a place group to here by using x10 remote array copy.
+     * 
+     * @param src     distributed storage of data arrays in all places.
+     * @param dstbuf  storage array for gather result
+     * @param gp list of array sizes
+     * @param places      the place group 
+     */
+    public static def x10Gather(
+            src:DataArrayPLH, 
+            dstbuf:Rail[ElemType]{self!=null},
+            gp:Rail[Long],
+            places:PlaceGroup): void {
 
-				async {
-					/**********************************************/
-					// DO NOT move this block into for loop block
-					// MPI process will hang, Cause is not clear
-					/**********************************************/	
-					val srcbuf = src();
-					//Debug.flushln("P"+root+" starting root gather:"+szlist.toString());
-				
-					WrapMPI.world.gatherv(srcbuf, 0, szlist(root), dst, 0, szlist, root);
-				}
-			
-			}
-		}
-	}
-	
-	/**
-	 * Gather distributed arrays from all places to here by using x10 remote array copy.
-	 * 
-	 * @param src     distributed storage of data arrays in all places.
-	 * @param dstbuf  storage array for gather result
-	 * @param gp      list of array sizes
-	 */
-	public static def x10Gather(
-			src:DataArrayPLH, 
-			dstbuf:Array[Double](1),
-			gp:Array[Int](1)): void {
+        assert (gp.size == places.size()) :
+            "Number of segments "+gp.size+" not equal to number of places "+places.size();
+        val root = here.id();
+        var off:Long=0;
+        finish for (cb in 0..(places.size()-1)) {
+            val datcnt = gp(cb);
+            val dstoff = off;
+            val pid = places(cb).id;
 
-		Debug.assure(gp.size <= Place.MAX_PLACES, 
-				"Number of segments "+gp.size+" exceeds number of places "+Place.MAX_PLACES);
-		val root = here.id();
-		var off:Int=0;
-		for (var cb:Int=0; cb<gp.size; cb++) {
-			val datcnt = gp(cb);
-			
-			if (cb != root) {
-				x10Copy(src, cb, 0, dstbuf, off, datcnt);
-			} else {
-				//Make local copying
-				val srcbuf = src();
-				Array.copy(srcbuf, 0, dstbuf, off, datcnt);
-			}
-			off += datcnt;
-		}
-	}
-	
-	//=======================================
-	//util
-	//=======================================
-	public static def verify(
-			src:DataArrayPLH, buf:Array[Double](1), 
-			szlist:Array[Int](1)):Boolean =
-			ArrayScatter.verify(buf, src, szlist);	
+            if (pid != root) {
+                async x10Copy(src, pid, 0, dstbuf, dstoff, datcnt);
+            } else {
+                //Make local copying
+                val srcbuf = src();
+                async Rail.copy(srcbuf, 0L, dstbuf, dstoff, datcnt);
+            }
+            off += datcnt;
+        }
+    }
+
+    public static def verify(
+            src:DataArrayPLH, buf:Rail[ElemType], 
+            szlist:Rail[Long]):Boolean =
+            ArrayScatter.verify(buf, src, szlist);
+
+    public static def verify(
+            src:DataArrayPLH, buf:Rail[ElemType], 
+            szlist:Rail[Long], places:PlaceGroup):Boolean =
+            ArrayScatter.verify(buf, src, szlist, places);
+
 }

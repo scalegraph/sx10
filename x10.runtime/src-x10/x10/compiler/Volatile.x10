@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.compiler;
@@ -14,6 +14,7 @@ package x10.compiler;
 import x10.lang.annotations.FieldAnnotation;
 
 /**
- * We use this annotation to tell the compiler that a field should be marked as volatile.
+ * This annotation indicates to the compiler that a field is volatile, with
+ * consequences for back-end code generation.
  */
 public interface Volatile extends FieldAnnotation { }

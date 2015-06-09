@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.ast;
@@ -153,7 +153,7 @@ public class IntLit_c extends NumLit_c implements IntLit
 
     public String toString() {
         if (kind() == UINT) {
-            return Long.toString(value & 0xffffffffL) + "U";
+            return Long.toString(value & 0xffffffffL) + "UN";
         }
         else if (kind() == LONG) {
             return Long.toString(value) + "L";
@@ -180,6 +180,8 @@ public class IntLit_c extends NumLit_c implements IntLit
             	s += "S";
             } else if (kind() == USHORT) {
             	s += "US";
+            } else if (kind() == INT) {
+                s += "N";
             }
             return s;
         }

@@ -6,71 +6,84 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 #ifndef WRAP_BLAS_H
 #define WRAP_BLAS_H
 
+/**
+  vj: Added support for single precision operations. 
+ */
+#include "../elem_type.h"
 
+
+typedef int64_t blas_long;
 //------------------------------------------------------------------------
 // Level One 
 //------------------------------------------------------------------------
-void scale(int n, double a, double* x);
-void copy(int n, double* x, double* y);
-double dot_prod(int n, double* x, double* y); 
-double norm2(int n, double* x);
-double abs_sum(int n, double* x);
 
-
-//------------------------------------------------------------------------
-//Simplified interface
-//------------------------------------------------------------------------
-// C = A * B
-/* void matrix_matrix_mult(double* A, double* B, double* C, */
-/* 						int m, int n, int k); */
-// C = alpah* op(A) * op(B) + beta*C
-void matrix_matrix_mult(double* A, double* B, double* C, 
-						int* dim, double* scale, int* trans);
-
-// C = alpah* A * B + beta*C, where A is symmetrix matrix of lower trianular part
-void sym_matrix_mult(double* A, double* B, double* C, 
-					 int* dim, double* scale);
-void matrix_sym_mult(double* B, double* A, double* C,
-					 int* dim, double* scale);
+void scale(blas_long n, ElemType a, ElemType* x);
+void copy(blas_long n, ElemType* x, ElemType* y);
+ElemType dot_prod(blas_long n, ElemType* x, ElemType* y); 
+ElemType norm2(blas_long n, ElemType* x);
+ElemType abs_sum(blas_long n, ElemType* x);
 
 //------------------------------------------------------------------------
+// Level Two 
+//------------------------------------------------------------------------
 
-//y = A*x
-/* void matrix_vector_mult(double* A, double* x, double* y,  */
-/* 						int m, int n); */
-//y = alpah * op(A)*x + beta * y
-void matrix_vector_mult(double* A, double* x, double* y, 
-						int* dim, double* scale, int transA);
-//y = alpah* x *A + beta * y, A is symmetrix matrix of lower triangular part
-void sym_vector_mult(double* x, double* A, double* y,
-					 int* dim, double* scale);
+//y = alpha * op(A)*x + beta * y
+void matrix_vector_mult(ElemType alpha, ElemType* A, ElemType* x, ElemType beta, ElemType* y, 
+						blas_long* dim, blas_long lda, blas_long* offset, int transA);
+//y = alpha * op(A)*x + beta * y
+void matrix_vector_mult(ElemType alpha, ElemType* A, ElemType* x, ElemType beta, ElemType* y, 
+						blas_long* dim, int transA);
+//y = alpha* x *A + beta * y, A is symmetrix matrix of lower triangular part
+void sym_vector_mult(ElemType alpha, ElemType* x, ElemType* A, ElemType beta, ElemType* y,
+					 blas_long* dim);
 //   A*x = b,   or   A'*x = b,
-void tri_vector_mult(double* A, int uplo, double* bx, int lda, int transA);
+void tri_vector_mult(ElemType* A, blas_long uplo, ElemType* bx, blas_long lda, int transA);
+
+// A = alpha*x*y**T + A
+void rank_one_update(ElemType alpha, ElemType* x, ElemType* y, ElemType* A, blas_long* dim, blas_long* offset, blas_long* inc, blas_long lda);
 
 //  B := alpha*op( A )*B, A is lower-non-unit triangular
-void tri_matrix_mult(double* A, double* B, int* dim, int tranB);
+void tri_matrix_mult(ElemType* A, ElemType* B, blas_long* dim, int tranB);
 // A := alpha*B*op( A ), B is lower-non-unit triangular
-void matrix_tri_mult(double* B, double* A, int* dim, int tranA);
+void matrix_tri_mult(ElemType* B, ElemType* A, blas_long* dim, int tranA);
 
-//-------------------------------------------------------------------
+//------------------------------------------------------------------------
+// Level Three 
+//------------------------------------------------------------------------
+
+// C = alpha* op(A) * op(B) + beta*C
+void matrix_matrix_mult(ElemType alpha, ElemType* A, ElemType* B, ElemType beta, ElemType* C,
+						blas_long* dim, blas_long* ld, blas_long* offset, int* trans);
+
+// C = alpha* op(A) * op(B) + beta*C
+void matrix_matrix_mult(ElemType alpha, ElemType* A, ElemType* B, ElemType beta, ElemType* C,
+						blas_long* dim, blas_long* ld, int* trans);
+
+// C = alpha*A*A**T + beta*C
+void sym_rank_k_update(ElemType alpha, ElemType* A, ElemType beta, ElemType* C, blas_long* dim, blas_long* ld,
+                       blas_long* offset, bool upper, bool trans);
+
+// C = alpha*A*A**T + beta*C
+void sym_rank_k_update(ElemType alpha, ElemType* A, ElemType beta, ElemType* C,
+                       blas_long* dim, bool upper, bool trans);
+
+// C = alpha* A * B + beta*C, where A is symmetrix matrix of lower trianular part
+void sym_matrix_mult(ElemType alpha, ElemType* A, ElemType* B, ElemType beta, ElemType* C, 
+					 blas_long* dim);
+void matrix_sym_mult(ElemType* B, ElemType alpha, ElemType* A, ElemType beta, ElemType* C,
+					 blas_long* dim);
+
 //Solve Ax=b. result->x
-void tri_vector_solve(double* A, double* bx, int* dim, int tranA);
+void tri_vector_solve(ElemType* A, ElemType* bx, blas_long* dim, int tranA);
 //Solve op(A)X=B
-void tri_matrix_solve(double* A, double* BX, int* dim, int tranA);
-void matrix_tri_solve(double* BX, double* A, int* dim, int tranA);
-
-//------------------------------------------------------------------------
-// Other tools
-//------------------------------------------------------------------------
-void print_matrix(char*, double*, int, int);
-void print_matrix_data(double*, int, int);
-void c_mat_mat_mult(double* A, double* B, double* C, 
-					int M, int N, int K);
+void tri_matrix_solve(ElemType* A, ElemType* BX, blas_long* dim, int tranA);
+void matrix_tri_solve(ElemType* BX, ElemType* A, blas_long* dim, int tranA);
 
 #endif
+

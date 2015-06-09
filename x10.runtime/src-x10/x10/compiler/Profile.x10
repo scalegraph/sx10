@@ -6,24 +6,26 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.compiler;
 
 import x10.lang.annotations.*;
+import x10.xrx.Runtime;
 
 /**
- *  @Profile can be used on at statements to make information about that at operation available to applications.
+ * This annotation on an at statement makes profiling information relating to
+ * the statement available to applications.
  *
  * EXAMPLE:
  *
- *      val x = new Runtime.Profile();
+ *      val x = new x10.xrx.Runtime.Profile();
  *      @Profile(x) at (here.next()) {
  *      }
  *      // x now populated with profiling data
  *
- * @see x10.lang.Runtime.Profile
+ * @see x10.xrx.Runtime.Profile
  */
-public interface Profile(prof:Runtime.Profile) extends StatementAnnotation, ExpressionAnnotation {
+public interface Profile(prof:x10.xrx.Runtime.Profile) extends StatementAnnotation, ExpressionAnnotation {
 }

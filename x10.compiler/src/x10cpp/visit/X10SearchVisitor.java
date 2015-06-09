@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10cpp.visit;
@@ -170,6 +170,7 @@ public class X10SearchVisitor<T extends Node> extends NodeVisitor {
 		return;
 	}
 
+    @Override
 	public Node override(Node parent, Node child) {
 		if (oneMatch && found)
 		    return child;

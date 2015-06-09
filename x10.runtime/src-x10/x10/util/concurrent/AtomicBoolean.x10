@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.util.concurrent;
@@ -27,12 +27,12 @@ public final class AtomicBoolean {
     private @Volatile var value:Int;
     
     public def this():AtomicBoolean {
-        value = 0;
+        value = 0n;
         // Memory model: acts like store of volatile field
         Fences.storeLoadBarrier();
     }
     public def this(v:Boolean):AtomicBoolean {
-        value = v ? 1 : 0;
+        value = v ? 1n : 0n;
         // Memory model: acts like store of volatile field
         Fences.storeLoadBarrier();
     }
@@ -42,22 +42,22 @@ public final class AtomicBoolean {
       // Memory model: acts like read of volatile field;
       Fences.loadStoreBarrier();
       Fences.storeLoadBarrier();
-      return value == 1;
+      return value == 1n;
    }
 
     @Native("java", "#this.set(#v)")
     public def set(v:Boolean):void {
-        value = v ? 1 : 0;
+        value = v ? 1n : 0n;
         // Memory model: acts like store of volatile field
         Fences.storeLoadBarrier();
     }
 
     @Native("java", "#this.compareAndSet(#expect,#update)")
-    @Native("c++", "x10::util::concurrent::AtomicBooleanNatives::compareAndSet(#this, #expect, #update)")
+    @Native("c++", "::x10::util::concurrent::AtomicBooleanNatives::compareAndSet(#this, #expect, #update)")
     public native def compareAndSet(expect:Boolean, update:Boolean):Boolean;
 
     @Native("java", "#this.weakCompareAndSet(#expect,#update)")
-    @Native("c++", "x10::util::concurrent::AtomicBooleanNatives::weakCompareAndSet(#this, #expect, #update)")
+    @Native("c++", "::x10::util::concurrent::AtomicBooleanNatives::weakCompareAndSet(#this, #expect, #update)")
     public native def weakCompareAndSet(expect:Boolean, update:Boolean):Boolean;
     
     @Native("java", "#this.getAndSet(#v)")

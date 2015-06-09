@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2012.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 import x10.interop.Java;
@@ -21,9 +21,9 @@ public class RunJava {
             }
                 
             val className = args(0);
-            val numRestArgs = args.size - 1;
-            val restArgs =  new Array[String](numRestArgs);
-            Array.copy(args, 1, restArgs, 0, numRestArgs);
+            val numRestArgs = args.size - 1L;
+            val restArgs =  new Rail[String](numRestArgs);
+            Rail.copy(args, 1L, restArgs, 0L, numRestArgs);
             val javaArgs = Java.convert(restArgs);
                 
             val mainClass = java.lang.Class.forName(className);

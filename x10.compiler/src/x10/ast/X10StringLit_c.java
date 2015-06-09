@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.ast;
@@ -55,7 +55,7 @@ public class X10StringLit_c extends StringLit_c {
 		    	Errors.issue(tc.job(), z);
 		    }
 		
-		Type newType = Types.xclause(Type, c);
+		Type newType = Types.toConstrainedType(Types.xclause(Type, c)).addNonNull(); // a literal is non-null
 		return type(newType);
 	}
 

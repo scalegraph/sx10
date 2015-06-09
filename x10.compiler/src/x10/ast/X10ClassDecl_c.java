@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.ast;
@@ -80,6 +80,7 @@ import polyglot.visit.TypeChecker;
 import x10.errors.Errors;
 import x10.extension.X10Del;
 import x10.extension.X10Del_c;
+import x10.extension.X10Ext;
 import x10.types.MacroType;
 import x10.types.ParameterType;
 import x10.types.TypeDef;
@@ -490,6 +491,10 @@ public class X10ClassDecl_c extends ClassDecl_c implements X10ClassDecl {
                 final QName fullName = curr.fullName();
                 MethodDecl md = nf.MethodDecl(pos,nf.FlagsNode(pos,flags),returnType,nf.Id(pos,getThisMethod(containerName,fullName)),Collections.<Formal>emptyList(),
                         nf.Block(pos,nf.Return(pos,nf.Special(pos, Special.Kind.THIS, nf.CanonicalTypeNode(pos, curr)))));
+                ArrayList<AnnotationNode> ans = new ArrayList<AnnotationNode>(1);
+                AnnotationNode synthetic = nf.AnnotationNode(pos, nf.AmbMacroTypeNode(pos, nf.PrefixFromQualifiedName(pos,QName.make("x10.compiler")), nf.Id(pos, "Synthetic"), Collections.<TypeNode>emptyList(), Collections.<Expr>emptyList()));
+                ans.add(synthetic);
+                md = (X10MethodDecl) ((X10Ext) md.ext()).annotations(ans);
                 n = (X10ClassDecl_c) n.body(n.body().addMember(md));
 
                 if (curr.flags().isStatic() || !curr.isMember()) break; // a non-member class doesn't have an outer instance
@@ -1120,6 +1125,13 @@ public class X10ClassDecl_c extends ClassDecl_c implements X10ClassDecl {
     	    }
     	}
 
+    	final X10ClassType classType = type.asType();
+    	if (ts.isThrowable(classType) && classType.hasParams()) {
+    		SemanticException ex = new Errors.ParametricClassCannotExtendCheckedThrowable(type, position());
+    		Errors.issue(tc.job(), ex, this);
+    	}
+     
+    
     	try {
     	    ((X10ClassDef) type).checkRealClause();
     	} catch (SemanticException e) {
@@ -1347,7 +1359,7 @@ public class X10ClassDecl_c extends ClassDecl_c implements X10ClassDecl {
     }
 
     public static MethodInstance expandMacros(ContextVisitor tc, TypeSystem ts, MethodInstance mi, MethodInstance mj) {
-        return ((X10TypeEnv_c)ts.env(tc.context())).expandPropertyInMethod(Types.getClassType(mi.container(),ts,tc.context()),mj);
+        return ((X10TypeEnv_c)ts.env(tc.context())).expandPropertyInMethod(mj);
     }
 
     protected boolean isValidType(Type type) {

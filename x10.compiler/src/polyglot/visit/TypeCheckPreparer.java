@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.visit;
@@ -32,6 +32,7 @@ public class TypeCheckPreparer extends ContextVisitor
         this.setMemo(memo);
     }
     
+    @Override
     public Node override(Node parent, Node n) {
     	Node m = n.del().setResolverOverride(parent, this);
     	assert m == null || m == n : "setResolverOverride should not rewrite";

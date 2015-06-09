@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.visit;
@@ -64,7 +64,6 @@ import x10.types.X10ClassType;
 import x10.types.X10CodeDef;
 import x10.types.X10ConstructorInstance;
 import x10.types.X10MethodDef;
-
 import polyglot.types.TypeSystem;
 
 public class X10LocalClassRemover extends LocalClassRemover {
@@ -82,6 +81,7 @@ public class X10LocalClassRemover extends LocalClassRemover {
             super(fields, ct);
         }
             
+        @Override
         public Node leave(Node old, Node n, NodeVisitor v) {
             Node n_ = super.leave(old, n, v);
             

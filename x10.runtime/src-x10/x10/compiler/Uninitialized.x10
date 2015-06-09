@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.compiler;
@@ -14,7 +14,7 @@ package x10.compiler;
 import x10.lang.annotations.FieldAnnotation;
 
 /**
- * The @Uninitialized annotation on a var field instructs the frontend not to implicitely
- * initialize this field in constructors to the type default value.
+ * This annotation on a var field instructs the compiler frontend to not
+ * implicitly initialize this field to the type's default value.
  */
 public interface Uninitialized extends FieldAnnotation { }

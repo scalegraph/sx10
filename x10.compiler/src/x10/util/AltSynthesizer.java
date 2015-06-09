@@ -178,7 +178,7 @@ public class AltSynthesizer {
                     return null;
                 args.add(ei);
             }
-            return nf.Tuple(pos, args).type(ts.arrayOf(ts.Any()));
+            return nf.Tuple(pos, args).type(ts.Rail(ts.Any()));
         }
         return null;
     }
@@ -388,7 +388,7 @@ public class AltSynthesizer {
      * @return
      */
     public Expr createNotNull(Position pos, Expr expr, ContextVisitor visitor) {
-        return createBinary(pos, createNull(pos, expr.type()), Binary.NE, expr, visitor).type(ts.Boolean());
+        return createBinary(pos, expr, Binary.NE, createNull(pos, expr.type()), visitor).type(ts.Boolean());
     }
 
     /**
@@ -1218,7 +1218,7 @@ public class AltSynthesizer {
         for (int i=0; i<numElems; i++) {
             tupleVals.add(initForAllElems);
         }
-        Type elemType = ts.Array(initForAllElems.type());
+        Type elemType = ts.Rail(initForAllElems.type());
         return nf.Tuple(pos, tupleVals).type(elemType);
     }
 

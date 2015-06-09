@@ -6,33 +6,92 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.util;
 
-public interface Map[K,V]   {
-	public def containsKey(k: K): boolean;
+/**
+ * A map from keys to values.
+ */
+public interface Map[K,V] {V haszero} {
+    /**
+     * Does the map contain an entry for the argument key?
+     */
+    public def containsKey(k:K):Boolean;
 
-	public def get(k: K): Box[V];
+    /**
+     * Return the value mapped to the argument key.
+     * Will return Zero.get[T]() if !containsKey(k).
+     */
+    public def get(k:K):V;
 
-    public def getOrElse(k: K, orelse: V): V;
+    /**
+     * Shorthand for @link{#get}
+     */
+    public operator this(k:K):V;
 
-    public def getOrThrow(k: K): V; //throws NoSuchElementException;
+    /**
+     * If containsKey(k), return the value mapped to k; 
+     * otherwise return orlese
+     */
+    public def getOrElse(k:K, orelse:V):V;
 
-	public def put(k: K, v: V): Box[V];
+    /**
+     * If containsKey(k), return the value mapped to k; 
+     * otherwise throw a NoSuchElementException.
+     */
+    public def getOrThrow(k:K):V;
 
-	public def remove(k: K): Box[V];
+    /**
+     * Map k to v; returns either the old value mapped to k 
+     *  or Zero.get[T]() if k was not previously mapped to a value.
+     */
+    public def put(k:K, v:V):V;
 
-	public def keySet(): Set[K];
+    /**
+     * Shorthand for @link{#put}
+     */
+    public operator this(k:K)=(v:V):V;
 
-	public def clear(): void;
-	
-	public def entries(): Set[Entry[K,V]];
-	
-	public static interface Entry[Key,Val] {
-	    public def getKey(): Key;
-	    public def getValue(): Val;
-	    public def setValue(Val): void;
-	}
+    /**
+     * Remove the mapping for k from the map, returning
+     * a boolean to indicate whether or not k was actually
+     * in the map before the call to delete. 
+     */
+    public def delete(k:K):boolean;
+
+    /**
+     * Remove the mapping for k from the map, returning
+     * the value that was mapped to k or Zero.get[T] if
+     * k was not mapped to a value.
+     */
+    public def remove(k:K):V;
+
+    /**
+     * Remove all entries in the map
+     */
+    public def clear():void;
+    
+    /**
+     * Return a set of all keys in the map.
+     */
+    public def keySet():Set[K];
+
+    /**
+     * Return an entry set for the map containing all
+     * keys and values.
+     */
+    public def entries():Set[Entry[K,V]];
+    
+    /**
+     * Return the number of entries in the map.
+     */
+    public def size():Long;
+
+    public static interface Entry[Key,Val] {
+        public def getKey():Key;
+        public def getValue():Val;
+        public def setValue(v:Val):void;
+    }
 }

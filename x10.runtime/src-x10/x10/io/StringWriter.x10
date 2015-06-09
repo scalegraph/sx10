@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.io;
@@ -22,6 +22,16 @@ public class StringWriter extends Writer {
 
     public def write(x:Byte):void { 
         b.add(x as Char);
+    }
+
+    public def write(s:String):void { 
+        b.addString(s);
+    }
+
+    public def write(x:Rail[Byte], off:Long, len:Long):void { 
+        for (var i:Long = off; i<off+len; i++) {
+            b.add(x(i) as Char);
+        }
     }
 
     public def size() = b.length();

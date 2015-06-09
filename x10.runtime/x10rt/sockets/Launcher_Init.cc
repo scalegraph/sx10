@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  *
  *  This file was written by Ben Herta for IBM: bherta@us.ibm.com
  */
@@ -102,9 +102,18 @@ void Launcher::initialize(int argc, char ** argv)
 	/* ------------------------------------------------ */
 
 	_argc = argc;
-	_argv = argv;
+
+	// make a copy, because some platforms may delete argv after we return (e.g. Windows 7)
+	_argv = (char**)malloc((argc+1)*sizeof(char*));
+	_argv[argc] = NULL;
+	for (int i=0; i<argc; i++) {
+		_argv[i] = (char*)malloc((strlen(argv[i])+1)*sizeof(char));
+		strcpy(_argv[i], argv[i]);
+	}
+
 	if (NULL==realpath(argv[0], _realpath)) {
-        perror("Resolving absolute path of executable");
+        // couldn't resolve realpath; assume executable is in $PATH
+        strncpy(_realpath, argv[0], PATH_MAX);
     }
 	if (!getenv(X10_NPLACES))
 	{
@@ -119,8 +128,8 @@ void Launcher::initialize(int argc, char ** argv)
 	{
 		_myproc = atoi(getenv(X10_LAUNCHER_PLACE));
 		char* host = getenv(X10_LAUNCHER_HOST);
-		if (host) strcpy(_runtimePort, host);
-		else strcpy(_runtimePort, "localhost");
+		if (host) strncpy(_runtimePort, host, PORT_MAX);
+		else strncpy(_runtimePort, "localhost", PORT_MAX);
 	}
 
 	/* -------------------------------------------- */
@@ -138,7 +147,7 @@ void Launcher::initialize(int argc, char ** argv)
 		else
 			_numchildren = 1;
 		#ifdef DEBUG
-			fprintf(stderr, "Launcher %u has %i child%s\n", _myproc, _numchildren, _numchildren==1?"":"ren");
+			fprintf(stderr, "Launcher %d has %i child%s\n", _myproc, _numchildren, _numchildren==1?"":"ren");
 		#endif
 	}
 	else
@@ -154,7 +163,7 @@ void Launcher::initialize(int argc, char ** argv)
 	if (ssh_command && strlen(ssh_command) > 0)
 	{
 		if (strlen(ssh_command) > sizeof(_ssh_command) - 10)
-			DIE("Launcher %u: SSH command is too long", _myproc);
+			DIE("Launcher %d: SSH command is too long", _myproc);
 		strncpy(_ssh_command, ssh_command, sizeof(_ssh_command) - 1);
 	}
 
@@ -166,7 +175,7 @@ void Launcher::initialize(int argc, char ** argv)
 	if (hostfname && strlen(hostfname) > 0)
 	{
 		if (strlen(hostfname) > sizeof(_hostfname) - 10)
-			DIE("Launcher %u: host file name is too long", _myproc);
+			DIE("Launcher %d: host file name is too long", _myproc);
 		realpath(hostfname, _hostfname);
 		readHostFile();
 	}
@@ -182,7 +191,7 @@ void Launcher::initialize(int argc, char ** argv)
 		{
 			_hostlist = (char **) malloc(sizeof(char *) * childLaunchers);
 			if (!_hostlist)
-				DIE("Launcher %u: hostname memory allocation failure", _myproc);
+				DIE("Launcher %d: hostname memory allocation failure", _myproc);
 
 			uint32_t currentNumber = 0;
 			const char* hostNameStart = hostlist;
@@ -219,13 +228,13 @@ void Launcher::initialize(int argc, char ** argv)
 				int hlen = hostNameEnd-hostNameStart;
 				char * host = (char *) malloc(hlen+1);
 				if (!host)
-					DIE("Launcher %u: memory allocation failure", _myproc);
+					DIE("Launcher %d: memory allocation failure", _myproc);
 				strncpy(host, hostNameStart, hlen);
 				host[hlen] = '\0';
 				_hostlist[currentNumber-_firstchildproc] = host;
 
 				#ifdef DEBUG
-					fprintf(stderr, "Launcher %u: launcher for place %i is on %s\n", _myproc, currentNumber, host);
+					fprintf(stderr, "Launcher %d: launcher for place %i is on %s\n", _myproc, currentNumber, host);
 				#endif
 				if (endOfLine)
 					hostNameStart = hostlist;
@@ -254,11 +263,11 @@ void Launcher::initialize(int argc, char ** argv)
 void Launcher::readHostFile()
 {
 	#ifdef DEBUG
-		fprintf(stderr, "Launcher %u: Processing hostfile \"%s\"\n", _myproc, _hostfname);
+		fprintf(stderr, "Launcher %d: Processing hostfile \"%s\"\n", _myproc, _hostfname);
 	#endif
 	FILE * fd = fopen(_hostfname, "r");
 	if (!fd)
-		DIE("Launcher %u: cannot open hostfile '%s': exiting", _myproc, _hostfname);
+		DIE("Launcher %d: cannot open hostfile '%s': exiting", _myproc, _hostfname);
 
 	int childLaunchers;
 	if (_myproc == 0xFFFFFFFF)
@@ -270,7 +279,7 @@ void Launcher::readHostFile()
 	{
 		_hostlist = (char **) malloc(sizeof(char *) * childLaunchers);
 		if (!_hostlist)
-			DIE("Launcher %u: hostname memory allocation failure", _myproc);
+			DIE("Launcher %d: hostname memory allocation failure", _myproc);
 
 		uint32_t lineNumber = 0;
 		bool skipped = false;
@@ -302,17 +311,19 @@ void Launcher::readHostFile()
 
 			char * p = strtok(buffer, " \t\n\r");
 			int plen = p ? strlen(p) : 0;
-			if (plen <= 0)
+			if (plen <= 0) {
+				fprintf(stderr, "Launcher %d: detected a line %i is blank in hostfile!  Please verify hostfile contents.\n", _myproc, lineNumber);
 				break;
+			}
 
 			char * host = (char *) malloc(plen + 10);
 			if (!host)
-				DIE("Launcher %u: memory allocation failure", _myproc);
+				DIE("Launcher %d: memory allocation failure", _myproc);
 			strcpy(host, p);
 			_hostlist[lineNumber-_firstchildproc] = host;
 
 			#ifdef DEBUG
-				fprintf(stderr, "Launcher %u: launcher for place %i is on %s\n", _myproc, lineNumber, host);
+				fprintf(stderr, "Launcher %d: launcher for place %i is on %s\n", _myproc, lineNumber, host);
 			#endif
 			lineNumber++;
 		}

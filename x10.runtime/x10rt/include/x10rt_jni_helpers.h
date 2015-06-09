@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2013.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 #ifndef X10RT_JNI_HELPERS_H
@@ -37,6 +37,8 @@ extern JNIEnv* jniHelper_getEnv();
 extern void initCachedJVM(JNIEnv*);
 
 extern void jniHelper_abort(const char* format, ...);
+
+extern void jniHelper_oom(JNIEnv*, const char* msg);
 
 extern const char* X10_PAUSE_GC_ON_SEND;
     

@@ -6,17 +6,8 @@
 #  You may obtain a copy of the License at
 #      http://www.opensource.org/licenses/eclipse-1.0.php
 #
-#  (C) Copyright IBM Corporation 2006-2011.
+#  (C) Copyright IBM Corporation 2006-2014.
 #
-
-###################################################
-###################################################
-## Name:  	X10 application test
-## Created by: 	Juemin Zhang
-## Contact:   	zhangj@us.ibm.com
-###################################################
-###################################################
-
 
 ###################################################
 # Source and target file
@@ -27,10 +18,7 @@ target		= DistDenseExample
 
 # test source
 x10src		= $(target).x10
-
-# lib source
-gml_path    = ../../../matrix
-
+gml_path    = $(X10_HOME)/x10.gml
 
 # build path
 build_path	= build

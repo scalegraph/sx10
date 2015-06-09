@@ -1,15 +1,4 @@
 ###################################################
-###################################################
-## Name:  	X10 application test
-## Created by: 	Juemin Zhang
-## Contact:   	zhangj@us.ibm.com
-###################################################
-###################################################
-
-# Build [mpi|sockets|lapi] transport: make [mpi|sock|lapi]
-# Build java backend: make java
-# Build all excutable and java backend: make all
-###################################################
 # Source and target file
 ###################################################
 target = MatMatMult
@@ -21,10 +10,7 @@ depend_src  =
 #-------------------------------------
 # build path
 build_path	= build
-
-# GML path
-gml_path    = ../..
-
+gml_path    = $(X10_HOME)/x10.gml
 
 # compile options
 X10_FLAG	= -sourcepath ../.  -d $(build_path) -report postcompile=2 -v -errors 5 -VERBOSE_CHECKS -O -NO_CHECKS

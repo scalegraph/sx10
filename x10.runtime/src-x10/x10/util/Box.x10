@@ -6,21 +6,21 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.util;
 
 public final class Box[T] implements ()=> T {
-    public val value: T;
-    public def this(x: T) { value = x; }
+    public val value:T;
+    public def this(x:T) { value = x; }
 
-    public operator this()=value;
-    public def hashCode(): int = value.hashCode();
+    public operator this() = value;
+    public def hashCode():Int = value.hashCode();
 
-    public def toString(): String = value.toString();
+    public def toString():String = value.toString();
 
-    public def equals(x:Any): Boolean {
+    public def equals(x:Any):Boolean {
         if (x == null) {
             return false;
         }

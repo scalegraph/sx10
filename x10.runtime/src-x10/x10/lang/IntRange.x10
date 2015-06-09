@@ -6,10 +6,12 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.lang;
+
+import x10.array.DenseIterationSpace_2;
 
 /**
  * A representation of the range of integers [min..max].
@@ -23,12 +25,7 @@ public struct IntRange(
                /**
                 * The maximum value included in the range
                 */
-               max:Int,
-               
-               /**
-                * Is the range zero-based?
-                */
-               zeroBased: boolean
+               max:Int
 ) implements Iterable[Int] {
 
     /**
@@ -37,33 +34,40 @@ public struct IntRange(
      * @param max the maximum value of the range
      */
     public def this(min:Int, max:Int) {
-    	val zero:Boolean = min == 0;
-        property(min, max, zero);
+        property(min, max);
     }
     
     /**
-     * The product of two int ranges is interpreted as if the IntRanges
-     * were first converted to Region(1) and then the * operator applied.
+     * Convert a given LongRange to an IntRange.
+     * @param x the given LongRange
+     * @return the given LongRange converted to an IntRange.
      */
-    public operator this * (that:IntRange):Region(2){rect} {
-        return Region.makeRectangular([min, that.min], [max, that.max]);
+    public static operator (x:LongRange) as IntRange = IntRange(x.min as Int, x.max as Int);
+
+    /**
+     * Split the IntRange into N IntRanges that
+     * collectively represent the same set of Ints as this.
+     * @see x10.array.BlockUtils.partitionBlock
+     */
+    public def split(n:Int):Rail[IntRange]{/*self.size==n,*/self!=null} {
+        val numElems = max - min + 1n;
+        val blockSize = numElems/n;
+        val leftOver = numElems - n*blockSize;
+        return new Rail[IntRange](n, (iLong:Long)=>{
+            val i = iLong as Int;   
+            val low = min + blockSize*i + (i < leftOver ? i : leftOver);
+            val hi = low + blockSize + (i < leftOver ? 0n : -1n);
+            IntRange(low,hi)
+        });
     }
 
     /**
-     * Return a new IntRange of the same size of this, but
-     * with min/max shifted by i.
-     */    
-    public def translate(i:int) = new IntRange(min+i, max+i);
-
-    /**
-     * Return a new IntRange of the same size of this, but
-     * with min/max shifted by p(0).
-     */    
-    public def translate(p:Point(1)) = new IntRange(min+p(0), max+p(0));
-    
-    public operator this && (that:Region(1)): Region(1) = (this as Region(1)) && that;
-
-    public operator this -> (p:Place) = Dist.makeConstant(this as Region(1), p);
+     * Define the product of two IntRanges to be a rank-2 IterationSpace
+     * containing all the points defined by the cartesian product of the ranges.
+     */
+    public operator this * (that:IntRange):DenseIterationSpace_2{self!=null} {
+        return new DenseIterationSpace_2(min, that.min, max, that.max);
+    }
 
     public def toString():String = min+".."+max;
     
@@ -75,16 +79,16 @@ public struct IntRange(
         return false;
     }
     
-    public def hashCode():int = (max-min).hashCode();
+    public def hashCode():Int = (max-min).hashCode();
     
     public def iterator():Iterator[Int] {
         return new IntRangeIt(min, max);
     }  
 
     private static class IntRangeIt implements Iterator[Int] {
-        var cur:int;
-        val max:int;
-        def this(min:int, max:int) {
+        var cur:Int;
+        val max:Int;
+        def this(min:Int, max:Int) {
             this.cur = min;
             this.max = max;
         }

@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 #ifndef X10AUX_NETWORK_H
@@ -18,11 +18,10 @@
 #include <x10rt_cpp.h>
 
 namespace x10 { namespace lang { class VoidFun_0_0; } }
-namespace x10 { namespace lang { class FinishState; } }
+namespace x10 { namespace xrx { class FinishState; } }
 namespace x10 { namespace lang { class Reference; } }
 namespace x10 { namespace lang { class String; } }
-namespace x10 { namespace lang { class Runtime__Profile; } }
-namespace x10 { namespace util { template <class K, class V> class HashMap; } }
+namespace x10 { namespace xrx { class Runtime__Profile; } }
 
 namespace x10aux {
 
@@ -33,8 +32,21 @@ namespace x10aux {
     typedef x10rt_msg_type msg_type;
     typedef x10rt_copy_sz copy_sz;
     typedef x10_int place; // FIXME: should be x10rt_place, but place ids are signed everywhere
-    typedef x10rt_endpoint endpoint;
 
+    class deserialization_buffer;
+
+    typedef ::x10::lang::Reference* (*Deserializer)(deserialization_buffer &buf);
+
+    typedef void (*CUDAPre)(deserialization_buffer &buf, place p,
+                            size_t &blocks, size_t &threads, size_t &shm, size_t &argc, char *&argv, size_t &cmemc, char *&cmemv);
+
+    typedef void (*CUDAPost)(deserialization_buffer &buf, place p,
+                             size_t blocks, size_t threads, size_t shm, size_t argc, char *argv, size_t cmemc, char *cmemv);
+
+    typedef void *(*BufferFinder)(deserialization_buffer &buf, x10_int len);
+
+    typedef void (*Notifier)(deserialization_buffer &buf, x10_int len);
+    
     // a message type used for putting serialised kernel data on a gpu 
     extern msg_type kernel_put;
 
@@ -51,7 +63,6 @@ namespace x10aux {
     inline place parent (place p)             { return x10rt_parent(p); }
     inline place child (place p, place index) { return x10rt_child(p, index); }
     inline place child_index (place p)        { return x10rt_child_index(p); }
-    inline x10_boolean is_spe (place p)       { return x10rt_is_spe(p); }
     inline x10_boolean is_cuda (place p)      { return x10rt_is_cuda(p); }
 
     inline void event_probe (void)
@@ -72,6 +83,15 @@ namespace x10aux {
             abort();
         }
     }
+    inline void unblock_probe (void)
+	{
+		x10rt_error err = x10rt_unblock_probe();
+		if (err != X10RT_ERR_OK) {
+			if (x10rt_error_msg() != NULL)
+				fprintf(stderr, "X10RT fatal error: %s\n", x10rt_error_msg());
+			abort();
+		}
+	}
 
     extern const int cuda_cfgs[];
     void blocks_threads (place p, msg_type t, int shm, x10_ubyte &bs, x10_ubyte &ts, const int *cfgs=cuda_cfgs);
@@ -83,6 +103,7 @@ namespace x10aux {
     void blocks_threads (place p, msg_type t, int shm, x10_ulong &bs, x10_ulong &ts, const int *cfgs=cuda_cfgs);
     void blocks_threads (place p, msg_type t, int shm, x10_long &bs, x10_long &ts, const int *cfgs=cuda_cfgs);
 
+    void device_sync (place p);
 
     inline x10_ulong remote_alloc (place p, size_t sz) {
         _X_(ANSI_BOLD<<ANSI_X10RT<<"Remote alloc: "<<ANSI_RESET
@@ -119,6 +140,12 @@ namespace x10aux {
         }
     }
 
+    inline void flush_remote_ops() {
+        if (opc > 0) {
+            x10rt_remote_ops(opv,opc);
+            opc = 0;
+        }
+    }
 
     msg_type register_async_handler (const char *cubin=NULL, const char *kernel=NULL);
     msg_type register_put_handler (void);
@@ -153,22 +180,26 @@ namespace x10aux {
         _X_("X10RT shutdown complete");
     }
 
+    ::x10::lang::String *runtime_name (void);
 }
 
 namespace x10aux {
 
-    x10::util::HashMap<x10::lang::String*, x10::lang::String*>* loadenv();
-
-    void run_closure_at (place p, x10::lang::VoidFun_0_0* body, x10::lang::Runtime__Profile *prof=NULL, endpoint e=0);
-    void run_async_at (place p, x10::lang::VoidFun_0_0* body, x10::lang::FinishState* fs, x10::lang::Runtime__Profile *prof=NULL, endpoint e=0);
+    void run_closure_at(place p, ::x10::lang::VoidFun_0_0* body,
+                        ::x10::xrx::Runtime__Profile *prof,
+                        ::x10::lang::VoidFun_0_0* preSendAction);
+    void run_async_at(place p, ::x10::lang::VoidFun_0_0* body,
+                      ::x10::xrx::FinishState* fs,
+                      ::x10::xrx::Runtime__Profile *prof,
+                      ::x10::lang::VoidFun_0_0* preSendAction);
 
     class serialization_buffer;
 
     void send_get (place p, serialization_id_t id,
-                   serialization_buffer &buf, void *data, x10aux::copy_sz len, endpoint e=0);
+                   serialization_buffer &buf, void *data, ::x10aux::copy_sz len);
    
     void send_put (place p, serialization_id_t id,
-                   serialization_buffer &buf, void *data, x10aux::copy_sz len, endpoint e=0);
+                   serialization_buffer &buf, void *data, ::x10aux::copy_sz len);
 
     void cuda_put (place gpu, x10_ulong addr, void *var, size_t sz);
 

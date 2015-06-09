@@ -1,17 +1,39 @@
-Release 2.3.1
+X10 Release 2.5.2
 
-MAJOR CHANGES
+HIGHLIGHTS OF THIS RELEASE
 
-No major changes were made in the X10 language
-specification and implementation in this release.
+Although there were no X10 language changes in X10 2.5.2, this release
+does contain user-visible changes to the structure of the X10 class
+library.  
+   (1)  The implementation of the X10 Runtime was moved from the
+        x10.lang package to a new x10.xrx package.  Unlike x10.lang,
+	this package is not auto-imported into all programs. Programs
+	that make calls to x10.xrx.Runtime (or other impacted classes)
+	will need to be updated to import the used XRX classes. 
+   (2)  We continue to improve Resilient/Elastic X10 and have made a
+        number of API improvements to classes in the
+	x10.util.resilient package.
+   (3)  We have added built-in support for ghost regions to the
+        x10.regionarray.DistArray class.  Some mostly internal changes
+	to the DistArray API were made to enable this new
+	functionality (XTENLANG-3488,3489).
 
-Please consult the language specification for the details of
-any minor language changes and specification clarifications made in
-this release.
+This release also contains significant enhancements to the x10rt_mpi
+implementation, including exploitation of MPI-3 non-blocking
+collections by X10 Team operations to enable unrestricted mixing of
+APGAS asynchronous messaging with Team collective operations.
+
+This release is also the first time we are bundling the Lulesh proxy
+application with the X10 benchmarks. We continue to improve our Lulesh
+code, but believe it has now reached a level of stability and
+performance that make it generally usable as a X10 benchmark.
 
 LIMITATIONS OF THIS RELEASE
 
-The following features described in the 2.3 language manual do not
+The size and index of arrays must be less than 2^31 with Managed X10.
+An attempt to allocate a longer array causes IllegalArgumentException. 
+
+The following features described in the 2.5 language manual do not
 currently work and may be fixed in the subsequent releases:
   - Non-static type definitions as class or interface members
     (static type defs do work)
@@ -22,51 +44,40 @@ distinct constraints.
 
 Additionally, the following features described in the language
 manual do not currently work with Native X10.
-  - Garbage collection on AIX
   - Non-final generic instance methods
   - Exception stack traces on Cygwin
 
-Although greatly improved from previous releases, the X10 runtime 
-still uses a modified "busy wait" loop in the worker threads that 
-execute asyncs. A consequence of this is that even if a Place has 
-no asyncs to execute, one worker thread in the Place will still consume
-CPU cycles busy waiting for messages to arrive from the network.  
-
 The generated C++ code requires g++ 4.2 or better to be compiled; 
 we do almost all of our testing against g++ 4.4.
-  + On AIX and Power/Linux, you may either use g++ 4.2 or better or 
-    xlC 10.1.0.4 or better. 
-  + Some versions of Xcode on MacOS default to using the Clang C++
-    front-end; Clang cannot compile the generated C++ code; you need to
-    use the g++ front-end.  To do this export CC=gcc; CXX=g++.  
+  + On Power/Linux and BG/Q, you may either use g++ 4.2 or better
+    or xlC 11.1 or better. 
 
 SUMMARY OF ISSUES RESOLVED IN THIS RELEASE
 
-Below is a summary of JIRA issues addressed for the X10 2.3.1
+Below is a summary of JIRA issues addressed for the X10 2.5.2
 
-Release Notes - X10 - Version X10 2.3.1
+Release Notes - X10 - Version X10 2.5.2
 
 ** New Features and Improvements
-    * [XTENLANG-2069] - Implement Team API for Managed X10
-    * [XTENLANG-3145] - Need a way to configure machines with multiple IP addresses
-    * [XTENLANG-3165] - Eliminate requirement to preload all X10 classes by Managed X10
+    * [XTENLANG-1373] - Support for ghost cells in distributed arrays
+    * [XTENLANG-3447] - Splittable PNRG
+    * [XTENLANG-3479] - Add FileReader.offset()
+    * [XTENLANG-3480] - GML: add rank-one update (DGER)
+    * [XTENLANG-3484] - Move XRX runtime to x10.xrx package (out of x10.lang)
+    * [XTENLANG-3488] - Replace Dist.offset with Region.indexOf
+    * [XTENLANG-3490] - x10rt_mpi should default to MPI_THREAD_MULTIPLE
 
-** Bug
-    * [XTENLANG-2793] - Fallback path in pure Java for forceSinglePlace not available in some Team methods (KMeansSPMD)
-    * [XTENLANG-3140] - Exception checking fails if the methods of a class are in the wrong order
-    * [XTENLANG-3143] - Compiler not allowing a method override when there is a simple subtyping constraint
-    * [XTENLANG-3144] - Generic overridden overloaded method with parameter does not match with superclass method
-    * [XTENLANG-3159] - CUDA broken on 2.3 release (X10RT: async 72 is not a CUDA kernel)
-    * [XTENLANG-3163] - Failure to generate dynamic constraint check on access to global reference
-
-** Task
-    * [XTENLANG-3142] - Synchronize languagespec testcases with language spec document
-    * [XTENLANG-3160] - Use balanced gc policy for IBM Java 7 64bit
+** Bugs
+    * [XTENLANG-3354] - asyncCopy deadlocks on BG/Q
+    * [XTENLANG-3355] - alltoall segfaults on BG/Q
+    * [XTENLANG-3485] - On MacOs the jblas library must have extension .jnilib and not .so
+    * [XTENLANG-3486] - GML: transpose DenseMatrix.T(DenseMatrix) should store to invocation target
+    * [XTENLANG-3489] - Replace x10.regionarray.PeriodicDist with x10.regionarray.PeriodicBoundaryConditions
+    * [XTENLANG-3492] - Team creation fails over SparsePlaceGroup
 
 For the details of JIRA issues fixed in this release, see
-http://jira.codehaus.org/secure/ReleaseNote.jspa?projectId=11812&version=18657:
+http://jira.codehaus.org/secure/ReleaseNote.jspa?projectId=11812&version=20767
 
 Please use the X10 JIRA to report bugs, after ensuring the problem is
 not already reported:
 http://jira.codehaus.org/secure/IssueNavigator.jspa?reset=true&&pid=11812&resolution=-1
-

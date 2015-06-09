@@ -6,14 +6,13 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.core.fun;
 
 import x10.rtt.FunType;
 import x10.rtt.RuntimeType;
-import x10.rtt.RuntimeType.Variance;
 import x10.rtt.Type;
 
 public interface Fun_0_8<T1,T2,T3,T4,T5,T6,T7,T8,U> extends Fun {
@@ -21,16 +20,6 @@ public interface Fun_0_8<T1,T2,T3,T4,T5,T6,T7,T8,U> extends Fun {
     
     public static final RuntimeType<Fun_0_8<?,?,?,?,?,?,?,?,?>> $RTT = FunType.<Fun_0_8<?,?,?,?,?,?,?,?,?>> make(
         Fun_0_8.class,
-        new Variance[] {
-            Variance.CONTRAVARIANT,
-            Variance.CONTRAVARIANT,
-            Variance.CONTRAVARIANT,
-            Variance.CONTRAVARIANT,
-            Variance.CONTRAVARIANT,
-            Variance.CONTRAVARIANT,
-            Variance.CONTRAVARIANT,
-            Variance.CONTRAVARIANT,
-            Variance.COVARIANT
-        }
+        9
     );
 }

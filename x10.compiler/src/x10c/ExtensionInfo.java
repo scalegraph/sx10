@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10c;
@@ -25,6 +25,7 @@ import polyglot.types.TypeSystem;
 import polyglot.util.ErrorQueue;
 import polyglot.visit.PostCompiled;
 import x10.X10CompilerOptions;
+import x10.ExtensionInfo.X10Scheduler.ValidatingVisitorGoal;
 import x10.visit.X10Translator;
 import x10c.ast.X10CNodeFactory_c;
 import x10c.types.X10CTypeSystem_c;
@@ -43,6 +44,10 @@ import x10c.visit.StaticInitializer;
 import x10c.visit.VarsBoxer;
 
 public class ExtensionInfo extends x10.ExtensionInfo {
+    
+    public boolean isNativeX10() { return false; }
+    public boolean isManagedX10() { return true; }
+    
     @Override
     protected Scheduler createScheduler() {
         return new X10CScheduler(this);
@@ -63,6 +68,7 @@ public class ExtensionInfo extends x10.ExtensionInfo {
         return new X10CCompilerOptions(this);
     }
 
+    @Override
     public X10CCompilerOptions getOptions() {
         return (X10CCompilerOptions) super.getOptions();
     }
@@ -97,12 +103,14 @@ public class ExtensionInfo extends x10.ExtensionInfo {
                     goals.add(JavaCaster(job));
                     goals.add(InlineHelped(job));
                     goals.add(BoxingDetector(job));
+                    goals.add(PreCodegenASTInvariantChecker(job));
                 }
                 goals.add(g);
             }
             return goals;
         }
 
+        @Override
         protected Goal codegenPrereq(Job job) {
             return InlineHelped(job);
         }
@@ -125,9 +133,15 @@ public class ExtensionInfo extends x10.ExtensionInfo {
         protected Goal PostCompiled() {
             return new PostCompiled(extInfo) {
                 private static final long serialVersionUID = 1L;
+                @Override
                 protected boolean invokePostCompiler(Options options, Compiler compiler, ErrorQueue eq) {
                     if (System.getProperty("x10.postcompile", "TRUE").equals("FALSE"))
                         return true;
+                    
+                    // Ensure that there is no post compilation for ONLY_TYPE_CHECKING jobs
+                    X10CompilerOptions opts = extensionInfo().getOptions();
+                    if (opts.x10_config.ONLY_TYPE_CHECKING) return true;
+                    
                     return X10Translator.postCompile((X10CompilerOptions)options, compiler, eq);
                 }
             }.intern(this);
@@ -136,6 +150,7 @@ public class ExtensionInfo extends x10.ExtensionInfo {
         public Goal JavaCodeGenStart(Job job) {
             Goal cg = new SourceGoal_c("JavaCodeGenStart", job) { // Is this still necessary?
                 private static final long serialVersionUID = 1L;
+                @Override
                 public boolean runTask() { return true; }
             };
             return cg.intern(this);
@@ -206,8 +221,13 @@ public class ExtensionInfo extends x10.ExtensionInfo {
             NodeFactory nf = extInfo.nodeFactory();
             return new ValidatingVisitorGoal("ExpressionFlattenerForAtExpr", job, new ExpressionFlattenerForAtExpr(job, ts, nf)).intern(this);
         }
+        
+        public Goal PreCodegenASTInvariantChecker(Job job) {
+            return new ValidatingVisitorGoal("CodegenASTInvariantChecker", job, new PreCodeGenASTChecker(job)).intern(this);
+        }
     }
 
+    @Override
     public Desugarer makeDesugarer(Job job) {
         return new Desugarer(job, job.extensionInfo().typeSystem(), job.extensionInfo().nodeFactory());
     }

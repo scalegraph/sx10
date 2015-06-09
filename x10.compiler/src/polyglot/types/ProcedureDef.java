@@ -9,12 +9,14 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.types;
 
 import x10.types.constraints.CConstraint;
+import x10.types.constraints.CRequirement;
+import x10.types.constraints.CRequirementCollection;
 import x10.types.constraints.TypeConstraint;
 import x10.types.X10CodeDef;
 import x10.types.X10MemberDef;
@@ -58,6 +60,9 @@ public interface ProcedureDef extends CodeDef, X10CodeDef, X10MemberDef
     Ref<CConstraint> guard(); // yoav todo: I think the guard should be kept as a DepParameterExpr (and not as a CContstraint). see e.g., Desugarer.desugarCall that converts a constraint to an expression.
     void setGuard(Ref<CConstraint> s);
 
+    Ref<CConstraint> sourceGuard();
+    void setSourceGuard(Ref<CConstraint> s);
+
     Ref<TypeConstraint> typeGuard();
     void setTypeGuard(Ref<TypeConstraint> s);
 
@@ -69,5 +74,10 @@ public interface ProcedureDef extends CodeDef, X10CodeDef, X10MemberDef
     List<Ref<? extends Type>> throwTypes();
     void setThrowTypes(List<Ref<? extends Type>> l);
 
+    /** Set a flag indicating we should infer addition constraints in the guard. */
+    void inferGuard(boolean r);
+    /** Get the status of the flag inferGuard. */
+    boolean inferGuard();
 
+    CRequirementCollection requirements();
 }

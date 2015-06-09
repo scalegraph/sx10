@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 #include <x10aux/throw.h>
@@ -14,20 +14,18 @@
 #include <x10/lang/ArithmeticException.h>
 #include <x10/lang/ClassCastException.h>
 #include <x10/lang/NullPointerException.h>
+#include <x10/lang/UnsupportedOperationException.h>
 #include <x10/lang/String.h>
+#include <x10/io/NotSerializableException.h>
 
 using namespace x10::lang;
 
 void x10aux::throwArithmeticException() {
-#ifndef NO_EXCEPTIONS
     throwException(ArithmeticException::_make(String::Lit("divide by zero")));
-#endif
 }
 
 void x10aux::throwNPE() {
-#ifndef NO_EXCEPTIONS
     throwException<NullPointerException>();
-#endif
 }
 
 void x10aux::throwClassCastException(const char *msg_) {
@@ -44,4 +42,14 @@ void x10aux::throwClassCastException(const RuntimeType *from, const RuntimeType 
         msg = String::Steal(x10aux::alloc_printf("%s", to->name()));
     }
     throwException(ClassCastException::_make(msg));
+}
+
+void x10aux::throwUnsupportedOperationException(const char *msg_) {
+    String *msg = String::Lit(msg_);
+    throwException(UnsupportedOperationException::_make(msg));
+}
+
+void x10aux::throwNotSerializableException(const char *msg_) {
+    String *msg = String::Lit(msg_);
+    throwException(x10::io::NotSerializableException::_make(msg));
 }

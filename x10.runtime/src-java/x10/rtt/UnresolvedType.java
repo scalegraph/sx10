@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.rtt;
@@ -17,8 +17,6 @@ import x10.serialization.X10JavaSerializer;
 
 
 public final class UnresolvedType implements Type, X10JavaSerializable {
-
-    private static final long serialVersionUID = 1L;
 
     public static final UnresolvedType THIS = new UnresolvedType(-1);
     private static final UnresolvedType[] params = {

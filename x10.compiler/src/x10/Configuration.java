@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10;
@@ -47,6 +47,9 @@ public final class Configuration extends x10.config.Configuration {
     
     public boolean DEBUG_APP_ONLY = false;
     private static final String DEBUG_APP_ONLY_desc = "Only generate debug information for the user application; still link with non-debug version of libraries";
+
+    public boolean DEBUG_ENABLE_LINEMAPS = false;
+    private static final String DEBUG_ENABLE_LINEMAP_desc = "Generate linemaps and other debug info for experimental X10 debugger";
 
     public boolean NO_TRACES = false;
     private static final String NO_TRACES_desc = "Disable traces";
@@ -102,6 +105,11 @@ public final class Configuration extends x10.config.Configuration {
     public boolean STATIC_CHECKS = false;
     private static final String STATIC_CHECKS_desc = "Treat dynamic constraint checks as errors.";
 
+    public boolean VERBOSE_INFERENCE = false;
+    private static final String VERBOSE_INFERENCE_desc = "Print details of inferred guards.";
+
+    public boolean CONSTRAINT_INFERENCE = false;
+    private static final String CONSTRAINT_INFERENCE_desc = "Allow guard inference through the annotation @InferGuard.";
 
     public boolean VERBOSE = false;
     private static final String VERBOSE_desc = "Print details for various warnings that might be interested to the programmer.";
@@ -121,6 +129,9 @@ public final class Configuration extends x10.config.Configuration {
 
     public boolean OPTIMIZE_COMMUNICATIONS = false;
     private static final String OPTIMIZE_COMMUNICATIONS_desc = "Communication optimizations, i.e. scalar replacement";
+    
+    public boolean EXECUTOR_MODE = false;
+    private static final String EXECUTOR_MODE_desc = "Allow main method to submit and cancel jobs";
 
     /**
      * Parses one argument from the command line.  This allows the user

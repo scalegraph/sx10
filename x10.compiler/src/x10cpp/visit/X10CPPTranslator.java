@@ -6,46 +6,40 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10cpp.visit;
 
-import java.io.File;
+import static x10cpp.visit.ASTQuery.getCppRep;
+import static x10cpp.visit.ASTQuery.getStringPropertyInit;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
-import java.io.PrintWriter;
-
-import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
-import polyglot.ast.Assert;
 import polyglot.ast.Block;
 import polyglot.ast.Branch;
 import polyglot.ast.Catch;
 import polyglot.ast.ClassDecl;
 import polyglot.ast.ClassMember;
-import polyglot.ast.CompoundStmt;
 import polyglot.ast.ConstructorCall.Kind;
 import polyglot.ast.ConstructorDecl;
 import polyglot.ast.Eval;
 import polyglot.ast.FieldDecl;
 import polyglot.ast.For;
 import polyglot.ast.Formal;
-import polyglot.ast.If;
 import polyglot.ast.LocalDecl;
 import polyglot.ast.MethodDecl;
 import polyglot.ast.Node;
@@ -59,16 +53,12 @@ import polyglot.ast.SwitchBlock;
 import polyglot.ast.Term;
 import polyglot.ast.TopLevelDecl;
 import polyglot.ast.Try;
-
 import polyglot.frontend.Compiler;
 import polyglot.frontend.ExtensionInfo;
 import polyglot.frontend.Job;
-import polyglot.frontend.Source;
 import polyglot.frontend.TargetFactory;
-
 import polyglot.main.Options;
 import polyglot.main.Reporter;
-
 import polyglot.types.ClassType;
 import polyglot.types.Context;
 import polyglot.types.MemberDef;
@@ -84,12 +74,11 @@ import polyglot.util.DiffWriter;
 import polyglot.util.ErrorInfo;
 import polyglot.util.ErrorQueue;
 import polyglot.util.InternalCompilerError;
+import polyglot.util.Position;
 import polyglot.util.SimpleCodeWriter;
 import polyglot.util.StdErrorQueue;
 import polyglot.util.StringUtil;
-import polyglot.util.CollectionUtil; import x10.util.CollectionFactory;
 import polyglot.visit.Translator;
-import x10.ast.Closure;
 import x10.ast.ForLoop;
 import x10.ast.X10ClassDecl;
 import x10.ast.X10ConstructorCall;
@@ -98,25 +87,17 @@ import x10.extension.X10Ext;
 import x10.types.X10ClassDef;
 import x10.types.X10ClassType;
 import x10.util.ClassifiedStream;
+import x10.util.CollectionFactory;
 import x10.util.StreamWrapper;
 import x10.util.WriterStreams;
 import x10.visit.StaticNestedClassRemover;
-import x10cpp.Configuration;
 import x10cpp.X10CPPCompilerOptions;
 import x10cpp.X10CPPJobExt;
 import x10cpp.debug.LineNumberMap;
-import x10cpp.postcompiler.AIX_CXXCommandBuilder;
 import x10cpp.postcompiler.CXXCommandBuilder;
-import x10cpp.postcompiler.Cygwin_CXXCommandBuilder;
-import x10cpp.postcompiler.Linux_CXXCommandBuilder;
 import x10cpp.postcompiler.PostCompileProperties;
 import x10cpp.postcompiler.SharedLibProperties;
-import x10cpp.postcompiler.SunOS_CXXCommandBuilder;
-import x10cpp.postcompiler.CXXMakeBuilder;
 import x10cpp.types.X10CPPContext_c;
-import static x10cpp.visit.ASTQuery.getCppRep;
-import static x10cpp.visit.ASTQuery.getStringPropertyInit;
-import static x10cpp.visit.SharedVarsMethods.*;
 
 public class X10CPPTranslator extends Translator {
 	
@@ -179,10 +160,12 @@ public class X10CPPTranslator extends Translator {
 				 (n instanceof ConstructorDecl) ||
 				 (n instanceof ClassDecl)))
 		{
-		    String nodeName = n instanceof Eval ? ("Eval of "+(((Eval)n).expr().getClass().getName())) : n.getClass().getName();
-			w.forceNewline(0);
-			w.write("//#line " + line + " \"" + file + "\": "+nodeName);
-			w.newline();
+		    Position lastLine = ((X10CPPContext_c)context).lastLine;
+		    if (lastLine == null || lastLine.line() != line || !lastLine.file().equals(file)) {
+		        ((X10CPPContext_c)context).lastLine = n.position();
+		        w.forceNewline(0);
+		        w.writeln("//#line " + line + " \"" + file + "\"");
+		    }
 		}
 		
 		X10CPPCompilerOptions opts = (X10CPPCompilerOptions) job.extensionInfo().getOptions();
@@ -194,7 +177,7 @@ public class X10CPPTranslator extends Translator {
 
 		final int endLine = w.currentStream().getStreamLineNumber() - w.currentStream().getOmittedLines(); // for debug info
 
-		if (opts.x10_config.DEBUG && line > 0 &&
+		if (opts.x10_config.DEBUG && opts.x10_config.DEBUG_ENABLE_LINEMAPS && line > 0 &&
 		    ((n instanceof Stmt && !(n instanceof SwitchBlock) && !(n instanceof Catch)) ||
 		     (n instanceof ClassMember)))
 		{
@@ -330,7 +313,7 @@ public class X10CPPTranslator extends Translator {
 		context = c;
 	}
 
-    private static void maybeCopyTo (String file, String src_path_, String dest_path_) {
+    private static void maybeCopyTo (String file, String src_path_, String dest_path_, Compiler compiler, boolean noPostCompiler) {
 		File src_path = new File(src_path_);
     	File dest_path = new File(dest_path_);
     	// don't copy if the two dirs are the same...
@@ -353,8 +336,9 @@ public class X10CPPTranslator extends Translator {
 	    	}
             dest.close();
     	} catch (IOException e) {
-        	System.err.println("While copying "+file + " from "+src_path_+" to "+dest_path_);
-    		System.err.println(e);
+    	    if (!noPostCompiler) {
+    	        compiler.errorQueue().enqueue(ErrorInfo.WARNING, "Failed to copy "+file + " from "+src_path_+" to "+dest_path_);
+    	    }
     	}
     }
 
@@ -377,7 +361,7 @@ public class X10CPPTranslator extends Translator {
 			X10CPPCompilerOptions opts = (X10CPPCompilerOptions) job.extensionInfo().getOptions();
 			TypeSystem xts = typeSystem();
 
-			if (opts.x10_config.DEBUG)
+			if (opts.x10_config.DEBUG && opts.x10_config.DEBUG_ENABLE_LINEMAPS)
 				c.addData(FILE_TO_LINE_NUMBER_MAP, CollectionFactory.newHashMap());
 
 			// Use the source file name as the basename for the output .cc file
@@ -386,7 +370,7 @@ public class X10CPPTranslator extends Translator {
 			boolean generatedCode = false;
             WriterStreams fstreams = new WriterStreams(fname, pkg, job, tf);
 
-            if (opts.x10_config.DEBUG) {
+            if (opts.x10_config.DEBUG && opts.x10_config.DEBUG_ENABLE_LINEMAPS) {
                 Map<String, LineNumberMap> fileToLineNumberMap =
                     c.<Map<String, LineNumberMap>>getData(FILE_TO_LINE_NUMBER_MAP);
                 fileToLineNumberMap.put(fstreams.getStreamName(StreamWrapper.CC), new LineNumberMap());
@@ -409,14 +393,14 @@ public class X10CPPTranslator extends Translator {
 		                ASTQuery.assertNumberOfInitializers(at, 1);
 		                String include = getStringPropertyInit(at, 0);
 		                job.compiler().addOutputFile(sfn, pkg_+include);
-		                maybeCopyTo(include, path, out_path+pkg_);
+		                maybeCopyTo(include, path, out_path+pkg_, job.compiler(), opts.post_compiler == null);
 		            }
 		            as = ext.annotationMatching(xts.systemResolver().findOne(QName.make("x10.compiler.NativeCPPOutputFile")));
 		            for (Type at : as) {
 		                ASTQuery.assertNumberOfInitializers(at, 1);
 		                String file = getStringPropertyInit(at, 0);
 		                job.compiler().addOutputFile(sfn, pkg_+file);
-		                maybeCopyTo(file, path, out_path+pkg_);
+		                maybeCopyTo(file, path, out_path+pkg_, job.compiler(), opts.post_compiler == null);
 		            }
 		            as = ext.annotationMatching(xts.systemResolver().findOne(QName.make("x10.compiler.NativeCPPCompilationUnit")));
 		            for (Type at : as) {
@@ -424,7 +408,7 @@ public class X10CPPTranslator extends Translator {
 		                String compilation_unit = getStringPropertyInit(at, 0);
 		                job.compiler().addOutputFile(sfn, pkg_+compilation_unit);
 		                opts.compilationUnits().add(pkg_+compilation_unit);
-		                maybeCopyTo(compilation_unit, path, out_path+pkg_);
+		                maybeCopyTo(compilation_unit, path, out_path+pkg_, job.compiler(), opts.post_compiler == null);
 		            }
 		        } catch (SemanticException e) {
 		            assert false : e;
@@ -445,7 +429,7 @@ public class X10CPPTranslator extends Translator {
 				String header = wstreams.getStreamName(StreamWrapper.Header);
 				job.compiler().addOutputFile(sfn, header);
 				
-				if (opts.x10_config.DEBUG) {
+				if (opts.x10_config.DEBUG && opts.x10_config.DEBUG_ENABLE_LINEMAPS) {
 					Map<String, LineNumberMap> fileToLineNumberMap =
 					    c.<Map<String, LineNumberMap>>getData(FILE_TO_LINE_NUMBER_MAP);
 					fileToLineNumberMap.put(header, new LineNumberMap());
@@ -469,7 +453,7 @@ public class X10CPPTranslator extends Translator {
 			    job.compiler().addOutputFile(sfn, cc);
                 opts.compilationUnits().add(cc);
                 
-                if (opts.x10_config.DEBUG) {
+                if (opts.x10_config.DEBUG && opts.x10_config.DEBUG_ENABLE_LINEMAPS) {
                     Map<String, LineNumberMap> fileToLineNumberMap =
                         c.<Map<String, LineNumberMap>>getData(FILE_TO_LINE_NUMBER_MAP);
                     ClassifiedStream debugStream = fstreams.getNewStream(StreamWrapper.CC, false);
@@ -746,9 +730,6 @@ public class X10CPPTranslator extends Translator {
 	}
 
     public static boolean doPostCompile(Options options, ErrorQueue eq, Collection<String> outputFiles, String[] cxxCmd) {
-    	return doPostCompile(options, eq, outputFiles, cxxCmd, false);
-    }
-    public static boolean doPostCompile(Options options, ErrorQueue eq, Collection<String> outputFiles, String[] cxxCmd, boolean noError) {
         Reporter reporter = options.reporter;
         if (reporter.should_report(postcompile, 1)) {
         	StringBuffer cmdStr = new StringBuffer();
@@ -791,16 +772,16 @@ public class X10CPPTranslator extends Translator {
         		runtime.exec(rmCmd, null, options.output_directory);
         	}
 
-        	if (output != null)
-        		eq.enqueue((proc.exitValue() > 0 && !noError) ? ErrorInfo.POST_COMPILER_ERROR : ErrorInfo.WARNING, output);
+        	if (output != null) {
+        		eq.enqueue((proc.exitValue() > 0) ? ErrorInfo.POST_COMPILER_ERROR : ErrorInfo.WARNING, output);
+        	}
         	if (proc.exitValue() > 0) {
-        		eq.enqueue(noError?ErrorInfo.WARNING:ErrorInfo.POST_COMPILER_ERROR,
-        				"Non-zero return code: " + proc.exitValue());
+        		eq.enqueue(ErrorInfo.POST_COMPILER_ERROR,"Non-zero return code: " + proc.exitValue());
         		return false;
         	}
         }
         catch(Exception e) {
-        	eq.enqueue(noError?ErrorInfo.WARNING:ErrorInfo.POST_COMPILER_ERROR, e.getMessage() != null ? e.getMessage() : e.toString());
+        	eq.enqueue(ErrorInfo.POST_COMPILER_ERROR, e.getMessage() != null ? e.getMessage() : e.toString());
         	return false;
         }
         return true;

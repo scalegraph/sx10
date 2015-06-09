@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.visit;
@@ -232,7 +232,6 @@ public class X10DelegatingVisitor {
 		if (n instanceof Local_c) { visit((Local_c)n); return; }
 		if (n instanceof X10StringLit_c) { visit((X10StringLit_c)n); return; }
 		if (n instanceof StringLit_c) { visit((StringLit_c)n); return; }
-		if (n instanceof IntLit_c) { visit((IntLit_c)n); return; }
 		if (n instanceof IntLit_c) { visit((IntLit_c)n); return; }
 		if (n instanceof X10CharLit_c) { visit((X10CharLit_c)n); return; }
 		if (n instanceof CharLit_c) { visit((CharLit_c)n); return; }

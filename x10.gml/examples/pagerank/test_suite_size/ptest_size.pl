@@ -8,7 +8,7 @@
 #  You may obtain a copy of the License at
 #      http://www.opensource.org/licenses/eclipse-1.0.php
 #
-#  (C) Copyright IBM Corporation 2006-2011.
+#  (C) Copyright IBM Corporation 2006-2014.
 #
 
 use strict;
@@ -212,7 +212,7 @@ sub RunTestSuite {
 	  my %dnp=();
 	  foreach my $nn (@NodeList) {
 		my $np        = $nn * $ProcPerNode;
-		my $exe_param = "$ms $itnum 0 1 $NZDensity";
+		my $exe_param = "-m $ms --iterations --density $NZDensity";
                 my @retval = RunTest("$launch -N$nn -n$np $BatchModeOpt $wrap $testexe $exe_param");
 
 		$dnp{$nn} = [ @retval ];

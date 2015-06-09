@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 #include <x10/lang/X10Class.h>
@@ -20,7 +20,6 @@ x10::lang::String* x10::lang::X10Class::typeName() {
 }
 
 void x10::lang::X10Class::dealloc_object(X10Class *obj) {
-    _M_("Attempting to dealloc object "<<(void*)obj);
     obj->_destructor();
     x10aux::dealloc(obj);
 }
@@ -33,6 +32,6 @@ void x10::lang::X10Class::_initRTT() {
     rtt.initStageTwo("x10.lang.X10Class", RuntimeType::class_kind, 1, parents, 0, NULL, NULL);
 }
 
-itable_entry x10::lang::X10Class::empty_itable[1] = { itable_entry(NULL,  (void*)x10::lang::X10Class::getRTT()) };
+itable_entry x10::lang::X10Class::empty_itable[1] = { itable_entry(NULL,  (void*)"x10.lang.X10Class") };
 
 // vim:tabstop=4:shiftwidth=4:expandtab

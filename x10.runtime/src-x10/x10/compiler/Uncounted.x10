@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.compiler;
@@ -14,7 +14,8 @@ package x10.compiler;
 import x10.lang.annotations.StatementAnnotation;
 
 /**
- * @Uncounted may be used to annotate a non-clocked async.
+ * This annotation on an async indicates that the async should be ignored
+ * in the context of finish and clocks.
  * The body of an @Uncounted async may only contain @Uncounted asyncs.
  * The body of an @Uncounted async may contain a finish, which in turn can contain both regular and @Uncounted asyncs.
  * @Uncounted asyncs are not accounted for by the enclosing finish.
@@ -37,12 +38,12 @@ import x10.lang.annotations.StatementAnnotation;
  * }
  * 
  * public class Foo {
- *     public static def main(args:Array[String]) {
+ *     public static def main(args:Rail[String]) {
  *         val box = new Box[Boolean](false);
  *         @Uncounted async (here.next()) {
  *             Runtime.println("HELLO");
  *             @Uncounted async (box) {
- *             atomic box.t = true;
+ *                 atomic box.t = true;
  *             }
  *         }
  *         await box.t;

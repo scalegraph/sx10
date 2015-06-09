@@ -6,35 +6,36 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2012.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.core;
 
-import x10.io.SerialData;
-import x10.lang.Place;
+import java.io.IOException;
+
+import x10.core.fun.VoidFun_0_0;
+import x10.io.Unserializable;
 import x10.rtt.NamedType;
 import x10.rtt.RuntimeType;
 import x10.rtt.Type;
-import x10.rtt.Types;
 import x10.serialization.X10JavaSerializer;
-import x10.x10rt.X10RT;
-
-import java.io.IOException;
 
 /**
  */
-public class Thread implements Any {
-    private static final long serialVersionUID = 1L;
+public class Thread implements Any, Unserializable {
     public static final RuntimeType<Thread> $RTT = NamedType.<Thread> make("x10.lang.Thread", Thread.class);
     public RuntimeType<?> $getRTT() { return $RTT; }
     public Type<?> $getParam(int i) { return null; }
 
     private java.lang.Thread jthread;
 
+    public static boolean isX10WorkerThread$O() {
+	return java.lang.Thread.currentThread() instanceof X10WorkerThread;
+    }
+
     static final ThreadLocal<Thread> context = new ThreadLocal<Thread>() {
         protected Thread initialValue() {
-            return x10.lang.Runtime.wrapNativeThread();
+            return x10.xrx.Runtime.wrapNativeThread();
         }
     };
 
@@ -42,38 +43,40 @@ public class Thread implements Any {
         return context.get();
     }
 
-    private Place home;    // the current place
-
-    public x10.core.fun.VoidFun_0_0 body;
+    public VoidFun_0_0 body;
 
     // constructor just for allocation
     public Thread(java.lang.System[] $dummy) {}
-    public Thread(SerialData $dummy) {
-        throw new java.lang.UnsupportedOperationException("Cannot deserialize Thread");
-    }
 
-    public final Thread x10$lang$Thread$$init$S(java.lang.String name) {
-        jthread = new java.lang.Thread(name) {
+    class X10WorkerThread extends java.lang.Thread {
+	public X10WorkerThread (String name) {
+	    super(name);
+	}
             public void run() {
-                context.set(Thread.this);
-                if (null != body) {
-                    body.$apply();
-                } else {
-                    $apply();
-                }
-            }
-        };
-        home = Place.place(X10RT.here());
-        return this;
+	       context.set(Thread.this);
+	       if (null != body) {
+		   body.$apply();
+	       } else {
+		   $apply();
+	       }
+	   }
+        }
+
+    public final Thread x10$lang$Thread$$init$S(String name) {
+        jthread = new X10WorkerThread(name);
+	return this;
+    }
+    
+    public void removeWorkerContext() {
+        context.set(null);
     }
 
-    public Thread(java.lang.String name) {
+    public Thread(String name) {
         x10$lang$Thread$$init$S(name);
     }
 
     public final Thread x10$lang$Thread$$init$S() {
         jthread = java.lang.Thread.currentThread();
-        home = Place.place(X10RT.here());
         return this;
     }
 
@@ -92,18 +95,11 @@ public class Thread implements Any {
         jthread.join();
     }
 
-    /**
-     * Return current place
-     */
-    public Place home() {
-        return home;
-    }
-
-    public java.lang.String name() {
+    public String name() {
         return jthread.getName();
     }
 
-    public void name(java.lang.String name) {
+    public void name(String name) {
         jthread.setName(name);
     }
 
@@ -132,19 +128,23 @@ public class Thread implements Any {
             java.lang.Thread.sleep(time, nanos);
         } catch (java.lang.InterruptedException e) {
             try {
-                throw java.lang.Class.forName("x10.lang.InterruptedException").asSubclass(java.lang.RuntimeException.class).newInstance();
+                throw new x10.xrx.InterruptedException();
             } catch (java.lang.Exception e2) {
                 e2.printStackTrace();
             }
         }
     }
 
+    private Object writeReplace() throws java.io.ObjectStreamException {
+        throw new x10.io.NotSerializableException("Cannot serialize " + getClass());
+    }
+
     public short $_get_serialization_id() {
-        throw new java.lang.UnsupportedOperationException("Cannot serialize " + getClass());
+        throw new x10.io.NotSerializableException("Cannot serialize " + getClass());
     }
 
     public void $_serialize(X10JavaSerializer $serializer) throws IOException {
-        throw new java.lang.UnsupportedOperationException("Cannot serialize " + getClass());
+        throw new x10.io.NotSerializableException("Cannot serialize " + getClass());
     }
 
 }

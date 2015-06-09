@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.compiler;
@@ -18,6 +18,7 @@ import x10.lang.annotations.*;
  * lang is the name of the language, typically "java" or "c++".
  * code is the code to insert for a call to the method or an access to the field.
  *
+ * <pre>
  * For "java" annotations:
  *
  * Given a method with signature:
@@ -37,5 +38,6 @@ import x10.lang.annotations.*;
  * For "c++" annotations:
  *
  * As for "java" except boxed and run-time representations of type vars should not be used.
+ * </pre>
  */
 public interface Native(lang: String, code: String) extends NoInferType, StatementAnnotation, MethodAnnotation, FieldAnnotation { }

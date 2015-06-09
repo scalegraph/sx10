@@ -6,15 +6,17 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 //package commu.distmatrix;
 
-import x10.io.Console;
 import x10.util.Timer;
 
-import x10.matrix.Debug;
+import x10.regionarray.Dist;
+import x10.regionarray.DistArray;
+
+import x10.matrix.util.Debug;
 import x10.matrix.Matrix;
 import x10.matrix.DenseMatrix;
 import x10.matrix.block.Grid;
@@ -24,37 +26,28 @@ import x10.matrix.block.DenseBlockMatrix;
 import x10.matrix.dist.DistDenseMatrix;
 import x10.matrix.dist.DupDenseMatrix;
 
-import x10.matrix.comm.CommHandle;
 import x10.matrix.comm.MatrixRemoteCopy;
 import x10.matrix.comm.MatrixBcast;
-import x10.matrix.comm.MatrixGather;
 import x10.matrix.comm.MatrixScatter;
 import x10.matrix.comm.MatrixReduce;
 
 /**
-   This class contains test cases for dense matrix multiplication.
-   <p>
-
-   <p>
+ * This class contains benchmarks for array communication operations.
  */
-
 public class TestCommu{
-    public static def main(args:Array[String](1)) {
+    public static def main(args:Rail[String]) {
 		val testcase = new TestDistMatrixCommu(args);
 		testcase.run();
 	}
 }
 
-
 class TestDistMatrixCommu {
-
 	public val vrfy:Boolean;
-	public val iter:Int;
-	public val M:Int;
+	public val iter:Long;
+	public val M:Long;
 
-	public val nplace:Int = Place.MAX_PLACES;
-	public val segt:Array[Int](1);
-
+	public val nplace:Long = Place.numPlaces();
+	public val segt:Rail[Long];
 	
 	public var syncTime:Long = 0;
 	public var gatherTime:Long = 0;
@@ -62,8 +55,7 @@ class TestDistMatrixCommu {
 	public var allgatherTime:Long = 0;
 	public var reduceTime:Long = 0;
 	
-	//---------
-	public val dist:Dist= Dist.makeUnique();
+	public val dist = Dist.makeUnique();
 	
 	public val dA:DistDenseMatrix;
 	public val dB:DistDenseMatrix;
@@ -76,17 +68,15 @@ class TestDistMatrixCommu {
 		
 	public val gpart:Grid;
 	
-	public val szlist:Array[Int](1);
+	public val szlist:Rail[Long];
 	
-	public val checkTime:Array[Long](1) = new Array[Long](Place.MAX_PLACES);
-	
-	public def this(args:Array[String](1)) {
-		val m = args.size > 0 ?Int.parse(args(0)):1024;
+	public def this(args:Rail[String]) {
+		val m = args.size > 0 ? Long.parse(args(0)):1024;
 		M = m;
-		iter = args.size > 1 ? Int.parse(args(1)):1;
+		iter = args.size > 1 ? Long.parse(args(1)):1;
 		vrfy = args.size > 2 ? true : false;
 		
-		segt =  new Array[Int](nplace, (i:Int)=>m);   
+		segt =  new Rail[Long](nplace, (i:Long)=>m);   
 		gpart = new Grid(m*nplace, 1, nplace, 1);
 		
 		dA   = DistDenseMatrix.make(gpart);
@@ -119,7 +109,7 @@ class TestDistMatrixCommu {
 				Console.OUT.println("--------Test of dist array communication failed!--------");
 		}	
 	}
-	//------------------------------------------------
+
 	public def testCopy():Boolean {
 		val op:MatrixRemoteCopy = new MatrixRemoteCopy();
 		var ret:Boolean = true;
@@ -127,13 +117,11 @@ class TestDistMatrixCommu {
 		ddA.local().initRandom();
 		
 		val stt:Long = Timer.milliTime();
-		for (var i:Int=0; i<iter; i++) {
-			for (var p:Int=0; p<nplace; p++) {
+		for (var i:Long=0; i<iter; i++) {
+			for (var p:Long=0; p<nplace; p++) {
 				if (p != here.id()) {
-					//var st:Long =  Timer.milliTime();
 					val srcden=ddA.local();
 					op.copy(srcden, 0, ddA.dupMs, p, 0, srcden.N);
-					//checkTime(p) =  Timer.milliTime() - st; 
 				}
 			}
 		}
@@ -144,25 +132,22 @@ class TestDistMatrixCommu {
 		if (vrfy) {
 			ret = ddA.syncCheck();
 			if (ret)
-				Console.OUT.println("Test P2P copy for DupMatrix commu test passed!");
+				Console.OUT.println("Test P2P copy for DupDenseMatrix commu test passed!");
 			else
-				Console.OUT.println("-----Test P2P copy for DupMatrix commu failed!-----");
+				Console.OUT.println("-----Test P2P copy for DupDenseMatrix commu failed!-----");
 		}
 		return ret;
-		
 	}	
-	
-	
-	//------------------------------------------------
+
 	public def testBcast():Boolean {
 		val op:MatrixBcast = new MatrixBcast();
 		var ret:Boolean = true;
 		ddA.local().initRandom();
-		Console.OUT.printf("\nTest DupMatrix bcast over %d places\n", nplace);
+		Console.OUT.printf("\nTest DupDenseMatrix bcast over %d places\n", nplace);
 		
 		//denA.initRandom();
 		val stt=Timer.milliTime();
-		for (var i:Int=0; i<iter; i++) {
+		for (var i:Long=0; i<iter; i++) {
 			ddA.sync();
 		}
 		val tt = 1.0 * (Timer.milliTime() - stt)/iter;
@@ -171,9 +156,9 @@ class TestDistMatrixCommu {
 		if (vrfy) {
 			ret = ddA.syncCheck();
 			if (ret)
-				Console.OUT.println("Test bcast for DupMatrix commu test passed!");
+				Console.OUT.println("Test bcast for DupDenseMatrix commu test passed!");
 			else
-				Console.OUT.println("-----Test bcast for DupMatrix commu failed!-----");
+				Console.OUT.println("-----Test bcast for DupDenseMatrix commu failed!-----");
 		}
 		return ret;
 	}
@@ -184,7 +169,7 @@ class TestDistMatrixCommu {
 		Console.OUT.printf("\nTest DistMatrix gather over %d places\n", nplace);
 
 		val st = Timer.milliTime();
-		for (var i:Int=0; i<iter; i++) {
+		for (var i:Long=0; i<iter; i++) {
 			dA.copyTo(bA as DenseBlockMatrix(dA.M, dA.N));
 		}
 		val tt = (1.0*Timer.milliTime()-st)/iter;
@@ -205,7 +190,7 @@ class TestDistMatrixCommu {
 		bA.initRandom();
 		Console.OUT.printf("\nTest DistMatrix scatter over %d places\n", nplace);
 		val stt = Timer.milliTime();
-		for (var i:Int=0; i<iter; i++) {
+		for (var i:Long=0; i<iter; i++) {
 			//dA.comm.p2pOp.copy(dA.local(), 0, dA.distBs, 1, 0, dA.local().N); 
 			dA.copyFrom(bA as DenseBlockMatrix(dA.M, dA.N));
 		}
@@ -229,10 +214,10 @@ class TestDistMatrixCommu {
 		var ret:Boolean = true;
 		ddA.init(1.0);
 		//dd.print("Source");
-		Console.OUT.printf("\nTest reduce of DupMatrix over %d places\n", nplace);
+		Console.OUT.printf("\nTest reduce of DupDenseMatrix over %d places\n", nplace);
 
 		val stt=Timer.milliTime();
-		for (var i:Int=0; i<iter; i++) {
+		for (var i:Long=0; i<iter; i++) {
 			ddA.reduceSum();
 		}
 		val tt = 1.0*(Timer.milliTime() - stt)/iter;
@@ -242,9 +227,9 @@ class TestDistMatrixCommu {
 			//dat.print("Result");
 			ret = ddA.equals(1.0*nplace);
 			if (ret)
-				Console.OUT.println("Test reduce of DupMatrix passed!");
+				Console.OUT.println("Test reduce of DupDenseMatrix passed!");
 			else
-				Console.OUT.println("-----Test reduce of DupMatrix failed!-----");
+				Console.OUT.println("-----Test reduce of DupDenseMatrix failed!-----");
 		}
 		return ret;
 	}

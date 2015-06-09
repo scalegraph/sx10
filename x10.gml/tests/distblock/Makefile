@@ -1,20 +1,9 @@
 ###################################################
-###################################################
-## Name:  	X10 application test
-## Created by: 	Juemin Zhang
-## Contact:   	zhangj@us.ibm.com
-###################################################
-###################################################
-
-
-###################################################
 # Source and target file
 ###################################################
-target_list 	= TestDistBlock TestDupBlock TestDistMult TestDistDupMult TestGridCast TestGridReduce TestSumma TestDistVector TestDupVector TestDistDupVectorMult
+target_list 	= TestDistBlock TestDupBlock TestDistMult TestDistDupMult TestDupDistMult TestSumma TestDistVector TestDupVector TestDistDupVectorMult
 
-target		= TestSumma
-#target		= TestDistSparse
-#target		= TestDist
+target		= TestDupVector
 #target		= TestDistDupMult
 
 # build path
@@ -24,8 +13,8 @@ build_path	= build
 gml_path    = ../../
 
 # compile options
-X10_FLAG	= -d $(build_path) -report postcompile=2 -v -errors 5 -VERBOSE_CHECKS 
-#-O -NO_CHECKS
+X10_FLAG	= -sourcepath $(X10_HOME)/../x10.tests/tests/x10lib -d $(build_path)  -errors 5 -VERBOSE_CHECKS 
+
 
 # runtime settings
 runtime_list = mpi sock java
@@ -37,12 +26,6 @@ test_args =
 ###################################################
 default	: java
 run		: run_java
-
-#default	: $(target).x10
-#	x10c -d build -report postcompile=2 -v -errors 5 -VERBOSE_CHECKS -classpath ../../sandbox/:../../lib/managed_gml.jar -x10lib ../..//managed_gml.properties  TestDistBlock.x10 
-
-
-###################################################
 
 ###################################################
 # Including rules

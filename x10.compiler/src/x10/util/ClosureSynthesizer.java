@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.util;
@@ -277,7 +277,8 @@ public class ClosureSynthesizer {
         }
 
         // N.B. white space is needed to fix XTENLANG-1647
-        name = " " + name;
+//        name = " " + name;
+        name = name + " "; // "x10.lang.Fun_0_1 " is better than "x10.lang. Fun_0_1". TODO: hide from x10doc
 
         // Check if the class has already been defined.
         QName fullName = QName.make("x10.lang", name);

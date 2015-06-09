@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.lang;
@@ -15,6 +15,6 @@ import x10.compiler.Native;
 
 public class Zero {
     @Native("java", "(#T$box) x10.rtt.Types.zeroValue(#T$rtt)")
-    @Native("c++",  "x10aux::zeroValue<#T >()")
+    @Native("c++",  "::x10aux::zeroValue< #T >()")
     public static native def get[T]() {T haszero} :T;
 }

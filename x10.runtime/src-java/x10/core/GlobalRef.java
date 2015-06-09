@@ -6,24 +6,30 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 package x10.core;
 
-import java.io.Externalizable;
 import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+import x10.core.fun.Fun_0_0;
+import x10.core.fun.Fun_0_1;
+import x10.core.fun.VoidFun_0_0;
+import x10.lang.DeadPlaceException;
 import x10.lang.Place;
-import x10.lang.Runtime.Mortal;
+import x10.xrx.Runtime.Mortal;
+import x10.rtt.NamedType;
+import x10.rtt.ParameterizedType;
 import x10.rtt.RuntimeType;
+import x10.rtt.StaticFunType;
+import x10.rtt.StaticVoidFunType;
 import x10.rtt.Type;
 import x10.rtt.Types;
+import x10.rtt.UnresolvedType;
 import x10.serialization.X10JavaDeserializer;
 import x10.serialization.X10JavaSerializable;
 import x10.serialization.X10JavaSerializer;
@@ -32,12 +38,12 @@ import x10.serialization.X10JavaSerializer;
  * [GlobalGC] Managed X10 (X10 on Java) supports distributed GC, which is mainly implemented here, in GlobalRef.java.
  *            See a paper "Distributed Garbage Collection for Managed X10" in ACM SIGPLAN 2012 X10 Workshop, June 2012.
  */
-public final class GlobalRef<T> extends x10.core.Struct implements Externalizable, X10JavaSerializable {
+public final class GlobalRef<T> extends Struct implements X10JavaSerializable {
 	
-    public static final RuntimeType<GlobalRef<?>> $RTT = x10.rtt.NamedType.<GlobalRef<?>> make(
+    public static final RuntimeType<GlobalRef<?>> $RTT = NamedType.<GlobalRef<?>> make(
         "x10.lang.GlobalRef",
         GlobalRef.class,
-        RuntimeType.INVARIANTS(1),
+        1,
         new Type[] { Types.STRUCT }
     );
     public RuntimeType<GlobalRef<?>> $getRTT() { return $RTT; }
@@ -53,11 +59,11 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
     private static int inited = 0;
     { if (inited++ == 0) if(GLOBALGC_DEBUG>=1)GlobalGCDebug("GLOBALGC_DISABLE=" + GLOBALGC_DISABLE + " GLOBALGC_WEIGHT=" + GLOBALGC_WEIGHT + " GLOBALGC_DEBUG=" + GLOBALGC_DEBUG); }
     private static final Object debugSync = new Object();
-    private static void GlobalGCDebug(java.lang.String msg) {
+    private static void GlobalGCDebug(String msg) {
         //if (level > GLOBALGC_DEBUG) return; // XTENLANG-3168: debug level should be checked in caller
         long time = System.nanoTime();
-        int placeId = x10.lang.Runtime.home().id;
-        java.lang.String output = "[GlobalGC(time=" + time + ",place=" + placeId + ")] " + msg;
+        int placeId = (int)x10.xrx.Runtime.home().id;
+        String output = "[GlobalGC(time=" + time + ",place=" + placeId + ")] " + msg;
         synchronized (debugSync) {
             System.err.println(output); System.err.flush();
         }
@@ -67,9 +73,13 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
         private static final ReferenceQueue<Object> referenceQueue = new ReferenceQueue<Object>();
         private static AtomicLong lastId = new AtomicLong(0L);
         private static AtomicLong lastMortalId = new AtomicLong(0L); // used for Mortal objects
+        // isNull support (kawatiya 2013/09/09)
+        private static final long NULL_ID_START = 8000000000000000000L;
+        private static AtomicLong lastNullId = new AtomicLong(NULL_ID_START);
         
         private /*final*/ long id;  // unique id for the corresponding {T,localObj}
                                     // id==0 means not assigned, negative ids are assigned to Mortal objects
+                                    // id>=NULL_ID_START is used for isNull (kawatiya 2013/09/09)
         private Object strongRef;   // strong reference to the localObj, used to prevent the collection
         private Type<?> T;          // T of corresponding GlobalRef[T](localObj)
         private int remoteCount;    // number of active remote GlobalRefs, should be < #places
@@ -78,7 +88,7 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
         // a singleton which represents null value
         private static final Object $null = new Object() {
             @Override
-            public java.lang.String toString() {
+            public String toString() {
                 return "<null>";
             }
         };
@@ -105,13 +115,22 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
             // assign an id
             boolean isMortal = obj instanceof Mortal;
             while (true) {
-                if (!isMortal) {
+                if (obj == $null) { // isNull support (kawatiya 2013/09/09)
+                    id = lastNullId.incrementAndGet();
+                    if (id >= NULL_ID_START) {
+                        // try to use the id
+                    } else { // wraparound
+                        if(GLOBALGC_DEBUG>=1)GlobalGCDebug("GlobalizedObjectTracker.<init>: resetting lastNullId");
+                        synchronized(lastNullId) { if (lastNullId.get() < NULL_ID_START) lastNullId.set(NULL_ID_START); }
+                        continue; // retry
+                    }                    
+                } else if (!isMortal) {
                     id = lastId.incrementAndGet();
-                    if (id > 0) {
+                    if (id < NULL_ID_START) {
                         // try to use the id
                     } else { // wraparound
                         if(GLOBALGC_DEBUG>=1)GlobalGCDebug("GlobalizedObjectTracker.<init>: resetting lastId");
-                        synchronized(lastId) { if (lastId.get() < 0) lastId.set(0L); }
+                        synchronized(lastId) { if (lastId.get() >= NULL_ID_START) lastId.set(0L); }
                         continue; // retry
                     }
                 } else { // for Mortal objects, use negative id
@@ -185,6 +204,10 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
             GlobalizedObjectTracker got = null;
             while ((got = (GlobalizedObjectTracker)referenceQueue.poll()) != null) {
                 assert(got.strongRef==null && got.id!=0L && got.get()==null);
+                if (got.T.equals(PlaceLocalHandle.Sentinel.$RTT)) { // [PLH_GC] GlobalGC support for PlaceLocalHandle (kawatiya 2013/06)
+                    PlaceLocalHandle.Sentinel.cleanup(got.id);
+                    if(GLOBALGC_DEBUG>=2)GlobalGCDebug("GlobalizedObjectTracker.cleanup: id=" + got.id + " PLH deleted");
+                }
                 id2got.remove(got.id); // this may return null for tmpGot
                 got2id.remove(got);    // this may return null for tmpGot
                 if(GLOBALGC_DEBUG>=2)GlobalGCDebug("GlobalizedObjectTracker.cleanup: id=" + got.id + " removed, #GOT=" + got2id.size());
@@ -278,6 +301,10 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
             //if (GLOBALGC_DISABLE) return gr;
             // it is better to merge remote GlobalRefs even if GlobalGC is disabled, since same FinishState may be passed many times
             
+            if (gr.id < 0) {
+                return gr; // Do not register/track mortal references to avoid having to release the resources later
+            }
+            
             RemoteReferenceTracker rrt = new RemoteReferenceTracker(gr, weight);
             while (true) {
                 cleanup();
@@ -299,7 +326,8 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
         }
         
         private static RemoteReferenceTracker get(GlobalRef<?> gr) { // get corresponding RemoteReferenceTracker for the remote GlobalRef
-            assert(gr.home.id != x10.lang.Runtime.home().id);
+            if (gr.id < 0) return null; // do not track global refs of mortal objects
+            assert(gr.home.id != x10.xrx.Runtime.home().id);
             RemoteReferenceTracker rrt = new RemoteReferenceTracker(gr, 0);
             RemoteReferenceTracker existingRrt = rrtTable.get(rrt);
             assert(existingRrt != null);
@@ -327,40 +355,39 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
                 if(GLOBALGC_DEBUG>=2)GlobalGCDebug("RemoteReferenceTracker.changeRemoteCount: id=" + id + " at place=" + place.id + " delta=" + delta + ", Mortal -> do nothing");
                 return;
             }
-            if (place.id == x10.lang.Runtime.home().id) { // local GlobalRef
+            if (place.id == x10.xrx.Runtime.home().id) { // local GlobalRef
                 if(GLOBALGC_DEBUG>=2)GlobalGCDebug("RemoteReferenceTracker.changeRemoteCount: id=" + id + " at place=" + place.id + " delta=" + delta + ", local -> adjust directly");
                 GlobalizedObjectTracker.changeRemoteCount(id, delta);
             } else if (delta > 0) { // remote GlobalRef, increment
                 if(GLOBALGC_DEBUG>=2)GlobalGCDebug("RemoteReferenceTracker.changeRemoteCount: id=" + id + " at place=" + place.id + " delta=" + delta + ", remote -> call runAt and wait");
-                //x10.lang.Runtime.runAt(placeId, new $Closure$0(id, delta)/*should be KIND_NOT_ASYNC*/); // this does not work inside deserializer
-                //x10.runtime.impl.java.Runtime.runClosureAt(placeId, new $Closure$0(id, delta)); // this does not wait for the execution
-                x10.lang.Runtime.runAtSimple(place, new $Closure$0(id, delta), true/*wait*/); // special simplified version of runAt
+                try {
+                    //x10.lang.Runtime.runAt(placeId, new $Closure$0(id, delta)/*should be KIND_NOT_ASYNC*/); // this does not work inside deserializer
+                    //x10.runtime.impl.java.Runtime.runClosureAt(placeId, new $Closure$0(id, delta)); // this does not wait for the execution
+                    x10.xrx.Runtime.runAtSimple(place, new $Closure$0(id, delta), true/*wait*/); // special simplified version of runAt
+                } catch (DeadPlaceException e) {
+                    if(GLOBALGC_DEBUG>=2)GlobalGCDebug("RemoteReferenceTracker.changeRemoteCount: place=" + place.id + " is dead");
+                }
             } else { // remote GlobalRef, decrement can be asynchronous
                 if(GLOBALGC_DEBUG>=2)GlobalGCDebug("RemoteReferenceTracker.changeRemoteCount: id=" + id + " at place=" + place.id + " delta=" + delta + ", remote -> call runAt and not-wait");
-                x10.lang.Runtime.runAtSimple(place, new $Closure$0(id, delta), false/*not-wait*/);
+                try {
+                    x10.xrx.Runtime.runAtSimple(place, new $Closure$0(id, delta), false/*not-wait*/);
+                } catch (DeadPlaceException e) {
+                    if(GLOBALGC_DEBUG>=2)GlobalGCDebug("RemoteReferenceTracker.changeRemoteCount: place=" + place.id + " is dead");
+                }
             }
         }
         
         // Closure for calling GlobalizedObjectTracker.changeRemoteCount(id, delta)
         // modified from the compiled code of "async at (place) { changeRemoteCount(id, delta); }"
-        private /*@@public@@*/ static class $Closure$0 extends x10.core.Ref implements x10.core.fun.VoidFun_0_0,
-                x10.serialization.X10JavaSerializable {
-            private static final long serialVersionUID = 1L;
+        private /*@@public@@*/ static class $Closure$0 extends Ref implements VoidFun_0_0, X10JavaSerializable {
 
-            public static final x10.rtt.RuntimeType<$Closure$0> $RTT = x10.rtt.StaticVoidFunType.<$Closure$0> make(
-            /* base class */$Closure$0.class, /* parents */new x10.rtt.Type[] { x10.core.fun.VoidFun_0_0.$RTT });
+            public static final RuntimeType<$Closure$0> $RTT = StaticVoidFunType.<$Closure$0> make(
+            /* base class */$Closure$0.class, /* parents */new Type[] { VoidFun_0_0.$RTT });
 
-            public x10.rtt.RuntimeType<?> $getRTT() {return $RTT;}
+            public RuntimeType<?> $getRTT() {return $RTT;}
             public Type<?> $getParam(int i) {return null;}
 
-            private void writeObject(java.io.ObjectOutputStream oos) throws java.io.IOException {
-                if (x10.runtime.impl.java.Runtime.TRACE_SER) {
-                    java.lang.System.out.println("Serializer: writeObject(ObjectOutputStream) of " + this + " calling");
-                }
-                oos.defaultWriteObject();
-            }
-
-            public static x10.serialization.X10JavaSerializable $_deserialize_body($Closure$0 $_obj, X10JavaDeserializer $deserializer) throws java.io.IOException {
+            public static X10JavaSerializable $_deserialize_body($Closure$0 $_obj, X10JavaDeserializer $deserializer) throws java.io.IOException {
                 if (x10.runtime.impl.java.Runtime.TRACE_SER) {
                     x10.runtime.impl.java.Runtime.printTraceMessage("X10JavaSerializable: $_deserialize_body() of "
                             + $Closure$0.class + " calling");
@@ -370,7 +397,7 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
                 return $_obj;
             }
 
-            public static x10.serialization.X10JavaSerializable $_deserializer(X10JavaDeserializer $deserializer) throws java.io.IOException {
+            public static X10JavaSerializable $_deserializer(X10JavaDeserializer $deserializer) throws java.io.IOException {
                 $Closure$0 $_obj = new $Closure$0((java.lang.System[]) null);
                 $deserializer.record_reference($_obj);
                 return $_deserialize_body($_obj, $deserializer);
@@ -406,6 +433,7 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
     } // class RemoteReferenceTracker
 
     private Type<?> T;
+    public long epoch;
     public x10.lang.Place home;
     private long id; // place local id of referenced object
     private transient Object obj;
@@ -437,7 +465,9 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
     public final GlobalRef<T> x10$lang$GlobalRef$$init$S(final Type<?> T, T obj, __0x10$lang$GlobalRef$$T $dummy) {
         if(GLOBALGC_DEBUG>=3)GlobalGCDebug("GlobalRef.$init(T=" + T + ", obj=" + obj + ", $dummy) called, isMortal=" + (obj instanceof Mortal));
         this.T = T;
-        this.home = x10.lang.Runtime.home();
+        x10.xrx.Activity activity = x10.xrx.Runtime.activity();
+        this.epoch = activity == null ? x10.xrx.Runtime.epoch$O() : activity.epoch;
+        this.home = x10.xrx.Runtime.home();
         this.obj = obj;
         return this;
     }
@@ -445,7 +475,9 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
     public GlobalRef(final Type<?> T, T obj, __0x10$lang$GlobalRef$$T $dummy) {
         if(GLOBALGC_DEBUG>=3)GlobalGCDebug("GlobalRef.<init>(T=" + T + ", obj=" + obj + ", $dummy) called, isMortal=" + (obj instanceof Mortal));
         this.T = T;
-        this.home = x10.lang.Runtime.home();
+        x10.xrx.Activity activity = x10.xrx.Runtime.activity();
+        this.epoch = activity == null ? x10.xrx.Runtime.epoch$O() : activity.epoch;
+        this.home = x10.xrx.Runtime.home();
         this.obj = obj;
     }
     // zero value constructor
@@ -463,6 +495,12 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
         if(GLOBALGC_DEBUG>=3)GlobalGCDebug("GlobalRef.globalize: id=" + id + " used for obj=" + obj + ", T=" + T);
     }
 
+    public void forget() {
+        // TODO: Kiyo, can you implement this functionality for Managed X10?
+        //       Thanks, --dave.
+        if(GLOBALGC_DEBUG>=1)GlobalGCDebug("GlobalRef.forget: not implemented; doing nothing");
+    }
+    
     private boolean isGlobalized() {
         return id != 0L;
     }
@@ -475,10 +513,17 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
         return this.home;
     }
 
-    @Override
-    final public java.lang.String toString() {
+    final public long getId() { // [PLH_GC] Backdoor for PlaceLocalHandle ingegration (kawatiya 2013/06)
         globalize(); // necessary to decide the id for this object
-        return "GlobalRef(" + this.home + "," + this.id + ")";
+        return this.id;
+    }
+
+    @Override
+    final public String toString() {
+        globalize(); // necessary to decide the id for this object
+//      return "GlobalRef(" + this.home + "," + this.id + ")";
+        // isNull support (2013/09/09)
+        return "GlobalRef["+T+"](" + home + "," + id + "," + (isNull() ? "isNull" : "nonNull") + ")";
     }
 
     @Override
@@ -488,7 +533,7 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
     }
 
     @Override
-    final public boolean equals(java.lang.Object other) {
+    final public boolean equals(Object other) {
         if (!(other instanceof GlobalRef<?>))
             return false;
 
@@ -497,54 +542,37 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
         return this._struct_equals$O(otherGref);
     }
 
-    final public boolean equals(x10.core.GlobalRef<T> other) {
+    final public boolean equals(GlobalRef<T> other) {
         return this._struct_equals(other);
     }
 
-    final public boolean _struct_equals$O(java.lang.Object other) {
-        if (!x10.core.GlobalRef.$RTT.isInstance(other, T)) {
+    final public boolean _struct_equals$O(Object other) {
+        if (!GlobalRef.$RTT.isInstance(other, T)) {
             return false;
         }
-        return this._struct_equals((x10.core.GlobalRef<T>) other);
+        return this._struct_equals((GlobalRef<T>) other);
     }
 
-    final public boolean _struct_equals(x10.core.GlobalRef<T> other) {
+    final public boolean _struct_equals(GlobalRef<T> other) {
         //if (T != other.T || home != other.home) return false;
         if (!T.equals(other.T) || home.id != other.home.id) return false;
-        if (home.id == x10.lang.Runtime.home().id) { // local GlobalRefs
+        if (home.id == x10.xrx.Runtime.home().id) { // local GlobalRefs
             return obj == other.obj;
         } else { // remote GlobalRefs
             return id == other.id;
         }
     }
 
-    public void writeExternal(ObjectOutput out) throws IOException {
-        if (true) {
-            if(GLOBALGC_DEBUG>=1)GlobalGCDebug("GlobalRef.writeExternal: not supported!");
-            throw new RuntimeException("GlobalRef.writeExternal is not supported");
+    public boolean isNull() { // isNull support (kawatiya 2013/09/09)
+        if (home.id == x10.xrx.Runtime.home().id) { // local GlobalRef
+            return obj == null;
+        } else { // remote GlobalRefs
+            return id >= GlobalizedObjectTracker.NULL_ID_START;
         }
-        
-        globalize();
-        out.writeObject(T);
-        out.writeObject(home);
-        out.writeLong(id);
     }
 
-    public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-        if (true) {
-            if(GLOBALGC_DEBUG>=1)GlobalGCDebug("GlobalRef.readExternal: not supported!");
-            throw new RuntimeException("GlobalRef.readExternal is not supported");
-        }
-        
-        T = (Type<?>) in.readObject();
-        home = (x10.lang.Place) in.readObject();
-        id = in.readLong();
-
-        if (home.id == x10.lang.Runtime.home().id) {
-            obj = GlobalizedObjectTracker.getObject(id);
-        } else {
-            obj = null;
-        }
+    private Object writeReplace() throws java.io.ObjectStreamException {
+        return new x10.serialization.SerializationProxy(this);
     }
 
     public void $_serialize(X10JavaSerializer $serializer) throws IOException {
@@ -556,6 +584,7 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
         $serializer.write(T);
         $serializer.write(home);
         $serializer.write(id);
+        $serializer.write(epoch);
         $serializer.write(weight); // send the weight 
         
         $serializer.addToGrefMap(this, weight); // to adjust the weight when serialized data is used more than once
@@ -563,20 +592,19 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
 
     public static X10JavaSerializable $_deserializer(X10JavaDeserializer $deserializer) throws java.io.IOException {
         GlobalRef $_obj = new GlobalRef();
-        int pos = $deserializer.record_reference($_obj);
         X10JavaSerializable returned = $_deserialize_body($_obj, $deserializer); // remote GlobalRefs are merged if they have same id
-        if (returned != $_obj) $deserializer.update_reference(pos, returned);
         return returned;
     }
 
     public static X10JavaSerializable $_deserialize_body(GlobalRef $_obj, X10JavaDeserializer $deserializer) throws IOException {
-        $_obj.T = $deserializer.readRef();
-        $_obj.home = $deserializer.readRef();
+        $_obj.T = $deserializer.readObject();
+        $_obj.home = $deserializer.readObject();
         long id = $deserializer.readLong();
         $_obj.id = id;
+        $_obj.epoch = $deserializer.readLong();
         int weight = $deserializer.readInt(); // weight got from sender
         assert((id > 0 && weight > 0) || (id < 0 && weight == 0)); // weight should be > 0 for non-Mortal GlobalRef
-        if ($_obj.home.id == x10.lang.Runtime.home().id) { // local GlobalRef
+        if ($_obj.home.id == x10.xrx.Runtime.home().id) { // local GlobalRef
             $_obj.obj = GlobalizedObjectTracker.getObject(id);
             if(GLOBALGC_DEBUG>=3)GlobalGCDebug("GlobalRef.$_deserialize_body: id=" + $_obj.id + " deserialized, weight=" + weight + ", localObj=" + $_obj.obj);
             GlobalizedObjectTracker.changeRemoteCount($_obj.id, -weight); // decrement speculatively-incremented remoteCount, this must be done after the object is got
@@ -606,7 +634,7 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
     
     private int adjustWeight() {
         if (id < 0) return 0; // No weight for Mortal GlobalRef
-        if (home.id == x10.lang.Runtime.home().id) { // local GlobalRef
+        if (home.id == x10.xrx.Runtime.home().id) { // local GlobalRef
             int weight = GLOBALGC_WEIGHT;
             GlobalizedObjectTracker.changeRemoteCount(id, +weight); // add the initial weight
             if(GLOBALGC_DEBUG>=2)GlobalGCDebug("GlobalRef.adjustWeight(local): id=" + id + " at place=" + home.id + ", weight=" + weight);
@@ -640,10 +668,9 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
         }
     }
 
-    public static class LocalEval extends x10.core.Ref {
+    public static class LocalEval extends Ref {
 
-	private static final long serialVersionUID = 1L;
-	public static final RuntimeType<LocalEval> $RTT = x10.rtt.NamedType.<LocalEval> make("x10.lang.GlobalRef.LocalEval", LocalEval.class);
+	public static final RuntimeType<LocalEval> $RTT = NamedType.<LocalEval> make("x10.lang.GlobalRef.LocalEval", LocalEval.class);
 	public RuntimeType<?> $getRTT() {return $RTT;}
 	public Type<?> $getParam(int i) {return null;}
     
@@ -657,25 +684,22 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
             this((java.lang.System[]) null);
             x10$lang$GlobalRef$LocalEval$$init$S();
         }
-        // not used
-//	// creation method for java code
-//	public static LocalEval $make(){return new LocalEval((java.lang.System[])null).$init();}
         
 
-	public static <$T, $U> $U evalAtHome(Type $T, Type $U, x10.core.GlobalRef<$T> ref, x10.core.fun.Fun_0_1<$T,$U> eval) {
-	    if (x10.lang.Runtime.home().id == ref.home.id) {
+	public static <$T, $U> $U evalAtHome(Type $T, Type $U, GlobalRef<$T> ref, Fun_0_1<$T,$U> eval) {
+	    if (x10.xrx.Runtime.home().id == ref.home.id) {
 		return eval.$apply(ref.$apply$G(),$T);
 	    } else {
-                return x10.lang.Runtime.<$U>evalAt__1$1x10$lang$Runtime$$T$2$G($U, ref.home, new $Closure$Eval<$T, $U>($T, $U, ref, eval, (x10.core.GlobalRef.LocalEval.$Closure$Eval.__0$1x10$lang$GlobalRef$LocalEval$$Closure$Eval$$T$2__1$1x10$lang$GlobalRef$LocalEval$$Closure$Eval$$T$3x10$lang$GlobalRef$LocalEval$$Closure$Eval$$U$2) null), null);
+                return x10.xrx.Runtime.<$U>evalAt__1$1x10$xrx$Runtime$$T$2$G($U, ref.home, new $Closure$Eval<$T, $U>($T, $U, ref, eval, (GlobalRef.LocalEval.$Closure$Eval.__0$1x10$lang$GlobalRef$LocalEval$$Closure$Eval$$T$2__1$1x10$lang$GlobalRef$LocalEval$$Closure$Eval$$T$3x10$lang$GlobalRef$LocalEval$$Closure$Eval$$U$2) null), null);
 	    }
 	}
         
         
-	public static <$T> $T getLocalOrCopy(Type $T, x10.core.GlobalRef<$T> ref) {
-            if (x10.lang.Runtime.home().id == ref.home.id) {
+	public static <$T> $T getLocalOrCopy(Type $T, GlobalRef<$T> ref) {
+            if (x10.xrx.Runtime.home().id == ref.home.id) {
 		return ref.$apply$G();
 	    } else {
-                return x10.lang.Runtime.<$T>evalAt__1$1x10$lang$Runtime$$T$2$G($T, ref.home, new $Closure$Apply<$T>($T, ref, (x10.core.GlobalRef.LocalEval.$Closure$Apply.__0$1x10$lang$GlobalRef$LocalEval$$Closure$Apply$$T$2) null), null);
+                return x10.xrx.Runtime.<$T>evalAt__1$1x10$xrx$Runtime$$T$2$G($T, ref.home, new $Closure$Apply<$T>($T, ref, (GlobalRef.LocalEval.$Closure$Apply.__0$1x10$lang$GlobalRef$LocalEval$$Closure$Apply$$T$2) null), null);
 	    }
 	}
 
@@ -693,36 +717,29 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
     }
 
 
-	public static class $Closure$Eval<$T, $U> extends x10.core.Ref implements x10.core.fun.Fun_0_0 {
-	    private static final long serialVersionUID = 1L;
+	public static class $Closure$Eval<$T, $U> extends Ref implements Fun_0_0 {
 	    public static final RuntimeType<$Closure$Eval> $RTT =
-		x10.rtt.StaticFunType.<$Closure$Eval> make($Closure$Eval.class, 
-							 RuntimeType.INVARIANTS(2),
-							 new Type[] {x10.rtt.ParameterizedType.make(x10.core.fun.Fun_0_0.$RTT, x10.rtt.UnresolvedType.PARAM(1))});
+		StaticFunType.<$Closure$Eval> make($Closure$Eval.class, 2,
+							 new Type[] {ParameterizedType.make(Fun_0_0.$RTT, UnresolvedType.PARAM(1))});
 	    public RuntimeType<?> $getRTT() {return $RTT;}
 	    public Type<?> $getParam(int i) {if (i ==0)return $T;if (i ==1)return $U;return null;}
 
 	    // constructor just for allocation
 	    public $Closure$Eval(final java.lang.System[] $dummy) { super($dummy);}
-            public $Closure$Eval(Type $T, Type $U, x10.core.GlobalRef<$T> ref, x10.core.fun.Fun_0_1<$T,$U> eval, __0$1x10$lang$GlobalRef$LocalEval$$Closure$Eval$$T$2__1$1x10$lang$GlobalRef$LocalEval$$Closure$Eval$$T$3x10$lang$GlobalRef$LocalEval$$Closure$Eval$$U$2 $dummy) {
+            public $Closure$Eval(Type $T, Type $U, GlobalRef<$T> ref, Fun_0_1<$T,$U> eval, __0$1x10$lang$GlobalRef$LocalEval$$Closure$Eval$$T$2__1$1x10$lang$GlobalRef$LocalEval$$Closure$Eval$$T$3x10$lang$GlobalRef$LocalEval$$Closure$Eval$$U$2 $dummy) {
                 this.$T = $T;
                 this.$U = $U;
                 this.ref = ref;
                 this.eval = eval;
             }
-            // not used
-//            // creation method for java code
-//            public static <$T, $U> $Closure$Eval $make(Type $T, Type $U, x10.core.GlobalRef<$T> ref, x10.core.fun.Fun_0_1<$T,$U> eval, __0$1x10$lang$GlobalRef$LocalEval$$Closure$Eval$$T$2__1$1x10$lang$GlobalRef$LocalEval$$Closure$Eval$$T$3x10$lang$GlobalRef$LocalEval$$Closure$Eval$$U$2 $dummy){
-//                return new $Closure$Eval($T, $U, ref, eval, $dummy);
-//            }
             // synthetic type for parameter mangling
             public abstract static class __0$1x10$lang$GlobalRef$LocalEval$$Closure$Eval$$T$2__1$1x10$lang$GlobalRef$LocalEval$$Closure$Eval$$T$3x10$lang$GlobalRef$LocalEval$$Closure$Eval$$U$2 {}
 
 	    private Type $T;
 	    private Type $U;
 
-	    public x10.core.GlobalRef<$T> ref;
-	    public x10.core.fun.Fun_0_1<$T,$U> eval;
+	    public GlobalRef<$T> ref;
+	    public Fun_0_1<$T,$U> eval;
                 
 	    public $U $apply$G() {
 		return this.eval.$apply(this.ref.$apply$G(),$T);
@@ -742,41 +759,34 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
         }
 
         public static X10JavaSerializable $_deserialize_body($Closure$Eval $_obj, X10JavaDeserializer $deserializer) throws IOException {
-            $_obj.$T = $deserializer.readRef();
-            $_obj.$U = $deserializer.readRef();
-            $_obj.ref = $deserializer.readRef();
-            $_obj.eval = $deserializer.readRef();
+            $_obj.$T = $deserializer.readObject();
+            $_obj.$U = $deserializer.readObject();
+            $_obj.ref = $deserializer.readObject();
+            $_obj.eval = $deserializer.readObject();
             return $_obj;
         }
 	}
 
             
-	public static class $Closure$Apply<$T> extends x10.core.Ref implements x10.core.fun.Fun_0_0 {
-	    private static final long serialVersionUID = 1L;
+	public static class $Closure$Apply<$T> extends Ref implements Fun_0_0 {
 	    public static final RuntimeType<$Closure$Apply> $RTT =
-		x10.rtt.StaticFunType.<$Closure$Apply> make($Closure$Apply.class,
-                                                          RuntimeType.INVARIANTS(1),
-							  new Type[] {x10.rtt.ParameterizedType.make(x10.core.fun.Fun_0_0.$RTT, x10.rtt.UnresolvedType.PARAM(0))});
+		StaticFunType.<$Closure$Apply> make($Closure$Apply.class, 1,
+							  new Type[] {ParameterizedType.make(Fun_0_0.$RTT, UnresolvedType.PARAM(0))});
 	    public RuntimeType<?> $getRTT() {return $RTT;}
 	    public Type<?> $getParam(int i) {if (i ==0)return $T;return null;}
 
 	    // constructor just for allocation
 	    public $Closure$Apply(final java.lang.System[] $dummy) { super($dummy);}
-            public $Closure$Apply(Type $T, x10.core.GlobalRef<$T> ref, __0$1x10$lang$GlobalRef$LocalEval$$Closure$Apply$$T$2 $dummy) {
+            public $Closure$Apply(Type $T, GlobalRef<$T> ref, __0$1x10$lang$GlobalRef$LocalEval$$Closure$Apply$$T$2 $dummy) {
                 this.$T = $T;
                 this.ref = ref;
             }
-            // not used
-//            // creation method for java code
-//            public static <$T> $Closure$Apply $make(Type $T, x10.core.GlobalRef<$T> ref, __0$1x10$lang$GlobalRef$LocalEval$$Closure$Apply$$T$2 $dummy) {
-//                return new $Closure$Apply($T, ref, $dummy);
-//            }
 	    // synthetic type for parameter mangling
 	    public abstract static class __0$1x10$lang$GlobalRef$LocalEval$$Closure$Apply$$T$2 {}
 	
 	    private Type $T;
 
-	    public x10.core.GlobalRef<$T> ref;
+	    public GlobalRef<$T> ref;
 
 	    public $T $apply$G() {
 		return this.ref.$apply$G();
@@ -794,8 +804,8 @@ public final class GlobalRef<T> extends x10.core.Struct implements Externalizabl
         }
 
         public static X10JavaSerializable $_deserialize_body($Closure$Apply $_obj, X10JavaDeserializer $deserializer) throws IOException {
-            $_obj.$T = $deserializer.readRef();
-            $_obj.ref = $deserializer.readRef();
+            $_obj.$T = $deserializer.readObject();
+            $_obj.ref = $deserializer.readObject();
             return $_obj;
         }
 	}

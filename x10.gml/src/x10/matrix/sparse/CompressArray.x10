@@ -6,16 +6,16 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.matrix.sparse;
 
-import x10.io.Console;
+import x10.matrix.util.MathTool;
+import x10.matrix.util.RandTool;
+import x10.matrix.util.ElemTypeTool;
 
-import x10.matrix.Debug;
-import x10.matrix.MathTool;
-import x10.matrix.RandTool;
+import x10.matrix.ElemType;
 
 import x10.util.Pair;
 import x10.util.Random;
@@ -30,62 +30,44 @@ import x10.util.StringBuilder;
  * are stored contiguously in an array called the <em>underlying array</em>.
  * Indices into the underlying array are called <em>underlying indices</em>.
  */
-
-//public static type Rail[T] = Array[T](1){rail};
-
 public class CompressArray {
-
-    //TODO: Use Rail[Pair[Int,Double]] as backing storage.
+    //TODO: Use Rail[Pair[Long,ElemType]] as backing storage.
 	//Comments: the underlying storage won't be compatible to conventional
 	//sparse matrix format CSC or CSR, because the indexes and values are 
 	//in two arrays
 	// CHECK: Rail[Pair] uses the continuous memory space, so as to support
 	// MPI inter-process communication
 
-    //static type Rail[T] = Array[T](1){rail};
+	public var index:Rail[Long]{self!=null}; // the indices i1,..., in; indices must be positive
+	public var value:Rail[ElemType]{self!=null};//{self.size==index.size}; // the values v1,..., vn
 
-	public var index:Array[Int](1){rail}; // the indices i1,..., in; indices must be positive
-	public var value:Array[Double](1){rail};//{self.size==index.size,rail}; // the values v1,..., vn
-	
-	public var count:Int=0; // n
-	public def count()=count;
+	public var count:Long=0; // n
 
-	//===========================================================
-	// Constructor
-	//===========================================================
-	public def this(idxlst:Array[Int](1){rail}, 
-					vallst:Array[Double](1){self.size==idxlst.size,rail},
-					cnt:Int) { 
-		this.index = idxlst;// as Rail[Int]{rail};
-		this.value = vallst;// as Array[Double](1){self.size==index.size,rail};
+	public def this(idxlst:Rail[Long]{self!=null}, 
+					vallst:Rail[ElemType]{self!=null,self.size==idxlst.size},
+					cnt:Long) { 
+		this.index = idxlst;
+		this.value = vallst;
 		count = cnt;
-		//for (var i:Int=0; i<index.size&&index(i)>=0; i++) count++;
 	}
 
 	/**
 	 * Create an empty compressed array with space for s entries.
 	 */
-	public def this(s:Int) { 
-		Debug.assure(s>=0);
-		index = new Array[Int](s, -1) as Array[Int](1){rail};
-		value = new Array[Double](s, 0.0) as Array[Double](1){rail};
+	public def this(s:Long) { 
+		assert s >= 0;
+		index = new Rail[Long](s, -1) as Rail[Long]{self!=null};
+		value = new Rail[ElemType](s) as Rail[ElemType]{self!=null};
 		count = 0;
 	}
 
-
-	//===============================================
-	// Constructor with memory allocation
-	//===============================================
 	/**
 	 * Make a compressed array.
 	 *
 	 * @param sz     Number of entries or underlying indices.
 	 */
-	public static def make(sz:Int) = new CompressArray(sz); 
+	public static def make(sz:Long) = new CompressArray(sz); 
 
-	//===============================================
-	// Initialization
-	//===============================================
 	/**
 	 * Compress array data initialization. Starting from offset in the 
 	 * underlying array, set data in the compress array upto the last underlying 
@@ -102,16 +84,16 @@ public class CompressArray {
 	 * @param nzd             Percentage of nonzero entries or sparsity
 	 * @return                number of non-zero added 
 	 */
-	protected def init(offset:Int, maxIndex:Int, init:(ci:Int,rg:Random)=>Double, nzd:Double) =
+	protected def init(offset:Long, maxIndex:Long, init:(ci:Long,rg:Random)=>ElemType, nzd:Float) =
 		init(offset, 0, maxIndex, init, nzd);
 
-	protected def init(offset:Int, sttIndex:Int, maxIndex:Int, init:(ci:Int,rg:Random)=>Double, nzd:Double):Int {
+	protected def init(offset:Long, sttIndex:Long, maxIndex:Long, init:(ci:Long,rg:Random)=>ElemType, nzd:Float):Long {
 		val size = storageSize();
 		if (offset >= size)	return 0; 
 		val rg = RandTool.getRandGen();  
-		var ci:Int= offset;
-		for (var i:Int=sttIndex; i<maxIndex; i++) {
-			if (rg.nextDouble() < nzd) {
+		var ci:Long= offset;
+		for (var i:Long=sttIndex; i<maxIndex; i++) {
+			if (RandTool.nextElemType[ElemType](rg) < nzd) {
 				this(ci)=Pair(i,init(ci,rg));
 				ci++;
 				if (ci == size)
@@ -134,10 +116,10 @@ public class CompressArray {
 	 * @param nzd            nonzero density
 	 * @param return         number of nonzeros added
 	 */
-	public def initConstValue(offset:Int, maxIndex:Int, v:Double, nzd:Double) : Int =
-		init(offset, maxIndex, (ci:Int, rg:Random)=>(v), nzd);
-	public def initConstValue(offset:Int, sttIndex:Int, maxIndex:Int, v:Double,	nzd:Double) : Int =
-		init(offset, sttIndex, (ci:Int, rg:Random)=>(v), nzd);
+	public def initConstValue(offset:Long, maxIndex:Long, v:ElemType, nzd:Float):Long =
+		init(offset, maxIndex, (ci:Long, rg:Random)=>(v), nzd);
+	public def initConstValue(offset:Long, sttIndex:Long, maxIndex:Long, v:ElemType,	nzd:Float):Long =
+		init(offset, sttIndex, (ci:Long, rg:Random)=>(v), nzd);
 	
 	/**
 	 * Initialize compress array using nonzero indexing generating function and value
@@ -149,14 +131,14 @@ public class CompressArray {
 	 * @param fval          nonzero value generating function given [0..maxIndex) range If zero, ignored.                     
 	 * @return number of nonzero values
 	 */
-	public def init(offset:Int, maxIndex:Int, fidx:(Int)=>Int, fval:(Int)=>Double):Int =
+	public def init(offset:Long, maxIndex:Long, fidx:(Long)=>Long, fval:(Long)=>ElemType):Long =
 		init(offset, 0, maxIndex, fidx, fval);
 
-	public def init(offset:Int, sttIndex:Int, maxIndex:Int, fidx:(Int)=>Int, fval:(Int)=>Double):Int {
-		var nzidx:Int=0;
-		var stidx:Int=offset;
-		var stval:Double=0;
-		for (var i:Int=sttIndex; i<maxIndex&&stidx<index.size; i++) {
+	public def init(offset:Long, sttIndex:Long, maxIndex:Long, fidx:(Long)=>Long, fval:(Long)=>ElemType):Long {
+		var nzidx:Long=0;
+		var stidx:Long=offset;
+		var stval:ElemType=0;
+		for (var i:Long=sttIndex; i<maxIndex&&stidx<index.size; i++) {
 			nzidx = fidx(i);
 			if (nzidx >= maxIndex) break;
 			stval = fval(nzidx);
@@ -177,15 +159,15 @@ public class CompressArray {
 	 * @param maxIndex     the maximum surface index
 	 * @param f            value generating function, given [0..maxIndex) range.
 	 */
-	public def init(offset:Int, maxIndex:Int, f:(Int)=>Double):Int =
+	public def init(offset:Long, maxIndex:Long, f:(Long)=>ElemType):Long =
 		init(offset, 0, maxIndex, f);
 	
-	public def init(offset:Int, sttIndex:Int, maxIndex:Int, f:(Int)=>Double):Int {
+	public def init(offset:Long, sttIndex:Long, maxIndex:Long, f:(Long)=>ElemType):Long {
 	
-		var nzidx:Int=0;
-		var stidx:Int=offset;
-		var stval:Double=0;
-		for (var i:Int=sttIndex; i<maxIndex&&stidx<index.size; i++) {
+		var nzidx:Long=0;
+		var stidx:Long=offset;
+		var stval:ElemType=0;
+		for (var i:Long=sttIndex; i<maxIndex&&stidx<index.size; i++) {
 			stval = f(i);
 			if (! MathTool.isZero(stval)) {
 				this.index(stidx)=i;
@@ -208,11 +190,11 @@ public class CompressArray {
 	 * @param nzd            nonzero density
 	 * @param return         number of non-zeros added 
 	 */
-	public def initRandom(offset:Int, maxIndex:Int, nzd:Double): Int =
-	    init(offset, 0, maxIndex, (ci:Int, rg:Random)=>rg.nextDouble(), nzd);
+	public def initRandom(offset:Long, maxIndex:Long, nzd:Float):Long =
+	    init(offset, 0, maxIndex, (ci:Long, rg:Random)=>RandTool.nextElemType[ElemType](rg), nzd);
 
-	public def initRandom(offset:Int, sttIndex:Int, maxIndex:Int, nzd:Double): Int =
-		init(offset, sttIndex, maxIndex, (ci:Int, rg:Random)=>rg.nextDouble(), nzd);
+	public def initRandom(offset:Long, sttIndex:Long, maxIndex:Long, nzd:Float):Long =
+		init(offset, sttIndex, maxIndex, (ci:Long, rg:Random)=>RandTool.nextElemType[ElemType](rg), nzd);
 
 	/**
 	 * Fast initialize method. Distance between two adjacent surface indices is randomly created
@@ -226,54 +208,53 @@ public class CompressArray {
 	 * @param ub		-- upper random value bound
 	 * @param return   	-- number of nonzeros added
 	 */
-	public def initRandomFast(offset:Int, maxIndex:Int, nzd:Double, lb:Int, ub:Int): Int =
+	public def initRandomFast(offset:Long, maxIndex:Long, nzd:Float, lb:Long, ub:Long):Long =
 		initRandomFast(offset, 0, maxIndex, nzd, lb, ub);
 	
-	public def initRandomFast(offset:Int, sttIndex:Int, maxIndex:Int, nzd:Double, lb:Int, ub:Int): Int { 
-		val sts = storageSize();
-		//val cnt = maxIndex*nzd > sts ? sts: ((maxIndex*nzd) as Int); 
-		if (offset >=  sts) return 0;
+	public def initRandomFast(offset:Long, sttIndex:Long, maxIndex:Long, nzd:Float, lb:Long, ub:Long):Long { 
+	    val sts = storageSize();
+	    //val cnt = maxIndex*nzd > sts ? sts: ((maxIndex*nzd) as Long); 
+	    if (offset >=  sts) return 0;
 
-		//val rg = RandTool.getRandGen();
-		var ci:Int= offset;   
-		val avgDst:Double = 1.0/nzd;
-		val dstMax:Double = 2.0*avgDst - 1; 
+	    //val rg = RandTool.getRandGen();
+	    var ci:Long= offset;   
+	    val avgDst:ElemType = (1.0/nzd) as ElemType;
+	    val dstMax:ElemType = (2.0*avgDst - 1) as ElemType; 
 		
-		var i:Int = sttIndex;
-		var nextDst:Int;
-		// Set the starting posistion, taking half of avg distance
-		if (avgDst > 1.0) {
-			i += RandTool.nextDouble()* avgDst/2; 
-			// Generate nonzero indexes
-			while (ci < sts) {
-				if (i >= maxIndex) break;
-				this.index(ci) = i;
-				ci ++;
-				nextDst = (RandTool.nextDouble() * dstMax) as Int; 
-				i += nextDst + 1; 
-			}
-		} else {
-			//Special case for full dense matrix
-			while (ci < sts && i< maxIndex) {
-				this.index(ci) = i;
-				i++; ci++;
-			}
+	    var i:Long = sttIndex;
+	    var nextDst:Long;
+	    // Set the starting posistion, taking half of avg distance
+	    if (avgDst > 1.0) {
+		i += RandTool.nextDouble()* avgDst/2; 
+		// Generate nonzero indexes
+		while (ci < sts) {
+		    if (i >= maxIndex) break;
+		    this.index(ci) = i;
+		    ci ++;
+		    nextDst = (RandTool.nextDouble() * dstMax) as Long; 
+		    i += nextDst + 1; 
 		}
+	    } else {
+		//Special case for full dense matrix
+		while (ci < sts && i< maxIndex) {
+		    this.index(ci) = i;
+		    i++; ci++;
+		}
+	    }
 
-		val len:Int = ub-lb+1;
-		if (len <= 1) {
-			for (var vi:Int=offset ; vi < ci; vi++) {
-				this.value(vi) = RandTool.nextDouble();
-			}
-		} else {
-			for (var vi:Int=offset ; vi < ci; vi++) {
-				this.value(vi) = RandTool.nextInt(len) + lb;
-			}
+	    val len:Long = ub-lb+1;
+	    if (len <= 1) {
+		for (var vi:Long=offset; vi < ci; vi++) {
+		    this.value(vi) = RandTool.nextElemType[ElemType]();
 		}
-		//Console.OUT.print("."); Console.OUT.flush();
-	    val c:Int = ci-offset;
-		count += c;  //Increase the total nonzero CompressArray
-		return c;
+	    } else {
+		for (var vi:Long=offset; vi < ci; vi++) {
+		    this.value(vi) = RandTool.nextLong(len) + lb;
+		}
+	    }
+	    val c:Long = ci-offset;
+	    count += c;  //Increase the total nonzero CompressArray
+	    return c;
 	}
 	/**
 	 * Fast initialize method. Distance between two adjacent surface indices is randomly created
@@ -285,17 +266,16 @@ public class CompressArray {
 	 * @param nzd      	-- Nonzero percentage for each entry, must >= 1.0
 	 * @param return   	-- number of nonzeros added
 	 */
-	public def initRandomFast(offset:Int, maxIndex:Int, nzd:Double) =
+	public def initRandomFast(offset:Long, maxIndex:Long, nzd:Float) =
 		initRandomFast(offset, 0, maxIndex, nzd, 0, -1);
 
 	/**
 	 * Make a copy of myself
 	 */
 	public def clone():CompressArray {
-		val idxlist = new Array[Int](this.index) as Array[Int](1){rail};
-		val vallist = new Array[Double](this.value) as Array[Double](1){self.size==idxlist.size,rail};
+		val idxlist = new Rail[Long](this.index);
+		val vallist = new Rail[ElemType](this.value) as Rail[ElemType]{self!=null,self.size==idxlist.size};
 		val ca = new CompressArray(idxlist, vallist, this.count);
-		//ca.count = this.count;
 		return ca;
 	}
 
@@ -309,18 +289,17 @@ public class CompressArray {
 	/**
 	 * Increase storage size by reallocating memory space
 	 */
-	protected def incStorage(incsz:Int): void {
-		
-		val nsts:Int = storageSize() + incsz;
-		if (nsts > Int.MAX_VALUE) Debug.exit("Memory overflow");
+	protected def incStorage(incsz:Long): void {
+		val nsts:Long = storageSize() + incsz;
+        assert nsts < Long.MAX_VALUE;
 
 		// Allocate new storage
-		val newidx = new Array[Int](nsts);// (i:Int)=>(i<sts)?i<index(i):-1);
-		val newval = new Array[Double](nsts);// (i:Int)=>(i<sts)?value(i):0.0);
+		val newidx = new Rail[Long](nsts);// (i:Long)=>(i<sts)?i<index(i):-1);
+		val newval = new Rail[ElemType](nsts);// (i:Long)=>(i<sts)?value(i):0.0);
 		// Copy data
-		Array.copy[Int   ](index, 0, newidx, 0, count);
-		Array.copy[Double](value, 0, newval, 0, count);
-		// Replace index and value arrays
+		Rail.copy[Long](index, 0, newidx, 0, count);
+		Rail.copy[ElemType](value, 0, newval, 0, count);
+		// Replace index and value Rails
 		index = newidx;
 		value = newval;
 	}
@@ -332,13 +311,11 @@ public class CompressArray {
 	 * @param cnt     number of elements will be added to storage
 	 * @return     return true if storage is re-allocated
 	 */
-	public def testIncStorage(off:Int, cnt:Int): Boolean {
+	public def testIncStorage(off:Long, cnt:Long): Boolean {
 		var retval:Boolean=false;
 		val cursz = storageSize();
 		val chksz = off + cnt;
 		if (chksz > cursz) {
-			//Debug.flushln("Test storage size fail! Compress data offset:"+off+" add cnt:"+cnt+
-			//				" storage size:"+cursz+" Re-allocation increase to "+chksz);
 			retval = true;
 			incStorage(chksz - cursz);
 		}	
@@ -351,65 +328,59 @@ public class CompressArray {
 	 * @param cnt     number of elements will be added to storage
 	 * @return     return true if storage is re-allocated
 	 */
-	public def testIncStorage(cnt:Int) = testIncStorage(this.count(), cnt);
+	public def testIncStorage(cnt:Long) = testIncStorage(this.count, cnt);
 
-	//=======================================
-
-	//=======================================================
 	/**
 	 * Update the compressed array. It is the caller's responsibility
-	 * to ensure that the v.first >=0, and after this update the 
-	 * compressed array satisfies its invariants.
+	 * to ensure that after this update the compressed array satisfies its 
+     * invariants.
 	 * @param pos: The index of the entry in the underlying array to be updated.
 	 * @param v: The (surface index, value) pair to update the entry, 
 	 */
-	public operator this(pos:Int)=(v:Pair[Int,Double]):void {
-		Debug.assure(pos < this.storageSize(), 
-					 "CompressArray prealloc "+
-					 this.storageSize()+" memory overflow ");
-		//if (index(pos) < 0) count++;
+	public operator this(pos:Long)=(v:Pair[Long,ElemType]):void {
+        assert v.first >= 0;
+		assert (pos < this.storageSize()) : "CompressArray prealloc "+
+					 this.storageSize()+" memory overflow ";
 		index(pos) = v.first;
 		value(pos) = v.second;
 	}	
 
 	/**
 	 * Return the surface index associated with the index i in the 
-	 * underlying array. 
+	 * underlying Rail. 
 	 */
-	public def getIndex(i:Int) = index(i);
+	public final def getIndex(i:Long) = index(i);
 	/**
-	 * Return the value associated with the undex i in the underlying
-	 * array.
+	 * Return the value associated with index i in the underlying Rail.
 	 */
-	public def getValue(i:Int) = value(i);
+	public final def getValue(i:Long) = value(i);
 
 	/**
 	 * Return the value at surface index i.
 	 */
-	public operator this(i:Int) : Double = find(i);
+	public operator this(i:Long) : ElemType = find(i);
 
 	/**
 	 * The number of entries allocated for this compressed array. 
 	 * May be nonzero even if the compressed array has zero elements.
-	 * storageSize() must be less than Int.MAX_VALUE.
+	 * storageSize() must be less than Long.MAX_VALUE.
 	 */
-	public def storageSize() :Int = this.index.size;
+	public def storageSize():Long = this.index.size;
 
 	/**
 	 * Search between start and end for the index i that is mapped
 	 * to the surface index idx.  If such an index does not exist
-	 * then return the index in the backing array for a value within 
+	 * then return the index in the backing Rail for a value within 
 	 * the range that is no smaller than idx.
 	 */
-	public def find(idx:Int, start:Int, end:Int):Int { 
+	public def find(idx:Long, start:Long, end:Long):Long { 
+		if (this.count==0L) return 0;
 
-		if (this.count==0) return 0;
-
-		var min:Int = start; 
-		var max:Int = end; 
+		var min:Long = start; 
+		var max:Long = end; 
 
 		if (min>=max) return min;
-		var mid:Int = min;
+		var mid:Long = min;
 		do {
 			mid = min + (max - min) / 2;
 			if (index(mid) < idx) {
@@ -428,12 +399,11 @@ public class CompressArray {
 	 * Return the value associated with index idx for this array,
 	 * and 0.0 if the array does not have a value for idx.
 	 */
-	public def find(idx:Int): Double {
+	public def find(idx:Long): ElemType {
 		val fidx = find(idx, 0, this.count-1);
 		if (index(fidx) == idx) return value(fidx);
-		return 0.0D;
+		return 0.0 as ElemType;
 	}
-
 
 	/** obsolete
 	 * Copy length entries from the compressed array, starting from srcOffset
@@ -441,28 +411,24 @@ public class CompressArray {
 	 * destination compressed array is less than the surface index of
 	 * the entry in the source array.
 	 */
-	public def copyRange(srcOffset:Int, length:Int, dstOffset:Int,
-						 base:Int, dest:CompressArray) : void {
+	public def copyRange(srcOffset:Long, length:Long, dstOffset:Long,
+						 base:Long, dest:CompressArray) : void {
 		if (length <= 0) return;
-		var dpos:Int = dstOffset;
+		var dpos:Long = dstOffset;
 
 		//Size test should be performed before calling this method for better performance
 		//This is safe-guard for those functions which do not perform size test.
 		testIncStorage(dstOffset, length);
-		for (var spos:Int=srcOffset; spos<srcOffset+length; spos++, dpos++){
+		for (var spos:Long=srcOffset; spos<srcOffset+length; spos++, dpos++){
 		    dest(dpos) = Pair(getIndex(spos)-base, getValue(spos));
 		}
 		dest.count +=length;
 	}
 
-
-	//---------------------------------------------------------------------------
-	// Copy data between compress array
-	//---------------------------------------------------------------------------
 	/**
 	 * Copy specified range of compressed array from source to target.  The target compress
 	 * array allows to specify the modification for its index values, allowing target compress array
-s	 * has different original size (uncompress data array size) from the source.
+	 * has different original size (uncompress data array size) from the source.
 	 * 
 	 * @param src        The source compress array
 	 * @param srcoff     The starting position of source compress array
@@ -471,8 +437,8 @@ s	 * has different original size (uncompress data array size) from the source.
 	 * @param len        The number of elements (index-value pair) to be copied 
 	 * @param idxchg     Modification on the index values in the target compress array
 	 */
-	public static def copy(src:CompressArray, var srcoff:Int,
-						   dst:CompressArray, var dstoff:Int, len:Int, idxchg:Int) : void {
+	public static def copy(src:CompressArray, var srcoff:Long,
+						   dst:CompressArray, var dstoff:Long, len:Long, idxchg:Long) : void {
 		if (len <= 0) return;
 		//val srcend = srcoff + len;
 		//Size test should be performed before calling this method for better performance
@@ -481,11 +447,11 @@ s	 * has different original size (uncompress data array size) from the source.
 		//for (;srcoff < srcend; srcoff++, dstoff++){
 		//    dst(dstoff) = Pair(src.getIndex(srcoff)-idxchg, src.getValue(srcoff));
 		//}
-		Array.copy[Int   ](src.index, srcoff, dst.index, dstoff, len);
-		if (idxchg!=0) {
-			for (var i:Int=dstoff; i<dstoff+len; i++)	dst.index(i) -= idxchg;
+		Rail.copy[Long](src.index, srcoff, dst.index, dstoff, len);
+		if (idxchg!=0L) {
+			for (var i:Long=dstoff; i<dstoff+len; i++)	dst.index(i) -= idxchg;
 		}
-		Array.copy[Double](src.value, srcoff, dst.value, dstoff, len);
+		Rail.copy[ElemType](src.value, srcoff, dst.value, dstoff, len);
 		dst.count += len;
 	}
 
@@ -500,27 +466,24 @@ s	 * has different original size (uncompress data array size) from the source.
 	 * @param dstoff     The starting position of target compress array
 	 * @param len        The number of elements (index-value pair) to be copied 
 	 */
-	public static def copy(src:CompressArray, var srcoff:Int, 
-						   dst:CompressArray, var dstoff:Int, len:Int) : void {
+	public static def copy(src:CompressArray, var srcoff:Long, 
+						   dst:CompressArray, var dstoff:Long, len:Long) : void {
 		if (len <= 0) return;
 		//Size test should be performed before calling this method for better performance
 		dst.testIncStorage(dstoff, len);
 
-		Array.copy[Int   ](src.index, srcoff, dst.index, dstoff, len);
-		Array.copy[Double](src.value, srcoff, dst.value, dstoff, len);
+		Rail.copy[Long](src.index, srcoff, dst.index, dstoff, len);
+		Rail.copy[ElemType](src.value, srcoff, dst.value, dstoff, len);
 		dst.count += len;	
 	}
-
-	//--------------------------------------------------------------------
-	//
 
 	/**
 	 *  Return the number of nonzero (nz) entries in the given array. 
 	 * An entry v is nz if Math.testZero(v) succeeds.
 	 */
-	public static def countNonZero(d:Array[Double](1)):Int {
-		var nzcnt:Int = 0;
-		for (var i:Int=0; i<d.size; i++) {
+	public static def countNonZero(d:Rail[ElemType]):Long {
+		var nzcnt:Long = 0;
+		for (var i:Long=0; i<d.size; i++) {
 			if (!MathTool.isZero(d(i))) nzcnt++;
 		}
 		return nzcnt;
@@ -530,12 +493,12 @@ s	 * has different original size (uncompress data array size) from the source.
 	 * Return a new compressed array containing all the 
 	 * nonzero entries in d. 
 	 */
-	public static def compress(d:Array[Double](1)):CompressArray {
+	public static def compress(d:Rail[ElemType]):CompressArray {
 		val nzc = CompressArray.countNonZero(d);
 		val out = new CompressArray(nzc);
-		var pos:Int = 0;
+		var pos:Long = 0;
 		val size = d.size;
-		for (var i:Int=0; i<size; i++) {
+		for (var i:Long=0; i<size; i++) {
 			if (!MathTool.isZero(d(i))) {
 			    out(pos) = Pair(i,d(i));
 				pos++;
@@ -544,6 +507,7 @@ s	 * has different original size (uncompress data array size) from the source.
 		out.count = pos;
 		return out;
 	}
+
 	/**
 	 * Transfer as many nz entries from d into this 
 	 * the as can fit into this. The entries are transferred
@@ -555,11 +519,11 @@ s	 * has different original size (uncompress data array size) from the source.
 	 * @param offset     the index of the first entry in dest into which to copy
 	 * @return     number of nz entries transferred
 	 */
-	public def compressAt(destOffset:Int, s:Array[Double](1)):Int { 
-		var destI:Int = destOffset;
+	public def compressAt(destOffset:Long, s:Rail[ElemType]):Long { 
+		var destI:Long = destOffset;
 		val size = this.storageSize();
 		val sSize = s.size;
-		for (var i:Int=0; i < sSize && destI < size; i++) {
+		for (var i:Long=0; i < sSize && destI < size; i++) {
 		    if (!MathTool.isZero(s(i))) {
 		        this(destI)=Pair(i, s(i));
 		        destI++;
@@ -569,7 +533,6 @@ s	 * has different original size (uncompress data array size) from the source.
 		this.count += c;
 		return c;
 	}
-
 
 	/**
 	 * Extract data from this compressed array and transfer into dest.
@@ -582,22 +545,22 @@ s	 * has different original size (uncompress data array size) from the source.
 	 * @param dstOffset     starting offset for target array to store the extracted data
 	 * @param dest          target array
 	 */
-	public def extract(srcOffset:Int, count:Int, 
-					   dstOffset:Int, dest:Array[Double](1)):void {
-		if (count <=0 || this.count ==0) return;
-		Debug.assure(srcOffset+count-1  < this.count, 
-					 "extract compress array out of range");
+	public def extract(srcOffset:Long, count:Long, 
+					   dstOffset:Long, dest:Rail[ElemType]):void {
+		if (count <=0L || this.count ==0L) return;
+		assert (srcOffset+count-1  < this.count) :
+		    "extract compress array out of range";
 		val destSize = dest.size;
-		var preidx:Int = dstOffset;
-		var dstidx:Int = 0;
+		var preidx:Long = dstOffset;
+		var dstidx:Long = 0;
 
-		for (var i:Int=srcOffset; i<srcOffset+count; i++) {
+		for (var i:Long=srcOffset; i<srcOffset+count; i++) {
 			if (index(i) < 0) break;
 
 			dstidx = dstOffset+index(i);
 
 			//Reset target array between two adjacent nonzeros 
-			for (var j:Int=preidx; j<dstidx && i<destSize; j++) dest(j) = 0.0;
+			for (var j:Long=preidx; j<dstidx && i<destSize; j++) dest(j) = 0.0 as ElemType;
 			
 			if (dstidx < destSize) dest(dstidx) = value(i);
 			preidx = dstidx+1;
@@ -607,53 +570,35 @@ s	 * has different original size (uncompress data array size) from the source.
 	/**
 	 * Extract all data in this into dest.
 	 */
-	public def extract(dest:Array[Double](1)) {
+	public def extract(dest:Rail[ElemType]) {
 		extract(0, this.count, 0, dest);
 	}
 
 	/**
 	 * Allocate ls entries from current array and return a new Rail
-	 * containing these netries. 
+	 * containing these entries. 
 	 */
-	public def extract(ls:Int):Array[Double](1) {
-		val dst = new Array[Double](ls);
+	public def extract(ls:Long):Rail[ElemType] {
+		val dst = new Rail[ElemType](ls);
 		extract(dst);
 		return dst;
 	} 
 
-
-	//=========================================================
-	// Util methods
-	//=========================================================
 	public def toString():String {
 		val outstr = new StringBuilder();
-		outstr.add("Compressd Array (" + this.storageSize()+ ") NZ "+count+"  [");
-		for (var i:Int=0; i<this.count; i++) {
+		outstr.add("Compressed Array (" + this.storageSize()+ ") NZ "+count+"  [");
+		for (var i:Long=0; i<this.count; i++) {
 			outstr.add(" "+getIndex(i)+":"+getValue(i)+" ");
 		}
 		outstr.add(" ]");
 		return outstr.toString();
 	}
 
-	public def print(msg:String) {
-		val ostr:String = msg +	"\n"+toString();
-		Console.OUT.println(ostr);
-		Console.OUT.flush();
-	}
-	public def print() { print(""); }
-
-	public def debugPrint(msg:String) {
-		if (Debug.disable) return;
-		val output:String= msg+toString();
-		Debug.println(output);
-	}
-	public def debugPrint() { debugPrint("");}
-
 	public def equals(cl:CompressArray):Boolean {
 		if (this.count != cl.count) 
 			return false;
 		//
-		for (var i:Int=0; i<this.count; i++) {
+		for (var i:Long=0; i<this.count; i++) {
 			if ((this.getIndex(i) != cl.getIndex(i)) ||
 				(this.getValue(i) != cl.getValue(i)))
 				return false;
@@ -661,10 +606,10 @@ s	 * has different original size (uncompress data array size) from the source.
 		return true;
 	}
 
-	public def equals(al:Array[Double](1)):Boolean {
-		var pos:Int = 0;
-		var idx:Int = (this.count==0)?-1:this.getIndex(pos);
-		for (var i:Int=0; i<al.size; i++) {
+	public def equals(al:Rail[ElemType]):Boolean {
+		var pos:Long = 0;
+		var idx:Long = (this.count==0L)?-1L:this.getIndex(pos);
+		for (var i:Long=0; i<al.size; i++) {
 			if (idx == i) {
 				if (MathTool.equals(getValue(pos), al(i))) {
 					if (pos < this.count-1) {
@@ -682,6 +627,4 @@ s	 * has different original size (uncompress data array size) from the source.
 		}
 		return true;
 	}
-	//------------------
-
 }

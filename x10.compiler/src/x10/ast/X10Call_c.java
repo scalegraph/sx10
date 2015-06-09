@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.ast;
@@ -646,6 +646,7 @@ public class X10Call_c extends Call_c implements X10Call {
 		        args = p.snd();
 		    }
 		    catch (SemanticException e2) {
+		    	// [DC] seems to be a bug that e2 is not reported to the user?
 		        // Nothing worked. If you have a cc, thats the one. Exit with cc.
 		        if (cc != null) {
 		            // [IP] TODO: move closure call lookup here 

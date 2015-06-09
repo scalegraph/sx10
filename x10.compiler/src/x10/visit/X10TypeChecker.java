@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.visit;
@@ -63,6 +63,7 @@ public class X10TypeChecker extends TypeChecker {
 	private x10.ExtensionInfo extensionInfo;
 	
 	// TODO: record the top-level node in a memo only if typechecking a fragment
+    @Override
 	public Node override(Node parent, Node n) {
 	    Node n_ = memo.get(n);
 	    if (n_ != null) {

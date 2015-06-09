@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2012.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.runtime.impl.java;
@@ -14,7 +14,7 @@ package x10.runtime.impl.java;
 
 public abstract class ByteUtils {
 
-    public static java.lang.String toString(byte a, int radix) {
+    public static String toString(byte a, int radix) {
         if (a >= 0) {
             return java.lang.Integer.toString(a, radix);
         } else {

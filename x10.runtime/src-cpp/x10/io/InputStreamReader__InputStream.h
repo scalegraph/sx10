@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 #ifndef X10_IO_NATIVEINPUTSTREAM_H
@@ -16,13 +16,13 @@
 
 namespace x10 {
 
-    namespace util {
-        template<class T> class IndexedMemoryChunk;
+    namespace lang {
+        template<class T> class Rail;
     }
 
     namespace io {
 
-        class InputStreamReader__InputStream : public x10::lang::X10Class {
+        class InputStreamReader__InputStream : public ::x10::lang::X10Class {
         public:
             RTT_H_DECLS_CLASS;
 
@@ -41,17 +41,17 @@ namespace x10 {
 
             virtual x10_int read() = 0;
 
-            virtual x10_int read(x10::util::IndexedMemoryChunk<x10_byte> b);
+            virtual x10_int read(::x10::lang::Rail<x10_byte>* b);
 
-            virtual x10_int read(x10::util::IndexedMemoryChunk<x10_byte> b,
+            virtual x10_int read(::x10::lang::Rail<x10_byte>* b,
                                  x10_int off,
                                  x10_int len);
             
-            virtual x10_int available() { return 0; }
+            virtual x10_long available() { return 0L; }
 
-            virtual void skip(x10_int) = 0;
+            virtual void skip(x10_long) = 0;
 
-            virtual void mark(x10_int) { };
+            virtual void mark(x10_long) { };
 
             virtual void reset() { }
 
@@ -60,8 +60,8 @@ namespace x10 {
             static InputStreamReader__InputStream* STANDARD_IN();
 
             // Serialization
-            virtual void _serialize_body(x10aux::serialization_buffer& buf);
-            void _deserialize_body(x10aux::deserialization_buffer& buf);
+            virtual void _serialize_body(::x10aux::serialization_buffer& buf);
+            void _deserialize_body(::x10aux::deserialization_buffer& buf);
         };
     }
 }

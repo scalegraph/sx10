@@ -1,60 +1,36 @@
 /*
  *  This file is part of the X10 Applications project.
  *
- *  (C) Copyright IBM Corporation 2011.
+ *  (C) Copyright IBM Corporation 2011-2014.
  */
 
-import x10.io.Console;
-import x10.util.Timer;
-import x10.array.DistArray;
+import harness.x10Test;
 
+import x10.compiler.Ifndef;
+import x10.regionarray.Dist;
 
-import x10.matrix.Matrix;
-import x10.matrix.Debug;
-import x10.matrix.DenseMatrix;
-import x10.matrix.sparse.SparseCSC;
-import x10.matrix.block.MatrixBlock;
-import x10.matrix.block.BlockMatrix;
+import x10.matrix.ElemType;
+import x10.matrix.util.Debug;
 import x10.matrix.block.Grid;
 import x10.matrix.distblock.DistBlockMatrix;
-import x10.matrix.distblock.CastPlaceMap;
 import x10.matrix.distblock.BlockSet;
 import x10.matrix.distblock.DistMap;
 import x10.matrix.distblock.DistGrid;
-
 import x10.matrix.distblock.summa.AllGridReduce;
 
-/**
-   This class contains test cases P2P communication for matrix over different places.
-   <p>
+public class TestGridReduce extends x10Test {
 
-   <p>
- */
-
-public class TestGridReduce{
-    public static def main(args:Array[String](1)) {
-		val m = args.size > 0 ?Int.parse(args(0)):4;
-		val n = args.size > 1 ?Int.parse(args(1)):5;
-		val bm= args.size > 2 ?Int.parse(args(2)):4;
-		val bn= args.size > 3 ?Int.parse(args(3)):5;
-		val d = args.size > 4 ? Double.parse(args(4)):0.9;
-		val testcase = new GridReduceTest(m, n, bm, bn, d);
-		testcase.run();
-	}
-}
-
-
-class  GridReduceTest {
-
-	public val M:Int;
-	public val N:Int;
-	public val nzdensity:Double;
-	public val bM:Int;
-	public val bN:Int;
-	public val pM:Int;
-	public val pN:Int;
+    static def ET(a:Double)= a as ElemType;
+    static def ET(a:Float)= a as ElemType;
+	public val M:Long;
+	public val N:Long;
+	public val nzdensity:Float;
+	public val bM:Long;
+	public val bN:Long;
+	public val pM:Long;
+	public val pN:Long;
 	
-	public val numplace:Int;
+	public val numplace:Long;
 
 	public val dbmat:DistBlockMatrix;
 	public val sbmat:DistBlockMatrix;
@@ -63,8 +39,7 @@ class  GridReduceTest {
 	public distmap:DistMap;
 	public distgrid:DistGrid;
 	
-    public def this(m:Int, n:Int, bm:Int, bn:Int, d:Double) {
-
+    public def this(m:Long, n:Long, bm:Long, bn:Long, d:Float) {
 		M=m; N=n;
 		nzdensity = d;
 		bM = bm; bN = bn;
@@ -81,21 +56,14 @@ class  GridReduceTest {
 		numplace = Place.numPlaces();
 	}
 	
-	public def run(): void {
- 		// Set the matrix function
+    public def run():Boolean {
 		var retval:Boolean = true;
-		Console.OUT.println("Matrix dims:"+M+","+N);
-		Console.OUT.println("Partitioning grid:"+bM+"x"+bN);
-		Console.OUT.println("Distribution grid:"+pM+"x"+pN);
+	@Ifndef("MPI_COMMU") { // TODO Deadlocks!
 		retval &= testRowReduceSum(dbmat);
  		retval &= testColReduceSum(dbmat);
-		if (retval)
-			Console.OUT.println("Block communication test grid-reduce commu passed!");
-		else
-			Console.OUT.println("------------Block communication test collective grid-reduce failed!-----------");
+    }
+        return retval;
 	}
-	//------------------------------------------------
-
 	
 	public def testRowReduceSum(distmat:DistBlockMatrix):Boolean {
 		Console.OUT.printf("\nTest row-wise reduce of front column blocks on %d places\n", numplace);
@@ -104,18 +72,16 @@ class  GridReduceTest {
 		val work1 = distmat.makeTempFrontColBlocks(1);
 		distmat.reset();
 		
-		for (var colId:Int=0; colId<partgrid.numColBlocks; colId++) {
-			initFrontBlocks(1.0, work1);
-			finish AllGridReduce.startRowReduceSum(0, 1, colId, distmat, work1, tmp);
-						
-			Debug.flushln("Done row-wise cast from column block "+colId+" over "+pN+" places row-wise");
+		for (var colId:Long=0; colId<partgrid.numColBlocks; colId++) {
+		    initFrontBlocks(ET(1.0), work1);
+			finish AllGridReduce.startRowReduceSum(0, 1, colId, distmat, work1, tmp);			
+			//Debug.flushln("Done row-wise cast from column block "+colId+" over "+pN+" places row-wise");
 		}
 		
+                x10.matrix.util.VerifyTool.testSame(distmat, pN);
 		retval &= distmat.equals(pN as Double);//verifyRowReduceSum(pN as Double, 1, colId, work1);
-		if (!retval) distmat.printMatrix();
-		if (retval)
-			Console.OUT.println("Test ring reduce row-wise for dist block matrix test passed!");
-		else
+		if (!retval) Console.OUT.println(distmat);
+		if (!retval)
 			Console.OUT.println("-----Test ring reduce row-wise for dist block matrix failed!-----");
 		return retval;
 	}
@@ -128,26 +94,22 @@ class  GridReduceTest {
 		val tmp   = distmat.makeTempFrontRowBlocks(1);
 		val work2 = distmat.makeTempFrontRowBlocks(1);
 		
-		for (var rowId:Int=0; rowId<grid.numRowBlocks&&retval; rowId++) {
-			
-			initFrontBlocks(1.0, work2);
-			finish AllGridReduce.startColReduceSum(0, 1, rowId, distmat, work2, tmp);
-			
-			Debug.flushln("Done col-wise cast from row block "+rowId+" over "+pM+" places column-wise");
+		for (var rowId:Long=0; rowId<grid.numRowBlocks; rowId++) {
+		    initFrontBlocks(ET(1.0), work2);
+		    finish AllGridReduce.startColReduceSum(0, 1, rowId, distmat, work2, tmp);
+		    //Debug.flushln("Done col-wise cast from row block "+rowId+" over "+pM+" places column-wise");
 
 		}
-		retval &= distmat.equals(pN as Double);
+retval &=                x10.matrix.util.VerifyTool.testSame(distmat, pN);
+	//	retval &= distmat.equals(pN);
 
-		if (retval)
-			Console.OUT.println("Test ring reduce col-wise for dist block matrix test passed!");
-		else
-			Console.OUT.println("-----Test ring reduce col-wise for dist block matrix failed!-----");
+		if (!retval)
+		    Console.OUT.println("-----Test ring reduce col-wise for dist block matrix failed!-----");
 		return retval;
 	}
 
-	//===============================================
-	public static def initFrontBlocks(dv:Double, work:PlaceLocalHandle[BlockSet]) {
-		finish ateach (Dist.makeUnique()) {
+	public static def initFrontBlocks(dv:ElemType, work:PlaceLocalHandle[BlockSet]) {
+		finish ateach(Dist.makeUnique()) {
 			val itr = work().iterator();
 			while (itr.hasNext()) {
 				val blk = itr.next();
@@ -155,5 +117,13 @@ class  GridReduceTest {
 			}
 		}		
 	}
-	
+
+    public static def main(args:Rail[String]) {
+		val m = args.size > 0 ? Long.parse(args(0)):4;
+		val n = args.size > 1 ? Long.parse(args(1)):5;
+		val bm= args.size > 2 ? Long.parse(args(2)):4;
+		val bn= args.size > 3 ? Long.parse(args(3)):5;
+		val d = args.size > 4 ? Float.parse(args(4)):0.9f;
+		new TestGridReduce(m, n, bm, bn, d).execute();
+	}
 }

@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 
@@ -50,6 +50,7 @@ public class LocalAccessToFieldAccessReplacer extends NodeVisitor {
     }
     
     
+    @Override
     public Node leave(Node parent, Node old, Node n, NodeVisitor v) {
         Node ret = n;
         if(n instanceof Local && !(parent instanceof LocalAssign)){

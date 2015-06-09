@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.core;
@@ -30,8 +30,6 @@ final public class Int extends java.lang.Number implements StructI, java.lang.Co
 //    x10.lang.Arithmetic<Int>, x10.lang.Bitwise<Int>, x10.util.Ordered<Int>
     x10.core.Arithmetic.x10$lang$Int, x10.core.Bitwise.x10$lang$Int, x10.util.Ordered<Int>
 {
-    private static final long serialVersionUID = 1L;
-    
     public static final RuntimeType<?> $RTT = Types.INT;
     public RuntimeType<?> $getRTT() {return $RTT;}
     public Type<?> $getParam(int i) {return null;}
@@ -51,7 +49,7 @@ final public class Int extends java.lang.Number implements StructI, java.lang.Co
         static {
             // high value may be configured by property
             int h = 127;
-            java.lang.String highPropValue = System.getProperty("x10.lang.Int.Cache.high");
+            String highPropValue = System.getProperty("x10.lang.Int.Cache.high");
             if (highPropValue != null) {
             	int i = java.lang.Integer.parseInt(highPropValue);
                 i = Math.max(i, h);
@@ -121,7 +119,7 @@ final public class Int extends java.lang.Number implements StructI, java.lang.Co
     }
 
     @Override
-    public java.lang.String toString() {
+    public String toString() {
         return java.lang.Integer.toString($value);
     }
     
@@ -135,39 +133,39 @@ final public class Int extends java.lang.Number implements StructI, java.lang.Co
     // implements Arithmetic<Int>
     public Int $plus$G() { return this; }
     public Int $minus$G() { return Int.$box(-$value); }
-    public Int $plus(java.lang.Object b, Type t) { return Int.$box($value + ((Int)b).$value); }
-    public Int $minus(java.lang.Object b, Type t) { return Int.$box($value - ((Int)b).$value); }
-    public Int $times(java.lang.Object b, Type t) { return Int.$box($value * ((Int)b).$value); }
-    public Int $over(java.lang.Object b, Type t) { return Int.$box($value / ((Int)b).$value); }
+    public Int $plus(Object b, Type t) { return Int.$box($value + ((Int)b).$value); }
+    public Int $minus(Object b, Type t) { return Int.$box($value - ((Int)b).$value); }
+    public Int $times(Object b, Type t) { return Int.$box($value * ((Int)b).$value); }
+    public Int $over(Object b, Type t) { return Int.$box($value / ((Int)b).$value); }
     // for X10PrettyPrinterVisitor.exposeSpecialDispatcherThroughSpecialInterface
-    public int $plus$I(java.lang.Object b, Type t) { return $value + ((Int)b).$value; }
-    public int $minus$I(java.lang.Object b, Type t) { return $value - ((Int)b).$value; }
-    public int $times$I(java.lang.Object b, Type t) { return $value * ((Int)b).$value; }
-    public int $over$I(java.lang.Object b, Type t) { return $value / ((Int)b).$value; }
+    public int $plus$I(Object b, Type t) { return $value + ((Int)b).$value; }
+    public int $minus$I(Object b, Type t) { return $value - ((Int)b).$value; }
+    public int $times$I(Object b, Type t) { return $value * ((Int)b).$value; }
+    public int $over$I(Object b, Type t) { return $value / ((Int)b).$value; }
     
     // implements Bitwise<Int>
     public Int $tilde$G() { return Int.$box(~$value); }
-    public Int $ampersand(java.lang.Object b, Type t) { return Int.$box($value & ((Int)b).$value); }
-    public Int $bar(java.lang.Object b, Type t) { return Int.$box($value | ((Int)b).$value); }
-    public Int $caret(java.lang.Object b, Type t) { return Int.$box($value ^ ((Int)b).$value); }
-    public Int $left$G(int count) { return Int.$box($value << count); }
-    public Int $right$G(int count) { return Int.$box($value >> count); }
-    public Int $unsigned_right$G(int count) { return Int.$box($value >>> count); }
+    public Int $ampersand(Object b, Type t) { return Int.$box($value & ((Int)b).$value); }
+    public Int $bar(Object b, Type t) { return Int.$box($value | ((Int)b).$value); }
+    public Int $caret(Object b, Type t) { return Int.$box($value ^ ((Int)b).$value); }
+    public Int $left$G(long count) { return Int.$box($value << count); }
+    public Int $right$G(long count) { return Int.$box($value >> count); }
+    public Int $unsigned_right$G(long count) { return Int.$box($value >>> count); }
     // for X10PrettyPrinterVisitor.exposeSpecialDispatcherThroughSpecialInterface
-    public int $ampersand$I(java.lang.Object b, Type t) { return $value & ((Int)b).$value; }
-    public int $bar$I(java.lang.Object b, Type t) { return $value | ((Int)b).$value; }
-    public int $caret$I(java.lang.Object b, Type t) { return $value ^ ((Int)b).$value; }
+    public int $ampersand$I(Object b, Type t) { return $value & ((Int)b).$value; }
+    public int $bar$I(Object b, Type t) { return $value | ((Int)b).$value; }
+    public int $caret$I(Object b, Type t) { return $value ^ ((Int)b).$value; }
     
     // implements Ordered<Int>
-    public java.lang.Object $lt(java.lang.Object b, Type t) { return x10.core.Boolean.$box($value < ((Int)b).$value); }
-    public java.lang.Object $gt(java.lang.Object b, Type t) { return x10.core.Boolean.$box($value > ((Int)b).$value); }
-    public java.lang.Object $le(java.lang.Object b, Type t) { return x10.core.Boolean.$box($value <= ((Int)b).$value); }
-    public java.lang.Object $ge(java.lang.Object b, Type t) { return x10.core.Boolean.$box($value >= ((Int)b).$value); }
+    public Object $lt(Object b, Type t) { return Boolean.$box($value < ((Int)b).$value); }
+    public Object $gt(Object b, Type t) { return Boolean.$box($value > ((Int)b).$value); }
+    public Object $le(Object b, Type t) { return Boolean.$box($value <= ((Int)b).$value); }
+    public Object $ge(Object b, Type t) { return Boolean.$box($value >= ((Int)b).$value); }
     // for X10PrettyPrinterVisitor.generateSpecialDispatcher
-    public boolean $lt$Z(java.lang.Object b, Type t) { return $value < ((Int)b).$value; }
-    public boolean $gt$Z(java.lang.Object b, Type t) { return $value > ((Int)b).$value; }
-    public boolean $le$Z(java.lang.Object b, Type t) { return $value <= ((Int)b).$value; }
-    public boolean $ge$Z(java.lang.Object b, Type t) { return $value >= ((Int)b).$value; }
+    public boolean $lt$Z(Object b, Type t) { return $value < ((Int)b).$value; }
+    public boolean $gt$Z(Object b, Type t) { return $value > ((Int)b).$value; }
+    public boolean $le$Z(Object b, Type t) { return $value <= ((Int)b).$value; }
+    public boolean $ge$Z(Object b, Type t) { return $value >= ((Int)b).$value; }
 
     // extends abstract class java.lang.Number
     @Override
@@ -187,6 +185,10 @@ final public class Int extends java.lang.Number implements StructI, java.lang.Co
         return (double)$value;
     }
 
+    private Object writeReplace() throws java.io.ObjectStreamException {
+        return new x10.serialization.SerializationProxy(this);
+    }
+
     public void $_serialize(X10JavaSerializer $serializer) throws IOException {
         $serializer.write($value);
     }
@@ -198,7 +200,6 @@ final public class Int extends java.lang.Number implements StructI, java.lang.Co
     public static X10JavaSerializable $_deserialize_body(Int $_obj, X10JavaDeserializer $deserializer) throws IOException {
         int value  = $deserializer.readInt();
         $_obj = new Int(value);
-        $deserializer.record_reference($_obj);
         return $_obj;
     }
 }

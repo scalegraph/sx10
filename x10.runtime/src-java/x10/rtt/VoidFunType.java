@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.rtt;
@@ -15,23 +15,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class VoidFunType<T> extends RuntimeType<T> {
     
-    private static final long serialVersionUID = 1L;
-
-    // not used
-//    protected VoidFunType(Class<?> javaClass) {
-//        super(javaClass);
-//    }
-//    
-//    protected VoidFunType(Class<?> javaClass, Variance[] variances) {
-//        super(javaClass, variances);
-//    }
-//
-//    protected VoidFunType(Class<?> javaClass, Type<?>[] parents) {
-//        super(javaClass, parents);
-//    }
-    
-    protected VoidFunType(Class<?> javaClass, Variance[] variances, Type<?>[] parents) {
-        super(javaClass, variances, parents);
+    protected VoidFunType(Class<?> javaClass, int numParams, Type<?>[] parents) {
+        super(javaClass, numParams, parents);
     }
 
     private static final boolean useCache = true;
@@ -40,27 +25,27 @@ public final class VoidFunType<T> extends RuntimeType<T> {
         if (useCache) {
             VoidFunType<?> type = typeCache.get(javaClass);
             if (type == null) {
-                VoidFunType<?> type0 = new VoidFunType<T>(javaClass, null, null);
+                VoidFunType<?> type0 = new VoidFunType<T>(javaClass, 0, null);
                 type = typeCache.putIfAbsent(javaClass, type0);
                 if (type == null) type = type0;
             }
             return (VoidFunType<T>) type;
         } else {
-            return new VoidFunType<T>(javaClass, null, null);
+            return new VoidFunType<T>(javaClass, 0, null);
         }
     }
     
-    public static <T> VoidFunType/*<T>*/ make(Class<?> javaClass, Variance[] variances) {
+    public static <T> VoidFunType/*<T>*/ make(Class<?> javaClass, int numParams) {
         if (useCache) {
             VoidFunType<?> type = typeCache.get(javaClass);
             if (type == null) {
-                VoidFunType<?> type0 = new VoidFunType<T>(javaClass, variances, null);
+                VoidFunType<?> type0 = new VoidFunType<T>(javaClass, numParams, null);
                 type = typeCache.putIfAbsent(javaClass, type0);
                 if (type == null) type = type0;
             }
             return (VoidFunType<T>) type;
         } else {
-            return new VoidFunType<T>(javaClass, variances, null);
+            return new VoidFunType<T>(javaClass, numParams, null);
         }
     }
 
@@ -68,27 +53,27 @@ public final class VoidFunType<T> extends RuntimeType<T> {
         if (useCache) {
             VoidFunType<?> type = typeCache.get(javaClass);
             if (type == null) {
-                VoidFunType<?> type0 = new VoidFunType<T>(javaClass, null, parents);
+                VoidFunType<?> type0 = new VoidFunType<T>(javaClass, 0, parents);
                 type = typeCache.putIfAbsent(javaClass, type0);
                 if (type == null) type = type0;
             }
             return (VoidFunType<T>) type;
         } else {
-            return new VoidFunType<T>(javaClass, null, parents);
+            return new VoidFunType<T>(javaClass, 0, parents);
         }
     }
     
-    public static <T> VoidFunType/*<T>*/ make(Class<?> javaClass, Variance[] variances, Type<?>[] parents) {
+    public static <T> VoidFunType/*<T>*/ make(Class<?> javaClass, int numParams, Type<?>[] parents) {
         if (useCache) {
             VoidFunType<?> type = typeCache.get(javaClass);
             if (type == null) {
-                VoidFunType<?> type0 = new VoidFunType<T>(javaClass, variances, parents);
+                VoidFunType<?> type0 = new VoidFunType<T>(javaClass, numParams, parents);
                 type = typeCache.putIfAbsent(javaClass, type0);
                 if (type == null) type = type0;
             }
             return (VoidFunType<T>) type;
         } else {
-            return new VoidFunType<T>(javaClass, variances, parents);
+            return new VoidFunType<T>(javaClass, numParams, parents);
         }
     }
 
@@ -96,5 +81,10 @@ public final class VoidFunType<T> extends RuntimeType<T> {
     public String typeName(Object o) {
         return typeNameForVoidFun(o);
     }
+
+	@Override
+	protected RuntimeType.Variance getVariance(int i) {
+		return RuntimeType.Variance.CONTRAVARIANT; // parameter types are contravarient
+	}
 
 }

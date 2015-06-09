@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.visit;
@@ -86,18 +86,22 @@ public class TypeBuilder extends NodeVisitor
         return ts;
     }
 
+    @Override
     public NodeVisitor begin() {
         return this;
     }
     
+    @Override
     public Node override(Node n) {
         return n.del().buildTypesOverride(this);
     }
 
+    @Override
     public NodeVisitor enter(Node n) {
 	    return n.del().buildTypesEnter(this);
     }
 
+    @Override
     public Node leave(Node old, Node n, NodeVisitor v) {
 	    return n.del().buildTypes((TypeBuilder) v);
     }

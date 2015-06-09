@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.visit;
@@ -41,6 +41,7 @@ public abstract class LocalClassRemover extends ContextVisitor {
 	    this.theLocalClass = ct;
 	}
 
+    @Override
 	public NodeVisitor enter(Node n) {
 	    if (n instanceof ClassDecl) {
 		ConstructorCallRewriter v = (ConstructorCallRewriter) shallowCopy();
@@ -50,6 +51,7 @@ public abstract class LocalClassRemover extends ContextVisitor {
 	    return this;
 	}
 
+    @Override
 	public Node leave(Node old, Node n, NodeVisitor v) {
 	    if (n instanceof New) {
 		New neu = (New) n;
@@ -108,6 +110,7 @@ public abstract class LocalClassRemover extends ContextVisitor {
     Map<ClassDef, List<ClassMember>> orphans = CollectionFactory.newHashMap();
     Map<ClassDef,List<FieldDef>> newFields = CollectionFactory.newHashMap();
 
+    @Override
     public Node override(Node parent, Node n) {
 	// Find local classes in a block and remove them.
 	// Rewrite local classes to instance member classes.

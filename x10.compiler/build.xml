@@ -14,9 +14,11 @@
     <property name="etc" location="${x10.dist.location}/etc"/>
     <property name="config" value="*.cfg"/>
     <property name="lpg.jar" value="lpg.jar"/>
+    <property name="shrike.jar" value="com.ibm.wala.shrike_1.3.1.201101071300.jar"/>
     <path id="project.classpath">
         <path refid="mainproject.classpath"/>
         <path refid="lpg.classpath"/>
+        <path refid="shrike.classpath"/>
         <path refid="x10.constraints.classpath"/>
         <path refid="x10.common.classpath"/>
     </path>
@@ -25,6 +27,9 @@
     </path>
     <path id="lpg.classpath">
         <pathelement location="${lib}/${lpg.jar}"/>
+    </path>
+    <path id="shrike.classpath">
+        <pathelement location="${lib}/${shrike.jar}"/>
     </path>
     <path id="x10.constraints.classpath">
         <pathelement location="${x10.constraints.location}/classes"/>
@@ -74,10 +79,14 @@
             <available file="${lib}/${lpg.jar}"/>
         </condition>
         <fail message="Unable to find required file ${lib}/${lpg.jar}" unless="lpg.jar.present"/>
+        <condition property="shrike.jar.present">
+            <available file="${lib}/${shrike.jar}"/>
+        </condition>
+        <fail message="Unable to find required file ${lib}/${shrike.jar}" unless="shrike.jar.present"/>
     </target>
     <target name="build" depends="init,prereq-jars">
         <echo message="${ant.project.name}: ${ant.file}"/>
-        <javac destdir="${build}" source="1.5" target="1.5" debug="on" includes="polyglot/**,x10/**,x10c/**,x10cpp/**,x10cuda/**,x10rose/**" excludes="polyglot/ext/x10/dom/**,polyglot/ext/x10/plugin/**,polyglot/ext/x10/visit/Propagate*AnnotationsVisitor.java">
+        <javac destdir="${build}" source="1.6" target="1.6" includeantruntime="false" debug="on" includes="polyglot/**,x10/**,x10c/**,x10cpp/**,x10cuda/**,x10rose/**" excludes="polyglot/ext/x10/dom/**,polyglot/ext/x10/plugin/**,polyglot/ext/x10/visit/Propagate*AnnotationsVisitor.java">
             <src path="${src}"/>
             <classpath refid="project.classpath"/>
         </javac>
@@ -100,8 +109,7 @@
                 <equals arg1="${os.arch}" arg2="amd64"/>
             </or>
         </condition>
-        <property name="lpg.executable.location" location="${lpg.location}.${platform}_${arch}"/>
-        <property name="lpg.executable" location="${lpg.executable.location}/lpgexe/lpg-${platform}_${arch}"/>
+        <property name="lpg.executable" location="${lpg.location}/lpgexe/lpg-${platform}_${arch}"/>
         <!--
         <echo message="OS: ${os.name} ${os.arch}"/>
         <echo message="Platform: ${platform}"/>

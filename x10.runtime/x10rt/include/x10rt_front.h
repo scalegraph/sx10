@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2013.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 #ifndef X10RT_FRONT_H
@@ -107,8 +107,7 @@
  * x10rt_net.h which provides the links between hosts.  There are currently many implementations of
  * the core networking layer:  There is a standalone implementation that allows multiple places via
  * inter-process communication on a single host.  There is an MPI implementation that uses MPI for
- * communication between hosts.  There is also a proprietary implementation on top of the PGAS
- * library, which internally supports many HPC libraries and also has a sockets implementation.  All
+ * communication between hosts.  There is a sockets implementation that uses TCP/IP sockets. All
  * of these implement the symbols in x10rt_net.h so they cannot currently be used simultaneously.
  * However one can link against whichever implementation is preferred for inter-host communication.
  * Details on the available implementations of the Core Networking Layer can be found <a
@@ -167,12 +166,20 @@
 
 /**
  * This preinit method allows the runtime network code to be partially initialized ahead of the 
- * rest of the runtime.  The return value is a connection string (likely hostname:port), which can 
- * be used by other runtimes to find this one.  When this method is called ahead of the regular 
+ * rest of the runtime.  The connInfoBuffer is a connection string (likely "hostname:port"), which
+ * can be used by other runtimes to find this one.  When this method is called ahead of the regular
  * x10rt_init(), it puts the runtime into a library mode, so that the runtime can be used more as 
  * a library in other programs, by using less CPU, and not calling system exit when errors occur.
+ *
+ * \param connInfoBuffer A pointer to a pre-existing buffer into which the connection information
+ * for the local runtime is written
+ *
+ * \param connInfoBufferSize The size of the connInfoBuffer
+ *
+ * \returns X10RT_ERR_OK if successful, otherwise some other error code.  Upon failure, an error
+ * string is available via x10rt_error_msg() and x10rt_finalize must be called to shut down.
  */
-X10RT_C char* x10rt_preinit();
+X10RT_C x10rt_error x10rt_preinit (char* connInfoBuffer, int connInfoBufferSize);
 
 /** Whether or not X10 is running as library.
  * \returns Whether or not X10 is running as library.
@@ -187,23 +194,30 @@ X10RT_C const char *x10rt_error_msg (void);
 
 /** Initialize the X10RT API.
  *
- * This should be the first call made by a process into X10RT.  This allows the X10RT implementation
+ * This should be the first call made by a process into X10RT, with the exception of x10rt_preinit,
+ * which is optionally called before this.  This allows the X10RT implementation
  * to inspect and modify the command-line parameters to the X10 process.  This is needed e.g. for
  * the implementation of X10RT on MPI.
  *
  * Also, the X10RT_ACCELS environment variable is used to decide how to configure accelerators at
  * the particular host.  The value of this variable is a string containing a comma separated list of
  * accelerators to use.  Each accelerator is specified as a string containing the kind of
- * accelerator, currently 1 of CUDA and SPE (unsupported), and the index of the particular piece of
- * hardware.  For example "CUDA0,CUDA0,CUDA1,SPE0" will configure the host to use the first CUDA
+ * accelerator, currently only CUDA, and the index of the particular piece of
+ * hardware.  For example "CUDA0,CUDA0,CUDA1" will configure the host to use the first CUDA
  * device twice (two separate places on the same piece of hardware, as well as a 3rd place on the
- * second CUDA device, and a single SPE as well.  It is also possible to specify "ALL" to use each
+ * second CUDA device.  It is also possible to specify "ALL" to use each
  * piece of available hardware exactly once, or "NONE" (the default) to use no accelerators.
  * Lowercase can also be used.
  *
- * \param argc A pointer to the argc parameter from the application's ``main'' function.
+ * In the event that x10rt_preinit() was called before this method, the parameters have a different
+ * meaning, as described.
  *
- * \param argv A pointer to the argv parameter from the application's ``main'' function.
+ * \param argc A pointer to the argc parameter from the application's ``main'' function.  If called
+ * after preinit, this is still a counter for the size of argv, but is not related to the main argc.
+ *
+ * \param argv A pointer to the argv parameter from the application's ``main'' function.  If called
+ * after preinit, instead, this is an array of connection strings, one per place.  The local place
+ * is identified in the array by a null string.
  *
  * \returns X10RT_ERR_OK if successful, otherwise some other error code.  Upon failure, an error
  * string is available via x10rt_error_msg() and x10rt_finalize must be called to shut down.
@@ -315,18 +329,45 @@ X10RT_C void x10rt_finalize (void);
 
 /** \{ */
 
-/** Number of places.  The total number of places (which is constant throughout a particular
- * execution), including accelerators and hosts.
+/** Number of places.  The total number of places (which may grow, but not shrink, throughout
+ * a particular execution), including accelerators and hosts.
  * \returns The number of places.
  */
 X10RT_C x10rt_place x10rt_nplaces (void);
 
-/** Number of hosts.  The total number of hosts (which is constant throughout a particular
- * execution).  Hosts can contain accelerators and are never accelerators themselves.  Note that
- * place ids for the hosts range from 0 to #x10rt_nhosts()-1.
+/** Number of hosts.  The total number of hosts (which may grow, but not shrink, throughout
+ * a particular execution).  Hosts can contain accelerators and are never accelerators
+ * themselves.  Note that place ids for the hosts range from 0 to #x10rt_nhosts()-1.
  * \returns The number of hosts.
  */
 X10RT_C x10rt_place x10rt_nhosts (void);
+
+/** Number of dead hosts.  The total number of hosts which have died since computation began.
+ * \returns The number of dead hosts.
+ */
+X10RT_C x10rt_place x10rt_ndead (void);
+
+/** Ask if a place is known to be dead at the time of this call.  Note that a place may have died,
+ * but not been detected as dead yet, or a place may die immediately after this call returns.  So a return
+ * value of true (dead) is more concrete than a return value of false (likely still alive).
+ *
+ * \param *p 	Which place we want to know about.
+ *
+ * \returns true if the place is known to be dead, or false if the place is not known to be dead.
+ */
+X10RT_C bool x10rt_is_place_dead (x10rt_place p);
+
+/** Get the list of known dead places.  The user should call x10rt_ndead() to determine a minimum
+ * reasonable size to use for this array.
+ *
+ * \param *dead_places 	A pointer to an array of x10rt_places, which will be filled in by the network
+ *
+ * \param len	The number of elements in the dead_places array.
+ *
+ * \returns X10RT_ERR_OK if successful, otherwise some other error code.  Upon failure, an error
+ * string is available via x10rt_error_msg() and x10rt_finalize must be called to shut down.
+ */
+X10RT_C x10rt_error x10rt_get_dead (x10rt_place *dead_places, x10rt_place len);
 
 /** The local place.  An X10 process will discover its
  * own identity by calling this function.
@@ -345,13 +386,6 @@ X10RT_C bool x10rt_is_host (x10rt_place place);
  * \returns Whether or not the given place is a CUDA-capable GPU.
  */
 X10RT_C bool x10rt_is_cuda (x10rt_place place);
-
-/** Find out about a particular place.
- * \param place The place about which we are interested.
- * \returns Whether or not the given place is an synergistic processing element of a Cell.
- */
-X10RT_C bool x10rt_is_spe (x10rt_place place);
-
 
 /** Find the host of the given accelerator.  If the place is not an accelerator, then itself is
  * returned.
@@ -495,6 +529,12 @@ X10RT_C void x10rt_register_mem (void *ptr, size_t len);
 X10RT_C void x10rt_blocks_threads (x10rt_place d, x10rt_msg_type type, int dyn_shm,
                                    int *blocks, int *threads, const int *cfg);
 
+/** Blocks until the accelerator has completed all preceding requested tasks.
+ *
+ * \param d The accelerator to synchronize.
+ */
+X10RT_C void x10rt_device_sync (x10rt_place d);
+
 /** Handle outstanding incoming messages.  A place should periodically call the following function
  * to handle outstanding messages that have arrived since the last call.
  *
@@ -534,13 +574,26 @@ X10RT_C void x10rt_blocks_threads (x10rt_place d, x10rt_msg_type type, int dyn_s
  */
 X10RT_C x10rt_error x10rt_probe (void);
 
+/**
+ * Check to see if a call to blocking_probe has been implemented, or if it's just a wrapper for probe
+ * Returns true if blocking_probe is real, or false if it will always return immediately
+ */
+X10RT_C bool x10rt_blocking_probe_support (void);
 
-/** Handle outstanding incoming messages, and block on the network if nothing is available.
+/** Handle outstanding incoming messages, or block on the network if nothing is available.
  * This method operates like x10rt_probe(), but this version will attempt to block if nothing was
- * available from the network.  This mechanism allows an X10 program to go idle on the CPU.  The
- * network probe will attempt to block if possible, but this is not guaranteed.
+ * available from the network, there are no outgoing network messages pending, and there is nothing
+ * running/pending on any attached accelerators.  This mechanism allows an X10 program to go idle
+ * on the CPU.  The network probe will attempt to block if possible, but this is not guaranteed.
  */
 X10RT_C x10rt_error x10rt_blocking_probe (void);
+
+/**
+ * Unblock a thread stuck in x10rt_blocking_probe(), or, if none are currently blocked,
+ * prevent the next call to x10rt_blocking_probe() from blocking.
+ * Safe to call at any time, or to call multiple times in a row.
+ */
+X10RT_C x10rt_error x10rt_unblock_probe (void);
 
 /** \} */
 
@@ -582,6 +635,10 @@ while (!finished) x10rt_probe();
  */
 
 /** \{ */
+
+/** Return what level of collectives the network transport supports
+ */
+X10RT_C x10rt_coll_type x10rt_coll_support ();
 
 /** Asynchronously create a new team of the given distribution.  This should be called by a single
  * place, presumably before it has dispatched messages to the other places that will be playing the

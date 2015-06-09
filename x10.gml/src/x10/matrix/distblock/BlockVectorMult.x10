@@ -7,28 +7,19 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2012.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.matrix.distblock;
 
-import x10.util.ArrayList;
-import x10.compiler.Inline;
-
 import x10.matrix.Matrix;
 import x10.matrix.DenseMatrix;
-import x10.matrix.sparse.SparseCSC;
 import x10.matrix.Vector;
 import x10.matrix.VectorMult;
-
-import x10.matrix.Debug;
 import x10.matrix.block.Grid;
-import x10.matrix.block.DenseBlock;
-import x10.matrix.block.SparseBlock;
-import x10.matrix.block.MatrixBlock;
 
 /**
- * This class defines list of matrix blocks which live in the same place
+ * This class performs matrix-vector multiplication for block-partitioned matrices.
  */
 public class BlockVectorMult  { 
 
@@ -36,8 +27,8 @@ public class BlockVectorMult  {
 		comp(aSet, bV, 0, cV, 0, plus);
 	
 	public static def comp(aSet:BlockSet, 
-			bV:Vector, offsetB:Int, 
-			cV:Vector, offsetC:Int, plus:Boolean):Vector(cV) {
+			bV:Vector, offsetB:Long, 
+			cV:Vector, offsetC:Long, plus:Boolean):Vector(cV) {
 		val itr = aSet.iterator();
 		val grid = aSet.getGrid();
 		if (!plus) cV.reset();
@@ -54,8 +45,6 @@ public class BlockVectorMult  {
 			//val rowCnt = grid.rowBs(ablk.myRowId);
 			//val colCnt = grid.colBs(ablk.myColId);
 			val mA = ablk.getMatrix();
-			//Debug.flushln("Col partition:"+grid.colBs.toString());
-			//Debug.flushln("Compute blk:"+ablk.myRowId+","+ablk.myColId+" rowOff:"+rowOff+" colOff:"+colOff+" Starting colOff:"+grid.startCol(ablk.myColId)+" offsetB:"+offsetB);
 			VectorMult.comp(mA, bV, colOff, cV, rowOff, true);
 		}
 		return cV;
@@ -65,8 +54,8 @@ public class BlockVectorMult  {
 	public static def comp(bV:Vector, aSet:BlockSet, cV:Vector, plus:Boolean):Vector(cV) =
 		comp(bV, 0, aSet, cV, 0, plus);
 	
-	public static def comp(bV:Vector, offsetB:Int, 
-			aSet:BlockSet, cV:Vector, offsetC:Int, plus:Boolean):Vector(cV) {
+	public static def comp(bV:Vector, offsetB:Long, 
+			aSet:BlockSet, cV:Vector, offsetC:Long, plus:Boolean):Vector(cV) {
 		val itr = aSet.iterator();
 		val grid = aSet.getGrid();
 		if (!plus) cV.reset();
@@ -82,7 +71,6 @@ public class BlockVectorMult  {
 			//val rowCnt = grid.rowBs(ablk.myRowId);
 			//val colCnt = grid.colBs(ablk.myColId);
 			val mA = ablk.getMatrix();
-			//Debug.flushln("Vector:"+rowOff+" * block:"+ablk.myRowId+","+ablk.myColId+"=>Vector:"+colOff);
 			VectorMult.comp(bV, rowOff, mA, cV, colOff, true);
 		}
 		return cV;

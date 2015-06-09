@@ -6,11 +6,12 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.matrix.comm;
 
+import x10.matrix.ElemType;
 /**
  * This struct is used to pack information of sparse matrix from the source place.
  * The data fields are transferred to the local place where the remote array copy uses 
@@ -18,18 +19,18 @@ package x10.matrix.comm;
  *
  */
 protected struct DenseRemoteSourceInfo {
-	public val valbuf:RemoteArray[Double];
-	public val offset:Int;
-	public val length:Int;
+	public val valbuf:GlobalRail[ElemType];
+	public val offset:Long;
+	public val length:Long;
 	
-	public def this( vlu:RemoteArray[Double], off:Int, len:Int) {
+	public def this(vlu:GlobalRail[ElemType], off:Long, len:Long) {
 		valbuf = vlu;	
 		offset = off; 
 		length = len;
 	}
 
-	public def this( vlu:Array[Double], off:Int, len:Int) {
-		valbuf = new RemoteArray[Double](vlu as Array[Double]{self!=null});	
+	public def this(vlu:Rail[ElemType], off:Long, len:Long) {
+		valbuf = new GlobalRail[ElemType](vlu as Rail[ElemType]{self!=null});	
 		offset = off; 
 		length = len;
 	}

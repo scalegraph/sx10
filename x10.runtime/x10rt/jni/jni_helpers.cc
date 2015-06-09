@@ -6,8 +6,12 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2013.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
+
+#if defined(__CYGWIN__) || defined(__FreeBSD__)
+#undef __STRICT_ANSI__ // Strict ANSI mode is too strict in Cygwin and FreeBSD
+#endif
 
 #ifndef __int64
 #define __int64 __int64_t
@@ -68,4 +72,20 @@ void jniHelper_abort(const char* format, ...) {
     vfprintf(stderr, format, ap);
     va_end(ap);
     if (ABORT_NEEDED && !x10rt_run_as_library()) abort();
+}
+
+
+/*
+ * Raise an OutOfMemoryError.
+ * If throwing the exception fails, abort.
+ */
+void jniHelper_oom(JNIEnv* env, const char* msg) {
+    jclass oom = env->FindClass("java/lang/OutOfMemoryError");
+    if (NULL == oom) {
+        jniHelper_abort(msg);
+    }
+    jint rc = env->ThrowNew(oom, msg);
+    if (rc != 0) {
+        jniHelper_abort(msg);
+    }
 }

@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 #include <x10aux/config.h>
@@ -18,11 +18,6 @@
 
 #include <x10aux/throw.h>
 #include <x10/lang/OutOfMemoryError.h>
-
-#ifdef _AIX
-#include <sys/vminfo.h>
-#endif
-
 
 #include <sys/ipc.h>
 #include <sys/shm.h>
@@ -39,13 +34,7 @@
 using namespace x10aux;
 
 void x10aux::reportOOM(size_t size) {
-    _M_("Out of memory allocating " << size << " bytes");
-#ifndef NO_EXCEPTIONS
     throwException<x10::lang::OutOfMemoryError>();
-#else
-    fprintf(stderr,"Out of memory\n");
-    abort();
-#endif
 }
 
 char *x10aux::alloc_printf(const char *fmt, ...) {
@@ -168,6 +157,7 @@ namespace {
     size_t congruent_sz;
 }
 
+#ifdef __linux__
 // partial reimplemntation of glibc's getline
 static ssize_t mygetline (char **lineptr, size_t *sz, FILE *f)
 {
@@ -190,6 +180,7 @@ static ssize_t mygetline (char **lineptr, size_t *sz, FILE *f)
     *sz += 1;
     return *sz;
 }
+#endif
 
 #if !defined(SHM_R) || !defined(SHM_W)
 #include <sys/stat.h>
@@ -245,12 +236,6 @@ static void ensure_init_congruent (size_t req_size) {
         }
         fclose(f);
 
-        #elif defined(__aix)
-
-        page = 16 * 1024 * 1024; // 16MB
-
-        #else
-
         fprintf(stderr, "Using huge pages for congruent memory is not supported on your platform.  Please unset "ENV_CONGRUENT_HUGE".\n");
         abort();
 
@@ -287,15 +272,12 @@ static void ensure_init_congruent (size_t req_size) {
     if (x10aux::congruent_huge) {
 
         // huge pages are useful for performance, e.g. due to reducing TLB misses
-        // they are non-standard, currently aix and linux are supported.
+        // they are non-standard, currently only linux is supported.
 
         // we are assuming that huge pages (being very special) are going to always occupy the same virtual address space
 
         #if defined(__linux__) && !defined(SHM_HUGETLB)
             fprintf(stderr, "Using huge pages for congruent memory is only supported on Linux >= 2.6.  Please unset "ENV_CONGRUENT_HUGE".\n");
-            abort();
-        #elif defined(_AIX) && !defined(SHM_PAGESIZE)
-            fprintf(stderr, "This AIX system appears not to have SHM_PAGESIZE.  Please unset "ENV_CONGRUENT_HUGE".\n");
             abort();
         #else
             // ok let's go
@@ -312,16 +294,6 @@ static void ensure_init_congruent (size_t req_size) {
                 perror("congruent shmget");
                 abort();
             }
-
-            #ifdef __aix
-            // on AIX we ask for pages of a particular size
-            struct shmid_ds shm_buf = { 0 };
-            shm_buf.shm_pagesize = page;
-            if (shmctl(shm_id, SHM_PAGESIZE, &shm_buf) != 0) {
-                fprintf(stderr, "Could not get 16M pages\n");
-                abort();
-            }
-            #endif
 
             char *base_addr_ = x10aux::get_congruent_base();
             // Test different addresses by overriding with X10_CONGRUENT_BASE environment variable (takes decimal and hex)
@@ -349,7 +321,7 @@ static void ensure_init_congruent (size_t req_size) {
         // we're not using huge pages, however we still need an address that is consistent across all places
         // so we use mmap with a fixed address
 
-        #if !defined(_AIX) && !defined(__linux__) && !defined(__APPLE__)
+        #if !defined(__linux__) && !defined(__APPLE__)
 
             // in particular, cygwin can fall in this trap
             // other platforms have yet to be investigated for possible support
@@ -486,10 +458,6 @@ void *x10aux::alloc_internal_huge(size_t size) {
 	}
 	fclose(f);
 
-	#elif defined(__aix)
-
-	page = 16 * 1024 * 1024; // 16MB
-
 	#else
 
 	fprintf(stderr, "Using huge pages for congruent memory is not supported on your platform.  Please unset "ENV_CONGRUENT_HUGE".\n");
@@ -511,9 +479,6 @@ void *x10aux::alloc_internal_huge(size_t size) {
 	#if defined(__linux__) && !defined(SHM_HUGETLB)
 		fprintf(stderr, "Using huge pages for congruent memory is only supported on Linux >= 2.6.  Please unset "ENV_CONGRUENT_HUGE".\n");
 		abort();
-	#elif defined(_AIX) && !defined(SHM_PAGESIZE)
-		fprintf(stderr, "This AIX system appears not to have SHM_PAGESIZE.  Please unset "ENV_CONGRUENT_HUGE".\n");
-		abort();
 	#else
 		// ok let's go
 		int shmflag = 0;
@@ -529,16 +494,6 @@ void *x10aux::alloc_internal_huge(size_t size) {
 			abort();
 		}
 
-		#ifdef __aix
-		// on AIX we ask for pages of a particular size
-		struct shmid_ds shm_buf = { 0 };
-		shm_buf.shm_pagesize = page;
-		if (shmctl(shm_id, SHM_PAGESIZE, &shm_buf) != 0) {
-			fprintf(stderr, "Could not get 16M pages\n");
-			abort();
-		}
-		#endif
-
 		obj = shmat(shm_id,0,0);  // 'attach' the shared memory at any arbitrary address (seemingly, this is always the same)
 		shmctl(shm_id, IPC_RMID, NULL); // mark for destruction, will be deallocated when shmdt is called (for x10, never)
 	#endif
@@ -552,12 +507,7 @@ void *x10aux::alloc_internal_congruent(size_t size) {
 
     if (congruent_cursor - congruent_base + size > congruent_sz) {
         // run out of space
-        #ifndef NO_EXCEPTIONS
         throwException<x10::lang::OutOfMemoryError>();
-        #else
-        fprintf(stderr, "Out of congruent memory, see "ENV_CONGRUENT_SIZE"\n");
-        abort();
-        #endif
     }
 
     void *r = congruent_cursor;
@@ -567,3 +517,16 @@ void *x10aux::alloc_internal_congruent(size_t size) {
 
     return r;
 }
+
+void *x10aux::compute_congruent_addr(void* addr, int src, int dst) {
+
+    if (x10aux::congruent_huge) {
+        int modSrc = src % (1 << x10aux::congruent_period);
+        int modDst = dst % (1 << x10aux::congruent_period);
+        addr = (void*)((x10_ulong)addr - (x10_ulong)(x10aux::congruent_offset * modSrc) + (x10_ulong)(x10aux::congruent_offset *  modDst));
+    }
+    return addr;
+}
+
+
+

@@ -1,4 +1,4 @@
- /*
+/*
  *  This file is part of the X10 project (http://x10-lang.org).
  *
  *  This file is licensed to You under the Eclipse Public License (EPL);
@@ -6,32 +6,25 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.util.concurrent;
 
 import x10.compiler.Pinned;
-import x10.io.SerialData;
+import x10.xrx.Runtime;
+import x10.xrx.Worker;
 
 @Pinned public class SimpleLatch extends Lock {
     public def this() { super(); }
-
-    public def serialize():SerialData {
-        throw new UnsupportedOperationException("Cannot serialize "+typeName());
-    }
-
-    private def this(SerialData) {
-        throw new UnsupportedOperationException("Cannot deserialize "+typeName());
-    }
-
-    static type Worker = Runtime.Worker;
 
     private var worker:Worker = null;
     private var state:Boolean = false;
 
     // can only be called once
     public def await():void {
+        val activity = Runtime.activity();
+        if (activity.epoch < Runtime.epoch()) throw new DeadPlaceException("Cancelled");
         if (state) return;
         lock();
         if (state) {
@@ -41,6 +34,11 @@ import x10.io.SerialData;
         Runtime.increaseParallelism(); // likely to be blocked for a while
         worker = Runtime.worker();
         while (!state) {
+            if (activity.epoch < Runtime.epoch()) {
+                unlock();
+                release();
+                throw new DeadPlaceException("Cancelled");
+            }
             unlock();
             Worker.park();
             lock();
@@ -49,10 +47,15 @@ import x10.io.SerialData;
     }
 
     public def release():void {
+        if (state) return;
         lock();
+        if (state) {
+            unlock();
+            return;
+        }
         state = true;
         if (worker != null) {
-            Runtime.decreaseParallelism(1);
+            Runtime.decreaseParallelism(1n);
             worker.unpark();
         }
         unlock();

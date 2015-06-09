@@ -1,3 +1,14 @@
+/*
+ *  This file is part of the X10 project (http://x10-lang.org).
+ *
+ *  This file is licensed to You under the Eclipse Public License (EPL);
+ *  You may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *      http://www.opensource.org/licenses/eclipse-1.0.php
+ *
+ *  (C) Copyright IBM Corporation 2006-2014.
+ */
+
 package x10.util;
 
 import polyglot.frontend.Compiler;
@@ -179,7 +190,7 @@ public class RunTestSuite {
             //"LangSpec", // Bard has too many errors...
             "WorkStealing", // it has copies of existing tests
             "AutoGen", // it takes too long to compile these files
-            "NOT_WORKING", // to exclude some benchmarks: https://x10.svn.sourceforge.net/svnroot/x10/benchmarks/trunk
+            "NOT_WORKING", // to exclude some benchmarks: https://svn.code.sourceforge.net/p/x10/code/benchmarks/trunk
     };
     private static final String[] EXCLUDE_FILES = {
             // difference on MAC and PC (on PC the compiler crashes on AssertionError, on MAC it outputs this error: Semantic Error: Type definition type static TypedefOverloading06_MustFailCompile.A = x10.lang.String has the same name as member class TypedefOverloading06_MustFailCompile.A.

@@ -4,38 +4,26 @@
  *  (C) Copyright IBM Corporation 2012.
  */
 
-import x10.io.Console;
-
-import x10.matrix.Debug;
+import x10.matrix.util.Debug;
 import x10.matrix.Matrix;
 import x10.matrix.DenseMatrix;
-
 import x10.matrix.block.Grid;
 import x10.matrix.block.BlockMatrix;
 import x10.matrix.block.DenseBlockMatrix;
-
 import x10.matrix.distblock.DistMap;
 import x10.matrix.distblock.DistGrid;
-
 import x10.matrix.distblock.DistBlockMatrix;
 import x10.matrix.distblock.summa.SummaMult;
 import x10.matrix.distblock.summa.SummaMultTrans;
 
-
-/**
-   <p>
-
-   <p>
- */
 public class DistSparseBlockSUMMA {
-	
-    public static def main(args:Array[String](1)) {
-    	val M = args.size > 0 ?Int.parse(args(0)):100;
-    	val K = args.size > 1 ?Int.parse(args(1)):100;
-    	val N = args.size > 2 ?Int.parse(args(2)):100;
-    	val it = args.size > 3 ?Int.parse(args(3)):4;
-    	val pnl = args.size > 4 ?Int.parse(args(4)):10;
-    	val bMN = args.size > 5 ? Int.parse(args(5)):-1;
+    public static def main(args:Rail[String]) {
+    	val M = args.size > 0 ? Long.parse(args(0)):100;
+    	val K = args.size > 1 ? Long.parse(args(1)):100;
+    	val N = args.size > 2 ? Long.parse(args(2)):100;
+    	val it = args.size > 3 ? Long.parse(args(3)):4;
+    	val pnl = args.size > 4 ? Long.parse(args(4)):10;
+    	val bMN = args.size > 5 ? Long.parse(args(5)):-1;
     	
 		val testcase = new BenchRunSumma(M,K,N,it,pnl,bMN);
 		testcase.run();
@@ -43,14 +31,14 @@ public class DistSparseBlockSUMMA {
 }
 
 class BenchRunSumma {
-	public val M:Int;
-	public val K:Int;
-	public val N:Int;
-	public val bM:Int;
-	public val bN:Int;
+	public val M:Long;
+	public val K:Long;
+	public val N:Long;
+	public val bM:Long;
+	public val bN:Long;
 	public val nzd:Double;
 	
-	//-------------
+
 	//Matrix block partitioning
 	val gA:Grid;
 	val gB:Grid, gTransB:Grid;
@@ -59,24 +47,22 @@ class BenchRunSumma {
 	val gdA:DistGrid, dA:DistMap;
 	val dB:DistMap;
 	val dC:DistMap;
-	val itnum:Int;
-	val panel:Int;
-	//---------------------
+	val itnum:Long;
+	val panel:Long;
+
 	val A:DistBlockMatrix(M,K);
 	val B:DistBlockMatrix(K,N);
 	val C:DistBlockMatrix(M,N);
 	val tB:DistBlockMatrix(N,K);
-	//-----------
+
 	val summa:SummaMult;
 	val summaT:SummaMultTrans;
 	
-	
-	public def this(m:Int, k:Int, n:Int, it:Int, pnl:Int, blkmn:Int) {
-		
+	public def this(m:Long, k:Long, n:Long, it:Long, pnl:Long, blkmn:Long) {
 		M = m; K=k; N=n;
 		itnum = it;	panel = pnl; bM=blkmn; bN=blkmn;
 		nzd = 0.01;
-		//---------------------------------------------
+
 		
 		gA = blkmn<0?Grid.make(M,K):new Grid(M, K, bM, bN);
 		gB = blkmn<0?Grid.make(K,N):new Grid(K, N, bM, bN);
@@ -92,7 +78,7 @@ class BenchRunSumma {
 		B = DistBlockMatrix.makeSparse(gB, dB, nzd).initRandom() as DistBlockMatrix(K,N);
 		C = DistBlockMatrix.makeDense(gC, dC) as DistBlockMatrix(M,N);
 		tB= DistBlockMatrix.makeSparse(gTransB, dB, nzd).initRandom() as DistBlockMatrix(N,K);
-		//-------------------
+
 		//panel = SummaMult.estPanelSize(psz, A.getGrid(), B.getGrid());
 		val w1 = A.makeTempFrontColBlocks(panel);
 		val w2 = B.makeTempFrontRowBlocks(panel);
@@ -104,7 +90,7 @@ class BenchRunSumma {
 		
 		summa  = new SummaMult(panel, beta, A, B, C, w1, w2);
 		summaT = new SummaMultTrans(panel, beta, A, tB, C, w1t, w2t, tmp);
-		//-----------------------------------------
+
 		Console.OUT.printf("matrix (%dx%d) x (%dx%d) partitioned in (%dx%d) blocks ",
 				gA.M, gA.N, gB.M, gB.N, gA.numRowBlocks, gA.numColBlocks);
 		Console.OUT.printf("distributed in (%dx%d) places, panel size:%d\n", 

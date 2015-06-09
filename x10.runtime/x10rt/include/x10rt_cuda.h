@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2013.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 #ifndef X10RT_CUDA_H
@@ -135,6 +135,14 @@ X10RT_C void x10rt_cuda_send_put (x10rt_cuda_ctx *ctx, x10rt_msg_params *p,
 X10RT_C void x10rt_cuda_blocks_threads (x10rt_cuda_ctx *ctx, x10rt_msg_type type, int dyn_shm,
                                         int *blocks, int *threads, const int *cfg);
 
+/** Blocks until the CUDA device has completed all preceding requested tasks.
+ *
+ * \see x10rt_device_sync
+ *
+ * \param ctx The CUDA device to synchronize.
+ */
+X10RT_C void x10rt_cuda_device_sync (x10rt_cuda_ctx *ctx);
+
 /** Allocate memory on the given CUDA device.  Note that the CUDA GPU will adopt the same alignment
  * and pointer width characteristics as the host, so a void* is adequate for holding these remote
  * pointers.
@@ -165,8 +173,9 @@ X10RT_C void x10rt_cuda_device_free (x10rt_cuda_ctx *ctx, void *ptr);
  * \see x10rt_probe
  * 
  * \param ctx The CUDA device where work may be pending.
+ * \returns true if something is actively running in the GPU or is in the GPU work queue
  */
-X10RT_C void x10rt_cuda_probe (x10rt_cuda_ctx *ctx);
+X10RT_C bool x10rt_cuda_probe (x10rt_cuda_ctx *ctx);
 
 /** Clean up and destroy the given CUDA device.
  *

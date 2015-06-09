@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10;
@@ -34,6 +34,7 @@ public class X10CompilerOptions extends polyglot.main.Options {
     public Configuration x10_config;
 
     public String buildX10Lib = null;
+    public boolean symbols = true;
 
     /**
      * Absolute path to the X10 distribution
@@ -76,7 +77,35 @@ public class X10CompilerOptions extends polyglot.main.Options {
         source_path.add(jf);
     }
 
-	
+    protected static File createTempDir(String prefix, String suffix) throws IOException {
+        File tempdir = File.createTempFile(prefix, suffix);
+        // TODO following two statements should be done atomically
+        tempdir.delete();
+        tempdir.mkdir();
+        return tempdir;
+    }
+    
+    @Override
+    public void parseCommandLine(String[] args, Set<String> source) throws UsageError {
+        super.parseCommandLine(args, source);
+        
+        // XTENLANG-2126
+        if (!keep_output_files) { // -nooutput was specified
+            // ignore -d output_directory if specified and
+            // set a new temporary directory to output_directory.
+            // after post-compile, the output_directory will be removed.
+            try {
+                String prefix = "x10c-" + System.getProperty("user.name") + ".";
+                String suffix = "";
+                output_directory = createTempDir(prefix, suffix);
+            } catch (IOException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+        }
+    }
+
+    
 	@Override
 	protected int parseCommand(String args[], int index, Set<String> source) 
 		throws UsageError, Main.TerminationException
@@ -88,12 +117,15 @@ public class X10CompilerOptions extends polyglot.main.Options {
 			assertions = false;
 			return ++i;
 		}
+        if (args[i].equals("-nosymbols")) {
+            symbols = false;
+            return ++i;
+        }
 		if (args[i].equals("-o")) {
 		    ++i;
 		    executable_path = args[i];
 		    return ++i;
 		}
-		
 		if (args[i].equals("-x10lib")) {
 		    ++i;
 		    String libFile = args[i];
@@ -110,13 +142,12 @@ public class X10CompilerOptions extends polyglot.main.Options {
 	        }
 	        return ++i;
 		}
-
 		if (args[i].equals("-buildx10lib")) {
 		    ++i;
 			buildX10Lib = args[i];
 	        return ++i;
 		}
-
+		
 		try {
 			x10_config.parseArgument(args[index]);
 			return ++index;
@@ -143,9 +174,10 @@ public class X10CompilerOptions extends polyglot.main.Options {
 	public void usage(PrintStream out) {
 		super.usage(out);
 		usageForFlag(out, "-noassert", "turn off assertion generation");
-		usageForFlag(out, "-o <path>", "set generated executable path (for the post-compiler)");
+        usageForFlag(out, "-nosymbols", "generate executable without symbols (it won't be used for type check)");
+        usageForFlag(out, "-o <path>", "set generated executable path (for the post-compiler)");
+        usageForFlag(out, "-buildx10lib <path>", "build an x10 library");
 		usageForFlag(out, "-x10lib <lib.properties>", "use the precompiled x10 library described by <lib.properties>");
-		usageForFlag(out, "-buildx10lib <path>", "build an x10 library");
 
 		String[][] options = x10_config.options();
 		for (int i = 0; i < options.length; i++) {

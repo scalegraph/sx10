@@ -6,25 +6,19 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.matrix.comm;
 
-import x10.io.Console;
-import x10.util.Timer;
-
 import x10.compiler.Ifdef;
 import x10.compiler.Ifndef;
-import x10.compiler.Uninitialized;
 
-import x10.matrix.Debug;
+import x10.matrix.ElemType;
 
 import x10.matrix.Matrix;
 import x10.matrix.DenseMatrix;
-import x10.matrix.sparse.CompressArray;
-import x10.matrix.sparse.SparseCSC;
-
+import x10.matrix.comm.mpi.WrapMPI;
 
 /**
  * Ring cast, similar to broadcast, sends data to selected places, while using place-to-place
@@ -49,15 +43,7 @@ import x10.matrix.sparse.SparseCSC;
  */
 public class DistArrayRcast extends DistArrayRemoteCopy { 
 
-	//===========================
-	// Constructor
-	//===========================
-	public def this() {
-		super();
-	}
-	//==================================================
 	// RingCast: receive form previous one and send to one next in a ring 
-	//==================================================
 
 	/**
 	 * Broadcast the whole distributed array at here to all places one by one 
@@ -69,17 +55,15 @@ public class DistArrayRcast extends DistArrayRemoteCopy {
 		rcast(dmlist, sz);
 	}
 
-
-	//--------------------------------------------
 	/**
 	 * Broadcast double-precision data array from here to all places.
 	 *
 	 * @param dmlist 		distributed storage for data arrays
 	 * @param datCnt 		number of data elements in array to broadcast 
 	 */
-	public static def rcast(dmlist:DistDataArray, datCnt:Int) : void{
+	public static def rcast(dmlist:DistDataArray, datCnt:Long) : void{
 		val pcnt = dmlist.dist.region.size();
-		val plist:Array[Int](1) = new Array[Int](pcnt, (i:Int)=>(i));
+		val plist = new Rail[Long](pcnt, (i:Long)=>(i));
 		rcast(dmlist, datCnt, plist);
 	}
 
@@ -93,19 +77,17 @@ public class DistArrayRcast extends DistArrayRemoteCopy {
 	 */
 	public static def rcast(
 			dmlist:DistDataArray, 
-			datCnt:Int, 
-			plist:Array[Int](1)) : void {
+			datCnt:Long, 
+			plist:Rail[Long]) : void {
 		
 		@Ifdef("MPI_COMMU") {
 			mpiRcast(dmlist, datCnt, plist);
 		}
 
 		@Ifndef("MPI_COMMU") {
-			//Debug.flushln("start bcast to "+numPlaces);
 			x10Rcast(dmlist, datCnt, plist);
 		}
 	}
-	//----------------------------------------------------------------
 	
 	/**
 	 * Send data from here to places in the list using
@@ -117,8 +99,8 @@ public class DistArrayRcast extends DistArrayRemoteCopy {
 	 */
 	protected static def mpiRcast(
 			dmlist:DistDataArray, 
-			datCnt:Int, 
-			plist:Array[Int](1)):void {
+			datCnt:Long, 
+			plist:Rail[Int]):void {
 		
 	@Ifdef("MPI_COMMU") {
 		
@@ -128,12 +110,12 @@ public class DistArrayRcast extends DistArrayRemoteCopy {
 		val root   = here.id();                     //Implicitly copied to all places
 		finish {
 	
-			for (var p:Int=0; p < plist.size; p++) {
+			for (var p:Long=0; p < plist.size; p++) {
 				val nxtpid = (p==plist.size-1)?root:plist(p+1); //Implicitly carry to next place
 				val prepid = (p==0)?root:plist(p-1);            //Implicitly carry to next place
 				val curpid = plist(p);
 
-				at (dmlist.dist(curpid)) async {
+				at(dmlist.dist(curpid)) async {
 					//Need: dmlist, root, nxtpid, prepid, colOff, datasz
 					val mypid  = here.id();
 					val matbuf = dmlist(mypid);
@@ -152,18 +134,18 @@ public class DistArrayRcast extends DistArrayRemoteCopy {
 	}
 	}	
 	
-	//======================================================================
+
 	// Sparse matrix
-	//======================================================================
+
 	/**
 	 * Broadcast data in compress array to all places.
 	 *
 	 * @param smlist 		dist compress array 
 	 * @param catCnt 		number of nonzero data elements to broadcast 
 	 */
-	public static def rcast(smlist:DistCompArray, datCnt:Int) : void{
+	public static def rcast(smlist:DistCompArray, datCnt:Long) : void{
 		val pcnt = smlist.dist.region.size();
-		val plist:Array[Int](1) = new Array[Int](pcnt, (i:Int)=>(i));
+		val plist = new Rail[Long](pcnt, (i:Long)=>(i));
 		rcast(smlist, datCnt, plist);
 	}
 
@@ -173,7 +155,7 @@ public class DistArrayRcast extends DistArrayRemoteCopy {
 	 * @param smlist 		distributed storage for copies of compress array in all places
 	 */
 	public static def rcast(smlist:DistCompArray): void {
-		rcast(smlist, smlist(here.id()).count());
+		rcast(smlist, smlist(here.id()).count);
 	}
 
 	/**
@@ -184,15 +166,14 @@ public class DistArrayRcast extends DistArrayRemoteCopy {
 	 */
 	public static def rcast(
 			smlist:DistCompArray, 
-			datCnt:Int, 
-			plist:Array[Int](1)) : void {
+			datCnt:Long, 
+			plist:Rail[Long]) : void {
 		
 		@Ifdef("MPI_COMMU") {
 			mpiRcast(smlist, datCnt, plist);
 		}
 
 		@Ifndef("MPI_COMMU") {
-			//Debug.flushln("start bcast to "+numPlaces);
 			x10Rcast(smlist, datCnt, plist);
 		}
 	}
@@ -207,8 +188,8 @@ public class DistArrayRcast extends DistArrayRemoteCopy {
 	 */
 	protected static def mpiRcast(
 			smlist:DistCompArray, 
-			datCnt:Int, 
-			plist:Array[Int](1)):void {
+			datCnt:Long, 
+			plist:Rail[Int]):void {
 		
 		@Ifdef("MPI_COMMU") {
 			// Check place list 
@@ -220,14 +201,13 @@ public class DistArrayRcast extends DistArrayRemoteCopy {
 			//Not matrix, no need to initialize
 			//srcspa.initRemoteCopyAtSource(colOff, colCnt);
 			finish {
-	
-				for (var p:Int=0; p < plist.size; p++) {
+				for (var p:Long=0; p < plist.size; p++) {
 					val nxtpid = (p==plist.size-1)?root:plist(p+1); //Implicitly carry to next place
 					val prepid = (p==0)?root:plist(p-1);            //Implicitly carry to next place
 					//val curpid = p;
 					val curpid = plist(p);
 
-					async at (smlist.dist(curpid)) {
+					at(smlist.dist(curpid)) async {
 						//Need: dmlist, root, nxtpid, prepid, colOff, colCnt, datasz
 						val mypid  = here.id();
 						val matbuf = smlist(mypid);
@@ -267,50 +247,45 @@ public class DistArrayRcast extends DistArrayRemoteCopy {
 	 */
 	protected static def x10Rcast(
 			dmlist:DistDataArray, 
-			datCnt:Int, 
-			plist:Array[Int](1)):void {
+			datCnt:Long, 
+			plist:Rail[Long]):void {
 		
 		//Check place list 
 		if (plist.size == 0 || datCnt<=0) return;
 		val root   = here.id();
 		val srcden = dmlist(root);	
 
-		val rmtbuf = new RemoteArray[Double](srcden as Array[Double]{self!=null});
-		val nplist = new Array[Int](plist.size-1, (i:Int)=>plist(i+1));
+		val rmtbuf = new GlobalRail[ElemType](srcden as Rail[ElemType]{self!=null});
+		val nplist = new Rail[Long](plist.size-1, (i:Long)=>plist(i+1));
 
 		val nxtpid = plist(0);
-		at (dmlist.dist(nxtpid)) {
+		at(dmlist.dist(nxtpid)) {
 			//Implicit capture: rmtbuf, dmlist, datasz, nplist, root
 			copyToHere(rmtbuf, dmlist, datCnt, nplist, root);
 		}
 	}
 
-	/**
-	 *
-	 */
 	private static def copyToHere(
-			srcbuf:RemoteArray[Double],
+			srcbuf:GlobalRail[ElemType],
 			dmlist:DistDataArray,
-			datCnt:Int,
-			plist:Array[Int](1),
-			root:Int): void {
+			datCnt:Long,
+			plist:Rail[Long],
+			root:Long): void {
 		
 		val mypid  = here.id();
 		val rcvden = dmlist(mypid);
 
 		//Copy data from source place
 		if (mypid != root) {
-			//Debug.flushln("Copy data to here at Place "+mypid);
-			finish Array.asyncCopy[Double](srcbuf, 0, rcvden, 0, datCnt);
+			finish Rail.asyncCopy[ElemType](srcbuf, 0, rcvden, 0, datCnt);
 		}
-		//rcvden.print("Matrix data at "+mypid+" plist:"+plist.toString());
 		
 		//Goto next place in the list
 		if (plist.size >= 1) {
 			val nxtpid = plist(0); // Get next place id in the list
-			val rmtbuf = new RemoteArray[Double](rcvden as Array[Double]{self!=null});
-			val nplist = new Array[Int](plist.size-1, (i:Int)=>plist(i+1));
-			at (dmlist.dist(nxtpid)) {
+			val rmtbuf = new GlobalRail[ElemType](rcvden as Rail[ElemType]{self!=null});
+			val nplist = new Rail[Long](plist.size-1, (i:Long)=>plist(i+1));
+			at(dmlist.dist(nxtpid)) {
 				//Need: rmtbuf, dmlist, colOff, offset, datasz, nplist, root
 				copyToHere(rmtbuf, dmlist, datCnt, nplist, root);
 			}
@@ -327,38 +302,35 @@ public class DistArrayRcast extends DistArrayRemoteCopy {
 	 */
 	protected static def x10Rcast(
 			smlist:DistCompArray, 
-			datCnt:Int, 
-			plist:Array[Int](1)):void {
+			datCnt:Long, 
+			plist:Rail[Long]):void {
 		
 		//Check place list 
 		if (plist.size == 0 || datCnt<=0) return;
 		val root   = here.id();
 		val srcspa = smlist(root);	
 
-		val rmtidx = new RemoteArray[Int   ](srcspa.index as Array[Int]{self!=null});
-		val rmtval = new RemoteArray[Double](srcspa.value as Array[Double]{self!=null});
-		val nplist = new Array[Int](plist.size-1, (i:Int)=>plist(i+1));
+		val rmtidx = new GlobalRail[Long](srcspa.index as Rail[Long]{self!=null});
+		val rmtval = new GlobalRail[ElemType](srcspa.value as Rail[ElemType]{self!=null});
+		val nplist = new Rail[Long](plist.size-1, (i:Long)=>plist(i+1));
 
 		val nxtpid = plist(0);
 		
 		//srcspa.initRemoteCopyAtSource(colOff, colCnt);
-		at (smlist.dist(nxtpid)) {
+		at(smlist.dist(nxtpid)) {
 			//Need: rmtidx, rmtval, dmlist, colOff, offset, cnlCnt, datasz, nplist, root
 			copyToHere(rmtidx, rmtval, smlist, datCnt, nplist, root);
 		}
 		//srcspa.finalizeRemoteCopyAtSource();
 	}
 
-	/**
-	 *
-	 */
 	private static def copyToHere(
-			rmtIndex:RemoteArray[Int], 
-			rmtValue:RemoteArray[Double],
+			rmtIndex:GlobalRail[Long], 
+			rmtValue:GlobalRail[ElemType],
 			smlist:DistCompArray,
-			datCnt:Int,
-			plist:Array[Int](1),
-			root:Int): void {
+			datCnt:Long,
+			plist:Rail[Long],
+			root:Long): void {
 		
 		val mypid  = here.id();
 		val rcvspa = smlist(mypid);
@@ -369,17 +341,17 @@ public class DistArrayRcast extends DistArrayRemoteCopy {
 			//If receive side does not have enough space, program will crush
 			//+++++++++++++++++++++++++++++++++++++++++++++
 			//rcvspa.initRemoteCopyAtDest(colOff, colCnt, datasz);
-			finish Array.asyncCopy[Int   ](rmtIndex, 0, rcvspa.index, 0, datCnt);
-			finish Array.asyncCopy[Double](rmtValue, 0, rcvspa.value, 0, datCnt);
+			finish Rail.asyncCopy[Long](rmtIndex, 0, rcvspa.index, 0, datCnt);
+			finish Rail.asyncCopy[ElemType](rmtValue, 0, rcvspa.value, 0, datCnt);
 		}
 
 		//Goto next place in the list
 		if (plist.size >= 1) {
 			val nxtpid = plist(0); // Get next place id in the list
-			val rmtidx = new RemoteArray[Int   ](rcvspa.index as Array[Int]{self!=null});
-			val rmtval = new RemoteArray[Double](rcvspa.value as Array[Double]{self!=null});
-			val nplist = new Array[Int](plist.size-1, (i:Int)=>plist(i+1));
-			at (smlist.dist(nxtpid)) {
+			val rmtidx = new GlobalRail[Long](rcvspa.index as Rail[Long]{self!=null});
+			val rmtval = new GlobalRail[ElemType](rcvspa.value as Rail[ElemType]{self!=null});
+			val nplist = new Rail[Long](plist.size-1, (i:Long)=>plist(i+1));
+			at(smlist.dist(nxtpid)) {
 				//Need: rmtidx, rmtval, dmlist, colOff, offset, datasz, nplist, root
 				copyToHere(rmtidx, rmtval, smlist, datCnt, nplist, root);
 			}
@@ -388,5 +360,4 @@ public class DistArrayRcast extends DistArrayRemoteCopy {
 		//if (mypid != root)
 		//	rcvspa.finalizeRemoteCopyAtDest();
 	}
-
 }

@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.ast;
@@ -146,6 +146,7 @@ public class Initializer_c extends Term_c implements Initializer
         final InitializerDef mix = ii;
 
         Initializer_c n = (Initializer_c) this.visitSignature(new NodeVisitor() {
+            @Override
             public Node override(Node n) {
                 return Initializer_c.this.visitChild(n, tbx.pushCode(mix));
             }

@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2012.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.runtime.impl.java;
@@ -17,46 +17,36 @@ public abstract class ThrowableUtils {
     public static final boolean supportConversionForJavaErrors = false;
 
     private static final java.util.Map<Class<? extends java.lang.Throwable>,Class<? extends java.lang.RuntimeException>> x10Exceptions = new java.util.HashMap<Class<? extends java.lang.Throwable>,Class<? extends java.lang.RuntimeException>>();
-    private static Class<? extends java.lang.RuntimeException> x10_io_IOException;
+    private static final Class<? extends java.lang.RuntimeException> x10_io_IOException;
     static {
-        try {
             Class<? extends java.lang.Throwable> javaClass;
-            java.lang.String x10Name;
             Class<? extends java.lang.RuntimeException> x10Class;
 
             javaClass = java.io.NotSerializableException.class;
-            x10Name = "x10.io.NotSerializableException";
-            x10Class = Class.forName(x10Name).asSubclass(java.lang.RuntimeException.class);
+            x10Class = x10.io.NotSerializableException.class;
             x10Exceptions.put(javaClass, x10Class);
 
             javaClass = java.io.EOFException.class;
-            x10Name = "x10.io.EOFException";
-            x10Class = Class.forName(x10Name).asSubclass(java.lang.RuntimeException.class);
+            x10Class = x10.io.EOFException.class;
             x10Exceptions.put(javaClass, x10Class);
 
             javaClass = java.io.FileNotFoundException.class;
-            x10Name = "x10.io.FileNotFoundException";
-            x10Class = Class.forName(x10Name).asSubclass(java.lang.RuntimeException.class);
+            x10Class = x10.io.FileNotFoundException.class;
             x10Exceptions.put(javaClass, x10Class);
 
             javaClass = java.io.IOException.class;
-            x10Name = "x10.io.IOException";
-            x10Class = Class.forName(x10Name).asSubclass(java.lang.RuntimeException.class);
+            x10Class = x10.io.IOException.class;
             x10Exceptions.put(javaClass, x10Class);
             x10_io_IOException = x10Class;
 
             javaClass = java.lang.InterruptedException.class;
-            x10Name = "x10.lang.InterruptedException";
-            x10Class = Class.forName(x10Name).asSubclass(java.lang.RuntimeException.class);
+            x10Class = x10.xrx.InterruptedException.class;
             x10Exceptions.put(javaClass, x10Class);
-        } catch (java.lang.ClassNotFoundException e) {
-            e.printStackTrace();
-        }
     }
         
-    private static java.lang.RuntimeException asX10Exception(Class<? extends java.lang.RuntimeException> x10Class, java.lang.String message, java.lang.Throwable t) {
+    private static java.lang.RuntimeException asX10Exception(Class<? extends java.lang.RuntimeException> x10Class, String message, java.lang.Throwable t) {
         try {
-            java.lang.RuntimeException xe = x10Class.getConstructor(java.lang.String.class).newInstance(message);
+            java.lang.RuntimeException xe = x10Class.getConstructor(String.class).newInstance(message);
             if (t != null) {
                 xe.setStackTrace(t.getStackTrace());
             }
@@ -68,7 +58,7 @@ public abstract class ThrowableUtils {
 
     public static java.lang.RuntimeException ensureX10Exception(java.io.IOException e) {
         Class<? extends java.lang.RuntimeException> x10Class = x10Exceptions.get(e.getClass());
-        java.lang.String message = e.getMessage();
+        String message = e.getMessage();
         if (x10Class != null) {
             return asX10Exception(x10Class, message, e);
         }
@@ -83,7 +73,7 @@ public abstract class ThrowableUtils {
             return ensureX10Exception((java.io.IOException) e);
         } else if (e instanceof java.lang.Exception) {
             Class<? extends java.lang.RuntimeException> x10Class = x10Exceptions.get(e.getClass());
-            java.lang.String message = e.getMessage();
+            String message = e.getMessage();
             if (x10Class != null) {
                 return asX10Exception(x10Class, message, e);
             }
@@ -96,21 +86,33 @@ public abstract class ThrowableUtils {
         }
     }
 
-    public static java.lang.String toString(java.lang.Throwable e) {
-        java.lang.String typeName = x10.rtt.Types.typeName(e);
-        java.lang.String message = e.getMessage();
+    public static String toString(java.lang.Throwable e) {
+        String typeName = x10.rtt.Types.typeName(e);
+        String message = e.getMessage();
         return message == null ? typeName : typeName + ": " + message;
     }
 
-    public static x10.array.Array<java.lang.String> getStackTrace(java.lang.Throwable e) {
+    public static x10.core.Rail<String> getStackTrace(java.lang.Throwable e) {
         java.lang.StackTraceElement[] elements = e.getStackTrace();
-        java.lang.String str[] = new java.lang.String[elements.length];
+        String str[] = new String[elements.length];
         for (int i = 0; i < elements.length; ++i) {
-            str[i] = elements[i].toString();
+            str[i] = elements[i].toString(); //TODO replace the use of j.l.StackTraceElement#getClassName() with x10.rtt.Types#typeName(Object)
         }
-        return x10.runtime.impl.java.ArrayUtils.<java.lang.String>makeArrayFromJavaArray(x10.rtt.Types.STRING, str);
+        return x10.runtime.impl.java.ArrayUtils.<String>makeRailFromJavaArray(x10.rtt.Types.STRING, str);
     }
-    
+
+    private static void printStackTrace(java.lang.Throwable t, java.io.PrintStream ps) {
+        if (t instanceof x10.lang.MultipleExceptions) {
+            x10.lang.MultipleExceptions me = (x10.lang.MultipleExceptions) t;
+            x10.core.Rail<java.lang.Throwable> exceptions = (x10.core.Rail<java.lang.Throwable>) me.exceptions;
+            for (java.lang.Throwable ct : exceptions.getGenericArray()) {
+                printStackTrace(ct, ps);
+            }
+        } else {
+            t.printStackTrace(ps); //TODO replace the use of j.l.StackTraceElement#getClassName() with x10.rtt.Types#typeName(Object)
+        }
+    }
+
     public static void printStackTrace(java.lang.Throwable t, x10.io.Printer p) {
         x10.core.io.OutputStream os = p.getNativeOutputStream();
         java.io.PrintStream ps = null;
@@ -119,7 +121,7 @@ public abstract class ThrowableUtils {
         } else {
             ps = new java.io.PrintStream(os.stream);
         }
-        t.printStackTrace(ps);
+        printStackTrace(t, ps);
     }
 
 }

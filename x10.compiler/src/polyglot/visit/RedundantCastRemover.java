@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.visit;
@@ -30,6 +30,7 @@ public class RedundantCastRemover extends NodeVisitor {
         super();
     }
     
+    @Override
     public Node leave(Node old, Node n, NodeVisitor v) {
         if (n instanceof Cast) {
             Cast c = (Cast) n;

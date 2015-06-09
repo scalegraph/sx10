@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  *
  *  This file was written by Ben Herta for IBM: bherta@us.ibm.com
  *
@@ -510,6 +510,9 @@ void insertNewMessage(MSGTYPE mt, x10rt_msg_params *p, void *dataPtr, x10rt_copy
 /******************************************************
  *  Main API calls.  See x10rt_net.h for documentation
 *******************************************************/
+x10rt_error x10rt_net_preinit(char* connInfoBuffer, int connInfoBufferSize) {
+	return X10RT_ERR_UNSUPPORTED;
+}
 
 x10rt_error x10rt_net_init (int *argc, char ***argv, x10rt_msg_type *counter)
 {
@@ -647,9 +650,16 @@ void x10rt_net_register_get_receiver (x10rt_msg_type msg_type, x10rt_finder *cb1
 	#endif
 }
 
-void x10rt_net_internal_barrier (void)
-{
-    abort(); // FUNCTION IS ON DEATH ROW
+x10rt_place x10rt_net_ndead (void) {
+	return 0; // place failure is not handled by this implementation.
+}
+
+bool x10rt_net_is_place_dead (x10rt_place p) {
+	return false; // place failure is not handled by this implementation.
+}
+
+x10rt_error x10rt_net_get_dead (x10rt_place *dead_places, x10rt_place len) {
+	return X10RT_ERR_UNSUPPORTED; // place failure is not handled by this implementation.
 }
 
 x10rt_place x10rt_net_nhosts (void)
@@ -733,7 +743,6 @@ x10rt_error x10rt_net_probe (void)
 			#endif
 
 			if (pthread_mutex_unlock(&myPlace->messageQueueLock) != 0) error("Unable to unlock the message queue after finding it empty");
-			sched_yield(); // to help prevent the constant probes from preventing anything else from getting done.
             return X10RT_ERR_OK;
 		}
 
@@ -781,7 +790,6 @@ x10rt_error x10rt_net_probe (void)
 
 		// reconstruct the x10rt_msg_params structure
 		x10rt_msg_params mp;
-		mp.dest_endpoint = 0;
 		mp.dest_place = state.myPlaceId;
 		mp.type = entry->type;
 		mp.len = entry->msgLen;
@@ -907,10 +915,21 @@ x10rt_error x10rt_net_probe (void)
     return X10RT_ERR_OK;
 }
 
+bool x10rt_net_blocking_probe_support(void)
+{
+	return false;
+}
+
 x10rt_error x10rt_net_blocking_probe (void)
 {
 	// TODO: make this blocking.  For now, just call probe.
 	return x10rt_net_probe();
+}
+
+x10rt_error x10rt_net_unblock_probe (void)
+{
+	// TODO: once blocking_probe is implemented, this needs to do something.  Fine for now.
+	return X10RT_ERR_OK;
 }
 
 void x10rt_net_finalize (void)
@@ -938,12 +957,12 @@ void x10rt_net_finalize (void)
 	free(state.callBackTable);
 }
 
-int x10rt_net_supports (x10rt_opt o)
-{
-    switch (o)
-    {
-        default: return 0;
-    }
+x10rt_coll_type x10rt_net_coll_support () {
+	return X10RT_COLL_NOCOLLECTIVES;
+}
+
+bool x10rt_net_remoteop_support () {
+	return false;
 }
 
 void x10rt_net_team_new (x10rt_place placec, x10rt_place *placev,
@@ -1020,7 +1039,8 @@ void x10rt_net_allreduce (x10rt_team team, x10rt_place role,
     abort();
 }
 
-void x10rt_net_team_members (x10rt_team team, x10rt_place *members)
+void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg)
+//void x10rt_net_team_members (x10rt_team team, x10rt_place *members)
 {
     abort();
 }

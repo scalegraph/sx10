@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.ast;
@@ -67,6 +67,7 @@ import polyglot.types.TypeSystem;
 import polyglot.types.LazyRef_c;
 import x10.types.checker.Converter;
 import x10.types.constraints.CConstraint;
+import x10.types.constraints.xnative.CNativeLit;
 
 import x10.types.matcher.Subst;
 import x10.util.Synthesizer;
@@ -149,6 +150,7 @@ public abstract class X10Loop_c extends Loop_c implements X10Loop {
 	}
 
     private Type getIndexType(Type domainType, ContextVisitor tc) {
+    	/*
         final TypeSystem ts = tc.typeSystem();
         Type base = Types.baseType(domainType);
 
@@ -162,17 +164,19 @@ public abstract class X10Loop_c extends Loop_c implements X10Loop {
             if (ts.hasSameClassDef(base, ts.Iterable())) {
                 return Types.getParameterType(base, 0);
             }
-            if (ts.hasSameClassDef(base, ts.JLIterable())) {
+            if (ts.typeIsJLIterable(base)) {
                 return ts.Any();
             }
             else {
                 Type sup = ts.superClass(domainType);
+                // sup needs to be translated, can contain 'this'
                 if (sup != null) {
                     Type t = getIndexType(sup, tc);
                     if (t != null) return t;
                 }
                 for (Type ti : ts.interfaces(domainType)) {
                     Type t = getIndexType(ti, tc);
+                    // t needs to be translated, can contain 'this'
                     if (t != null) {
                         return t;
                     }
@@ -180,6 +184,10 @@ public abstract class X10Loop_c extends Loop_c implements X10Loop {
             }
         }
         return null;
+        */
+    	Set<Type> types = Types.getIterableIndex(domainType, tc.context());
+    	for (Type t : types) return t;
+    	return null;
     }
 
     private void resolveIndexType(ContextVisitor tc) {
@@ -197,7 +205,7 @@ public abstract class X10Loop_c extends Loop_c implements X10Loop {
             XVar self = Types.xclause(indexType).self();
             Synthesizer synth = new Synthesizer(nf, ts);
             XTerm v = synth.makePointRankTerm((XVar) self);
-            XTerm rank = ConstraintManager.getConstraintSystem().makeLit(length, ts.Int());
+            XTerm rank = ConstraintManager.getConstraintSystem().makeLit((long)length, ts.Long());
             indexType = Types.addBinding(indexType, v, rank);
             r.update(indexType);
             return;
@@ -247,18 +255,18 @@ public abstract class X10Loop_c extends Loop_c implements X10Loop {
 		TypeSystem ts =  tc.typeSystem();
 		Type domainType = domainTypeRef.get();
 		if (domainType == null ) {
-			// aha, in this case the type inferencer did not run, since an explicit type was givem.
+			// aha, in this case the type inferencer did not run, since an explicit type was given.
 			domainType = domain.type();
 		}
 		ConstrainedType formalType = Types.toConstrainedType(formal.declType());
-		assert domainType != null
-		: "formal=" + formal + " domain = " + domain + " position = " + position();
+		assert domainType != null : "formal=" + formal + " domain = " + domain + " position = " + position();
         final Context context = tc.context();
 
         HashSet<Type> iterableIndex = Types.getIterableIndex(domainType, context);
         boolean newRes = false;
-        for (Type tt : iterableIndex)
+        for (Type tt : iterableIndex) {
             newRes |= ts.isSubtype(tt, formalType, context);
+        }
         //assert newRes==ts.isSubtype(domainType, ts.Iterable(formalType), tc.context()); // when Iterable was covariant (i.e., Iterable[+T])
 		if (newRes) {
 		//	if (X10TypeMixin.areConsistent(formalType, domainType)
@@ -473,6 +481,7 @@ public abstract class X10Loop_c extends Loop_c implements X10Loop {
 		
 		// Set the final flag on all formals introduced in the loop.
 		Formal f = (Formal) n.formal().visit(new NodeVisitor() {
+			@Override
 			public Node leave(Node old, Node n, NodeVisitor v) {
 				if (n instanceof Formal) {
 					Formal f = (Formal) n;

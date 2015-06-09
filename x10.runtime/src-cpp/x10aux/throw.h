@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 #ifndef X10AUX_THROW_H
@@ -24,49 +24,49 @@ namespace x10aux {
     void throwArithmeticException() X10_PRAGMA_NORETURN;
 
     inline x10_byte zeroCheck(x10_byte val) {
-        #if !defined(NO_CHECKS) && !defined(NO_EXCEPTIONS)
+        #if !defined(NO_CHECKS)
         if (0 == val) throwArithmeticException();
         #endif
         return val;
     }
     inline x10_ubyte zeroCheck(x10_ubyte val) {
-        #if !defined(NO_CHECKS) && !defined(NO_EXCEPTIONS)
+        #if !defined(NO_CHECKS)
         if (0 == val) throwArithmeticException();
         #endif
         return val;
     }
     inline x10_short zeroCheck(x10_short val) {
-        #if !defined(NO_CHECKS) && !defined(NO_EXCEPTIONS)
+        #if !defined(NO_CHECKS)
         if (0 == val) throwArithmeticException();
         #endif
         return val;
     }
     inline x10_ushort zeroCheck(x10_ushort val) {
-        #if !defined(NO_CHECKS) && !defined(NO_EXCEPTIONS)
+        #if !defined(NO_CHECKS)
         if (0 == val) throwArithmeticException();
         #endif
         return val;
     }
     inline x10_int zeroCheck(x10_int val) {
-        #if !defined(NO_CHECKS) && !defined(NO_EXCEPTIONS)
+        #if !defined(NO_CHECKS)
         if (0 == val) throwArithmeticException();
         #endif
         return val;
     }
     inline x10_uint zeroCheck(x10_uint val) {
-        #if !defined(NO_CHECKS) && !defined(NO_EXCEPTIONS)
+        #if !defined(NO_CHECKS)
         if (0 == val) throwArithmeticException();
         #endif
         return val;
     }
     inline x10_long zeroCheck(x10_long val) {
-        #if !defined(NO_CHECKS) && !defined(NO_EXCEPTIONS)
+        #if !defined(NO_CHECKS)
         if (0 == val) throwArithmeticException();
         #endif
         return val;
     }
     inline x10_ulong zeroCheck(x10_ulong val) {
-        #if !defined(NO_CHECKS) && !defined(NO_EXCEPTIONS)
+        #if !defined(NO_CHECKS)
         if (0 == val) throwArithmeticException();
         #endif
         return val;
@@ -78,7 +78,7 @@ namespace x10aux {
     void throwNPE() X10_PRAGMA_NORETURN;
 
     template <class T> inline T* nullCheck(T* obj) {
-        #if !defined(NO_NULL_CHECKS) && !defined(NO_EXCEPTIONS)
+        #if !defined(NO_NULL_CHECKS)
         if (NULL == obj) throwNPE();
         #endif
         return obj;
@@ -97,6 +97,16 @@ namespace x10aux {
 
     extern void throwClassCastException(const RuntimeType *from, const RuntimeType *to) X10_PRAGMA_NORETURN;
     extern void throwClassCastException(const char *msg) X10_PRAGMA_NORETURN;
+
+    /*
+     * Helper function for UnsupportedOperationException
+     */
+    extern void throwUnsupportedOperationException(const char *msg) X10_PRAGMA_NORETURN;
+
+    /*
+     * Helper function for NotSerializableException
+     */
+    extern void throwNotSerializableException(const char *msg) X10_PRAGMA_NORETURN;
 }
 
 #endif /* X10AUX_THROW_H */
@@ -112,9 +122,9 @@ namespace x10aux {
 
     template<class T> void throwException() X10_PRAGMA_NORETURN;
 
-    void throwException(x10::lang::CheckedThrowable* e) X10_PRAGMA_NORETURN;
+    void throwException(::x10::lang::CheckedThrowable* e) X10_PRAGMA_NORETURN;
 
-    inline void throwException(x10::lang::CheckedThrowable* e) {
+    inline void throwException(::x10::lang::CheckedThrowable* e) {
         throw e->fillInStackTrace();
     }
 

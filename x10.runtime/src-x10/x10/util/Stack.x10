@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.util;
@@ -20,11 +20,11 @@ public class Stack[T] extends ArrayList[T] {
     /** Remove and return the top element of the stack. */
     public def pop(): T = removeLast();
     
-    public def pop(k:Int):Rail[T] {
+    public def pop(k:Long):Rail[T] {
     	val n = size();
     	if (n < k) 
-    		return null;
-    	return moveSectionToArray(n-k, n-1);
+            return null;
+    	return moveSectionToRail(n-k, n-1);
     }
 
     /** Return, but do not remove, the top element of the stack. */

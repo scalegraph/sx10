@@ -6,14 +6,14 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 #include <x10aux/config.h>
 
 #include <x10/lang/String.h>
 
-#include <x10/array/Array.h>
+#include <x10/lang/Rail.h>
 
 #include <x10/io/File.h>
 
@@ -50,7 +50,7 @@ void File__NativeFile::_deserialize_body(deserialization_buffer& buf) {
 }
 
 const x10aux::serialization_id_t File__NativeFile::_serialization_id =
-    x10aux::DeserializationDispatcher::addDeserializer(File__NativeFile::_deserializer, x10aux::CLOSURE_KIND_NOT_ASYNC);
+    x10aux::DeserializationDispatcher::addDeserializer(File__NativeFile::_deserializer);
 
 Reference* File__NativeFile::_deserializer(x10aux::deserialization_buffer &buf) {
     File__NativeFile* this_ = new (x10aux::alloc<File__NativeFile>()) File__NativeFile();
@@ -117,9 +117,6 @@ File__NativeFile::isHidden() {
 #if defined (__APPLE__)
 #   define STAT_TIME_SEC(type) st_##type##timespec.tv_sec
 #   define STAT_TIME_NSEC(type) st_##type##timespec.tv_nsec
-#elif defined (_AIX)
-#   define STAT_TIME_SEC(type) st_##type##time
-#   define STAT_TIME_NSEC(type) st_##type##time_n
 #elif defined (__FreeBSD__)
 #   define STAT_TIME_SEC(type) st_##type##timespec.tv_sec
 #   define STAT_TIME_NSEC(type) st_##type##timespec.tv_nsec
@@ -169,39 +166,26 @@ File__NativeFile::del() {
 		return (x10_boolean) (::rmdir(path->c_str()) == 0);
 }
 
-int
-File__NativeFile::cmp(const void* a, const void* b) {
-	return strcmp(*(char**)a, *(char**)b);
-}
-
-x10::array::Array<String*>*
+Rail<String*>*
 File__NativeFile::list() {
 	char sep = (char) (File::FMGL(SEPARATOR__get)().v);
 	DIR* dir;
-	struct dirent* de;
-	if((dir = ::opendir(path->c_str())) == NULL)
+
+    if((dir = ::opendir(path->c_str())) == NULL) {
 		return NULL;
-	int n;
-	for(n = 0; (de = ::readdir(dir)) != NULL; n++) ;
-	::rewinddir(dir);
-	n -= 2;
-	char** tmpArray = (char**)malloc(sizeof(char*) * n);
-	String* absPath = getAbsolutePath();
-	int i = 0;
-	while((de = ::readdir(dir)) != NULL) {
-		if(strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
-		tmpArray[i] = (char*)::malloc(sizeof(char) * (absPath->length() + 1 + ::strlen(de->d_name) + 1));
-		::sprintf(tmpArray[i], "%s%c%s", absPath->c_str(), sep, de->d_name);
-		i++;
-	}
-	::closedir(dir);
-	qsort(tmpArray, n, sizeof(char*), File__NativeFile::cmp);
-	x10::array::Array<String*>* array = x10::array::Array<String*>::_make((x10_int)n);
-	for(i = 0; i < n; i++) {
-		array->__set((x10_int)i, String::Steal(tmpArray[i]));
-	}
-	free(tmpArray);
-	return array;
+    }
+
+    x10::util::GrowableRail<String*>* gr = x10::util::GrowableRail<String*>::_make();
+	struct dirent* de;
+    while ((de = ::readdir(dir)) != NULL) {
+        const char* fn = de->d_name;
+        if ((strncmp(fn, ".", 1) != 0) && (strncmp(fn, "..", 1) != 0)){
+            gr->add(String::Lit(fn));
+        }
+    }
+    ::closedir(dir);
+
+    return gr->toRail();
 }
 
 x10_boolean

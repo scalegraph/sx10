@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.visit;
@@ -18,6 +18,7 @@ import java.util.*;
 
 import polyglot.ast.*;
 import polyglot.types.LocalDef;
+import polyglot.types.LocalInstance;
 import polyglot.types.Name;
 import polyglot.util.InternalCompilerError;
 import polyglot.util.UniqueID;
@@ -72,6 +73,7 @@ public class AlphaRenamer extends NodeVisitor {
 
     public static final String LABEL_PREFIX = "label ";
 
+    @Override
     public NodeVisitor enter(Node n) {
         if (isNewScope(n)) {
             // Push a new, empty set onto the stack.
@@ -132,13 +134,14 @@ public class AlphaRenamer extends NodeVisitor {
         String prefix = n.toString();
         boolean chopped = false;
         int tail = prefix.length();
-        while (tail > 0 && Character.isDigit(prefix.charAt(tail-1))) {
+        while (tail > 0 && (Character.isDigit(prefix.charAt(tail-1)) || prefix.charAt(tail-1)=='$')) {
             tail = tail-1;
             chopped = true;
         }
         return tail == prefix.length() ? prefix : prefix.substring(0, tail);
     }
 
+    @Override
     public Node leave(Node old, Node n, NodeVisitor v) {
         if (isNewScope(n)) {
             // Pop the current name set off the stack and remove the
@@ -162,8 +165,11 @@ public class AlphaRenamer extends NodeVisitor {
 
             // Update the local instance as necessary.
             Name newName = renamingMap.get(name);
-            // LocalType li = l.localInstance();
-            // if (li != null) li.setName(newName);
+            // [DC] I'm guessing the following is commented so that li.name remains null, so that li.name() defers to the Def's name (which we update elsewhere)
+            /*
+            LocalInstance li = l.localInstance();
+            if (li != null) l.localInstance(li.name(newName));
+            */
 
             return l.name(l.name().id(newName));
         }

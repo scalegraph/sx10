@@ -6,75 +6,69 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.matrix.block;
 
-import x10.io.Console;
-import x10.util.StringBuilder;
-
-import x10.matrix.Debug;
-import x10.matrix.VerifyTools;
 
 import x10.matrix.Matrix;
 import x10.matrix.DenseMatrix;
+import x10.matrix.ElemType;
 
 import x10.matrix.sparse.Compress1D;
 import x10.matrix.sparse.SparseCSC;
 
+import x10.matrix.util.VerifyTool;
 
-public type SparseBlockMatrix(M:Int)=SparseBlockMatrix{self.M==M};
-public type SparseBlockMatrix(M:Int, N:Int)=SparseBlockMatrix{self.M==M, self.N==N};
+public type SparseBlockMatrix(M:Long)=SparseBlockMatrix{self.M==M};
+public type SparseBlockMatrix(M:Long, N:Long)=SparseBlockMatrix{self.M==M, self.N==N};
 public type SparseBlockMatrix(C:SparseBlockMatrix)=SparseBlockMatrix{self==C};
-
 
 /**
  * OBSOLETE. Replace by BlockMatrix
  * 
- * Sparse block matrix is constructed by  an array or sparse blocks, and
+ * Sparse block matrix is constructed by a Rail of sparse blocks, and
  * partitioning grid specifies how each block is mapped to the whole matrix.
  *  
  */
 public class SparseBlockMatrix(grid:Grid) extends Matrix  {
 
-	public val listBs:Array[SparseBlock](1);
-   
-	//================================================================
+	public val listBs:Rail[SparseBlock];
+
 	/**
-	 * Construt sparse block matrix instance.
+	 * Construct sparse block matrix instance.
 	 *
 	 * @param  gp     Grid partition
-	 * @param  blkMs  Matrix block array
+	 * @param  blkMs  Matrix blocks
 	 */
-	public def this(gp:Grid, blkMs:Array[SparseBlock](1)) {
+	public def this(gp:Grid, blkMs:Rail[SparseBlock]) {
 		super(gp.M, gp.N);
 		property(gp);
 		listBs = blkMs;
 	}
 
 	/**
-	 * Construt block matrix instance without memory allocation for blocks.
+	 * Construct block matrix instance without memory allocation for blocks.
 	 *
 	 * @param  gp  Grid partition
 	 */
 	public def this(gp:Grid) {
 		super(gp.M, gp.N);
 		property(gp);
-		listBs = new Array[SparseBlock](gp.numRowBlocks* gp.numColBlocks);
+		listBs = new Rail[SparseBlock](gp.numRowBlocks* gp.numColBlocks);
 
 	}
 
-	//================================================================
-	// This method must be combined with setBlock(...) to set each MatrixBlock
 	/**
 	 * Create an instance of sparse-block matrix, and allocate memory space
 	 * for each block. All block have the same sparsity
+     * This method must be combined with setBlock(...) to set each MatrixBlock
 	 *
 	 * @param  gp   	block partitioning of matrix
 	 * @param nzd   	sparsity
 	 */
-	public static def make(gp:Grid, nzd:Double):SparseBlockMatrix(gp.M, gp.N) {
+	public static def make(gp:Grid, nzd:Float):SparseBlockMatrix(gp.M, gp.N) {
 		val dbm = new SparseBlockMatrix(gp) as SparseBlockMatrix(gp.M, gp.N);
 		dbm.alloc(nzd);
 		return dbm;
@@ -88,37 +82,34 @@ public class SparseBlockMatrix(grid:Grid) extends Matrix  {
 	 * @param nzd  	nonzero sparsity for all blocks
 	 *
 	 */
-	public static def makeRand(gp:Grid, nzd:Double) : SparseBlockMatrix(gp.M, gp.N) {
-		
+	public static def makeRand(gp:Grid, nzd:Float) : SparseBlockMatrix(gp.M, gp.N) {
 		val dbm = new SparseBlockMatrix(gp);
 		dbm.alloc(nzd);
 		dbm.initRandom();
 		return dbm;
 	}
 
-	//================================================================
-
 	/**
 	 * Allocate memory space for sparse blocks in the grid partitioning
 	 *
 	 * @param nzd 		sparsity for all blocks
 	 */
-	public def alloc(nzd:Double):void {
-		//finish ateach([p] :Point in this.dist) {
-		for(var c:Int=0; c<grid.numColBlocks; c++) {
-			for (var r:Int=0; r<grid.numRowBlocks; r++) {
-				val p:Int = grid.getBlockId(r, c);
+	public def alloc(nzd:Float):void {
+		for(var c:Long=0; c<grid.numColBlocks; c++) {
+			for (var r:Long=0; r<grid.numRowBlocks; r++) {
+				val p = grid.getBlockId(r, c);
 				listBs(p) = SparseBlock.make(grid, r, c, nzd);
 			}
 		}
 	}
+
 	/**
 	 * Allocate memory space for mxn sparse block matrix. Not supported
 	 * in sparse block matrix and an exception is thrown, because the
 	 * partitioning is unknown.
 	 * 
 	 */
-	public def alloc(m:Int, n:Int):SparseBlockMatrix(m,n) {
+	public def alloc(m:Long, n:Long):SparseBlockMatrix(m,n) {
 		throw new UnsupportedOperationException();
 	}
 
@@ -128,12 +119,12 @@ public class SparseBlockMatrix(grid:Grid) extends Matrix  {
 	 */
 	public def clone():SparseBlockMatrix(M,N) {
 		val nbm = new SparseBlockMatrix(this.grid);
-		for(val [p] :Point in listBs) {
+		for (p in 0..(listBs.size-1)) {
 			nbm.listBs(p) = this.listBs(p).clone();//getMatrix(p).clone();
 		}
 		return nbm as SparseBlockMatrix(M,N);
 	}
-	//================================================================
+
 
 	/**
 	 * Initialize sparse block matrix with a constant value and specified sparsity
@@ -141,12 +132,11 @@ public class SparseBlockMatrix(grid:Grid) extends Matrix  {
 	 * @param ival 	constant value for all elements
 	 * @param nzd  	sparsity for all blocks
 	 */
-	public def init(ival:Double, nzd:Double):void {
-		for (val [p] :Point in listBs) {
+	public def init(ival:ElemType, nzd:Float):void {
+		for (p in 0..(listBs.size-1)) {
 			listBs(p).sparse.init(ival, nzd);
 		}
 	}
-
 
 	/**
 	 * Initialize all nonzero elements in sparse block matrix to a specified value. 
@@ -155,16 +145,16 @@ public class SparseBlockMatrix(grid:Grid) extends Matrix  {
 	 *
 	 * @param ival 		constant value for all elements
 	 */
-	public def init(ival:Double):SparseBlockMatrix(this) {
-		for (val [p] :Point in listBs) {
+	public def init(ival:ElemType):SparseBlockMatrix(this) {
+		for (p in 0..(listBs.size-1)) {
 			listBs(p).sparse.init(ival);
 		}
 		return this;
 	}
 
-	public def init(f:(Int, Int)=>Double):SparseBlockMatrix(this) {
-		for (var cb:Int=0; cb<grid.numColBlocks; cb++)
-			for (var rb:Int=0; rb<grid.numRowBlocks; rb++ ) {
+	public def init(f:(Long, Long)=>ElemType):SparseBlockMatrix(this) {
+		for (var cb:Long=0; cb<grid.numColBlocks; cb++)
+			for (var rb:Long=0; rb<grid.numRowBlocks; rb++ ) {
 				listBs(grid.getBlockId(rb, cb)).init(f);
 			}		
 		return this;
@@ -177,8 +167,8 @@ public class SparseBlockMatrix(grid:Grid) extends Matrix  {
 	 * 
 	 * @param nzd  	sparsity for all blocks
 	 */
-	public def initRandom(nzd:Double):SparseBlockMatrix(this) {
-		for (val [p] :Point in listBs) {
+	public def initRandom(nzd:Float):SparseBlockMatrix(this) {
+		for (p in 0..(listBs.size-1)) {
 			listBs(p).sparse.initRandom(nzd);
 		}
 		return this;
@@ -189,29 +179,25 @@ public class SparseBlockMatrix(grid:Grid) extends Matrix  {
 	 * each block is computed by the storage size over the size of matrix.
 	 */
 	public def initRandom():SparseBlockMatrix(this) {
-		for (val [p] :Point in listBs) {
+		for (p in 0..(listBs.size-1)) {
 			listBs(p).sparse.initRandom();
 		}
 		return this;
 	}
 	
-	public def initRandom(lo:Int, up:Int):SparseBlockMatrix(this) {
-		for (val [p] :Point in listBs) {
+	public def initRandom(lo:Long, up:Long):SparseBlockMatrix(this) {
+		for (p in 0..(listBs.size-1)) {
 			listBs(p).sparse.initRandom(lo,up);
 		}
 		return this;
 	}
-
-	//================================================================
-	// Data copy and reset
-	//================================================================	
 
 	/**
 	 * Reset all nonzero entries, and the number of nonzeros to 0.
 	 *
 	 */
 	public def reset():void {
-		for (val [p] :Point in listBs) {
+		for (p in 0..(listBs.size-1)) {
 			listBs(p).sparse.reset();
 		}
 	}
@@ -223,18 +209,17 @@ public class SparseBlockMatrix(grid:Grid) extends Matrix  {
 	 */
 	public def copyTo(dm:DenseMatrix(M,N)) {
 
-		//Debug.assure(this.M==dm.M&&this.N==dm.N);
-		var dstcolidx:Int=0;
+		var dstcolidx:Long=0;
 		
-		for (var cb:Int=0; cb < grid.numColBlocks; cb++) {
-			var dstblkidx:Int = dstcolidx;
+		for (var cb:Long=0; cb < grid.numColBlocks; cb++) {
+			var dstblkidx:Long = dstcolidx;
 
-			for (var rb:Int=0; rb<grid.numRowBlocks; rb++) {
+			for (var rb:Long=0; rb<grid.numRowBlocks; rb++) {
 				val src = listBs(grid.getBlockId(rb, cb)).sparse;
-				var srcoff:Int = 0;
-				var dstoff:Int = dstblkidx;
+				var srcoff:Long = 0;
+				var dstoff:Long = dstblkidx;
 				//Uncompress column by column
-				for (var col:Int=0; col<src.N; col++, srcoff+=src.M, dstoff+=dm.M)
+				for (var col:Long=0; col<src.N; col++, srcoff+=src.M, dstoff+=dm.M)
 					src.ccdata.cLine(col).extract(dstoff, dm.d);
 
 				dstblkidx += src.M;
@@ -261,33 +246,29 @@ public class SparseBlockMatrix(grid:Grid) extends Matrix  {
 	public def copyTo(dst:SparseCSC(M,N)): void {
 
 		val nzcnt:Long = countNonZero();
-		Debug.assure(nzcnt <= Int.MAX_VALUE,
-					 "Copy to dense matrix fail! Exceeding the limit of array");
 		//Check storage size
-		dst.testIncStorage(0, nzcnt as Int);
+		dst.testIncStorage(0, nzcnt);
 		
-		var dstcol:Int=0;
-		var cnt:Int=0;
-		for (var cb:Int=0; cb < grid.numColBlocks; cb++) {
-			for (var col:Int=0; col < grid.colBs(cb); col++, dstcol++) {
+		var dstcol:Long=0;
+		var cnt:Long=0;
+		for (var cb:Long=0; cb < grid.numColBlocks; cb++) {
+			for (var col:Long=0; col < grid.colBs(cb); col++, dstcol++) {
 				val dstln = dst.getCol(dstcol);
-				var sttidx:Int = 0;
+				var sttidx:Long = 0;
 
 				dstln.offset = cnt;
-				for (var rb:Int=0; rb<grid.numRowBlocks; rb++) {
+				for (var rb:Long=0; rb<grid.numRowBlocks; rb++) {
 					val bid = grid.getBlockId(rb, cb);
 					val src = listBs(bid).sparse;
 					val srcln = src.getCol(col);
  
 					srcln.appendTo(dstln, sttidx);
-					//dstln.print();
 
 					sttidx += src.M;
 					cnt   += srcln.length;
 				}
 			}
 		}
-		//dst.print("copy to result:");
 	}
 	
 	public def copyTo(that:DenseBlockMatrix(M,N)):void {
@@ -304,53 +285,44 @@ public class SparseBlockMatrix(grid:Grid) extends Matrix  {
 	 * @param sm 	source sparse matrix
 	 */
 	public def copyFrom(sm:SparseCSC(M,N)): void {
-		var srccol:Int=0;
-		var cnt:Int = 0;
+		var srccol:Long=0;
+		var cnt:Long = 0;
 
-		for (var cb:Int=0; cb < grid.numColBlocks; cb++) {
-			
-			for (var col:Int=0; col < grid.colBs(cb); col++, srccol++) {
+		for (var cb:Long=0; cb < grid.numColBlocks; cb++) {
+			for (var col:Long=0; col < grid.colBs(cb); col++, srccol++) {
 				val srcln = sm.getCol(srccol);
-				var sttidx:Int = 0;
+				var sttidx:Long = 0;
 				
-				for (var rb:Int=0; rb<grid.numRowBlocks; rb++) {
+				for (var rb:Long=0; rb<grid.numRowBlocks; rb++) {
 					val bid = grid.getBlockId(rb, cb);
 					val dst = listBs(bid).getMatrix();
 					val dstln = dst.getCol(col);
 					
-					dstln.offset = (col==0)?0:dst.getCol(col-1).offset+dst.getCol(col-1).length;
+					dstln.offset = (col==0L)?0L:dst.getCol(col-1).offset+dst.getCol(col-1).length;
 					//NOTE: storage re-allocation if source data > storage size.
 					//Performance concern.
 					Compress1D.copySection(srcln, sttidx, dstln, dst.M);
 					
-					//dstln.print();
 					sttidx += dst.M;
 				}
 			}
 		}
 	}
-	
-
-	//================================================================
-	// Data access methods 
-	//================================================================	
 
 	/**
 	 *  Return the matrix instance of matrix block at index of array
 	 *
 	 * @param  i  index of matrix block in array
 	 */
-	public def getMatrix(i:Int) <: Matrix = this.listBs(i).getMatrix();
+	public def getMatrix(i:Long) <: Matrix = this.listBs(i).getMatrix();
 
-	//---------
- 
 	/**
 	 *  Return element value in matrix. override the method in super class.
 	 *
 	 * @param  r  the r-th rows in the matrix
 	 * @param  c  the c-th columns in the matrix
 	 */
-	public operator this(r:Int, c:Int):Double {
+	public operator this(r:Long, c:Long):ElemType {
 		val loc = grid.find(r, c);
 		val bid = grid.getBlockId(loc(0), loc(1));
 		return listBs(bid).sparse(loc(2), loc(3));
@@ -362,119 +334,91 @@ public class SparseBlockMatrix(grid:Grid) extends Matrix  {
 	 * @param  r  the index of rows in the matrix
 	 * @param  c  the index of columns in the matrix
 	 */
-	public  operator this(x:Int,y:Int)=(v:Double):Double  {
+	public  operator this(x:Long,y:Long)=(v:ElemType):ElemType  {
 		val loc = grid.find(x, y);
 		val bid = grid.getBlockId(loc(0), loc(1));
 		listBs(bid).sparse(loc(2), loc(3))=v;
 		return v;
 	}
 
-
- 	//====================================================================
-	// Cellwise operation
-	//====================================================================
-
 	/**
-	 * Raise each cell in the matrix by the factor of a:Double.
+	 * Raise each cell in the matrix by the factor of a:ElemType.
 	 *
 	 * @param  a  	the scaling factor
 	 */
-	public  def scale(a:Double) {
-		for (val [b] : Point in listBs) {
-			listBs(b).sparse.scale(a);
+	public  def scale(a:ElemType) {
+		for (p in 0..(listBs.size-1)) {
+			listBs(p).sparse.scale(a);
 		}
 		return this;
 	}
-	//-------------
+
     /**
      * Not valid operation for sparse matrix
 	 *
 	 * @param   x  the source matrix to be added with
      */
     public def cellAdd(x:Matrix(M,N)):SparseBlockMatrix(this)  {
-		Debug.exit("Matrix add does not support using sparse matrix to store result");
-	    return this;
+		throw new UnsupportedOperationException("Matrix add does not support using sparse matrix to store result");
 	}
 
-    public def cellAdd(d:Double):SparseBlockMatrix(this)  {
-    	Debug.exit("Matrix add does not support using sparse matrix to store result");
-    	return this;
+    public def cellAdd(d:ElemType):SparseBlockMatrix(this)  {
+    	throw new UnsupportedOperationException("Matrix add does not support using sparse matrix to store result");
     }
     
 	/**
 	 * dst = this + dst
 	 */
-	public def cellAddTo(dst:DenseMatrix(M,N)) {
-		
-		Debug.exit("Not implemented");
-		return dst;
+	public def cellAddTo(dst:DenseMatrix(M,N)):DenseMatrix(dst)  {
+		throw new UnsupportedOperationException("Not implemented");
 	}
 
-	//-----------------------
+
     /**
      * Cell-wise subtraction: this -= x, not support by sparse matrix
 	 *
 	 * @param  x  the subtracting matrix
      */
-    public def cellSub(x:Matrix(M,N))  {
-		Debug.exit("Matrix substract does not support using sparse matrix as target");
-		return this;
+    public def cellSub(x:Matrix(M,N)):SparseBlockMatrix(this) {
+		throw new UnsupportedOperationException("Matrix substract does not support using sparse matrix as target");
 	}
+
 	/**
 	 * x = x - this
 	 */
-	protected def cellSubFrom(x:DenseMatrix(M,N)) {
-		Debug.exit("Not implemented");
-		return x;
+	protected def cellSubFrom(x:DenseMatrix(M,N)):DenseMatrix(x) {
+		throw new UnsupportedOperationException("Not implemented");
 	}
-	
-	public def cellSubFrom(dv:Double) : SparseBlockMatrix(this) {
-		Debug.exit("Not implemented");
-		return this;
-	}
-	//---------------
 
     /**
      * Cell-wise multiplication, return this = this &#42 x
 	 *
 	 * @param  x  the multiplying matrix
      */
-    public def cellMult(x:Matrix(M,N))  {
-		Debug.exit("Matrix cell mult does not support using sparse as target matrix");
-	    return this;
+    public def cellMult(x:Matrix(M,N)):SparseBlockMatrix(this) {
+		throw new UnsupportedOperationException("Matrix cell mult does not support using sparse as target matrix");
 	}
 
 	/**
 	 * Compute x = this &#42 x 
 	 */
 	protected def cellMultTo(x:DenseMatrix(M,N)):DenseMatrix(x) {
-		Debug.assure(false, "Not implement");
-		return x;
+		throw new UnsupportedOperationException("Not implemented");
 	}
 
-
-	//---------------------------------------
     /**
      * Cell-wise division, return this /= x
      */
-	public  def cellDiv(x:Matrix(M,N)) {
-		Debug.exit("Matrix div does not support using sparse matrix as target");
-	
-	    return this;
+	public  def cellDiv(x:Matrix(M,N)):SparseBlockMatrix(this) {
+		throw new UnsupportedOperationException("Matrix div does not support using sparse matrix as target");
 	}
 
 	/**
 	 * x = this / x
 	 */
     protected def cellDivBy(x:DenseMatrix(M,N)):DenseMatrix(x) {
-		Debug.assure(false, "Not implement");
-		return x;		
+		throw new UnsupportedOperationException("Not implemented");
 	}
-
-
-	//====================================================================
-	// Matrix multiplication 
-	//====================================================================
 
     /**
      * Not supported. 
@@ -483,8 +427,7 @@ public class SparseBlockMatrix(grid:Grid) extends Matrix  {
 			A:Matrix(this.M), 
 			B:Matrix(A.N,this.N), 
 			plus:Boolean):SparseBlockMatrix(this) {
-		Debug.exit("Matrix mult does not support using sparse matrix as target");
-		return this;	
+		throw new UnsupportedOperationException("Matrix mult does not support using sparse matrix as target");
 	}		
 
 	/** 
@@ -494,8 +437,7 @@ public class SparseBlockMatrix(grid:Grid) extends Matrix  {
 			A:Matrix{self.N==this.M}, 
 			B:Matrix(A.M,this.N),
 			plus:Boolean):SparseBlockMatrix(this) {
-		Debug.exit("Matrix mult does not support using sparse matrix as target");
-		return this;		
+		throw new UnsupportedOperationException("Matrix mult does not support using sparse matrix as target");
     }
 
 	/** 
@@ -505,28 +447,19 @@ public class SparseBlockMatrix(grid:Grid) extends Matrix  {
 			A:Matrix(this.M), 
 			B:Matrix(this.N,A.N), 
 			plus:Boolean):SparseBlockMatrix(this)	{
-		Debug.exit("Matrix mult does not support using sparse matrix as target");
-		return this;		
+		throw new UnsupportedOperationException("Matrix mult does not support using sparse matrix as target");
     }
 
-	//====================================================================
-	// Operator overlead
-	//====================================================================
-	public operator - this = this.clone().scale(-1.0) as SparseBlockMatrix(M,N);
+    public operator - this = this.clone().scale((-1.0) as ElemType) as SparseBlockMatrix(M,N);
 	
-	
-	//====================================================================
-	// Utils
-	//====================================================================
-
 	/**
 	 * Transpose matrix.
 	 */
 	public def T(dbm:SparseBlockMatrix(N,M)): void {
-		Debug.exit("Not implemented");
+		throw new UnsupportedOperationException("Not implemented");
 	}
 
-	//================================================================
+
 	/**
 	 * Check matrix has the same type, partition and dimension or not.
 	 *
@@ -543,14 +476,14 @@ public class SparseBlockMatrix(grid:Grid) extends Matrix  {
 	 * @return 		true or false
 	 */		
 	public def equals(m:SparseBlockMatrix(M,N)) =
-		VerifyTools.testSame(this as Matrix(M,N), m as Matrix(M,N));
+		VerifyTool.testSame(this as Matrix(M,N), m as Matrix(M,N));
 
 	/**
 	 * Convert matrix data into string
 	 */
 	public def toString():String {
 		var output:String="---------- Sparse-block Matrix ["+M+"x"+N+"] ----------\n";;
-		for (val [p] :Point in listBs) {
+		for (p in 0..(listBs.size-1)) {
 			output+= "--- Sparse block("+p+") ---\n"+listBs(p).toString();
 		}
 		output += "----------------------------------------------------\n";
@@ -562,7 +495,7 @@ public class SparseBlockMatrix(grid:Grid) extends Matrix  {
 	 */
 	public def countNonZero() : Long {
 		var nzcnt:Long=0;
-		for (val [p] :Point in listBs) {
+		for (p in 0..(listBs.size-1)) {
 			nzcnt += listBs(p).sparse.countNonZero();
 		}
 		return nzcnt;
@@ -571,22 +504,5 @@ public class SparseBlockMatrix(grid:Grid) extends Matrix  {
 	/**
 	 * Get sparsity of all blocks
 	 */
-	public def compSparsity() : Double = 1.0*countNonZero()/M/N;
-
-
-		
-	//-------------------------
-	public def print() { print("");}
-	public def print(msg:String) {
-		Console.OUT.print(msg);
-		Console.OUT.print(this.toString());
-		Console.OUT.flush();
-	}
-
-	public def debugPrint() { debugPrint("");}
-	public def debugPrint(msg:String) {
-		Debug.println(msg+this.toString());
-		Debug.flush();
-	}
-
+    public def compSparsity() : ElemType = (1.0*countNonZero()/M/N) as ElemType;
 }

@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10cpp.postcompiler;
@@ -16,6 +16,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -63,20 +64,6 @@ public class CXXCommandBuilder {
                 // ignore all other settings; mpicxx/mpCC win ties, and also
                 // prevent sanity checking because they will be a wrapper on an unknown compiler
                 // So, if things don't match, the user will just find out via link time errors.
-            } else {
-                // If we're compiling for AIX, then we try to prevent mixing of g++ and xlC compiled
-                // code because they do not have binary compatible ABIs on AIX.
-                if (getPlatform().contains("aix")) {
-                    for (PrecompiledLibrary pcl: options.x10libs) {
-                        String pc2 = pcl.props.getProperty("X10LIB_CXX");
-                        if (pc2 != null) {
-                            if (pc != null && !pc2.equals(pc)) {
-                                throw new InternalCompilerError("Conflicting postcompilers. Both "+pc+" and "+pc2+" requested");
-                            }
-                            pc = pc2;
-                        } 
-                    }
-                }
             }
             cxxCompiler = pc == null ? "g++" : pc;
         }
@@ -108,17 +95,16 @@ public class CXXCommandBuilder {
 
     
     protected final boolean usingXLC() {
-        return defaultPostCompiler().contains("xlC");
+        return defaultPostCompiler().contains("xlC") || 
+               defaultPostCompiler().contains("mpCC") ||
+	       defaultPostCompiler().contains("xlcxx");
     }
     
-    protected final boolean bluegene() {
-        return bluegeneP() || bluegeneQ();
-    }
-    protected final boolean bluegeneP() {
-        return platform.contains("bgp");
-    }
     protected final boolean bluegeneQ() {
-        return platform.contains("bgq");
+        return getPlatform().contains("bgq");
+    }
+    protected final boolean fx10() {
+        return getPlatform().contains("fx10");
     }
 
     /** 
@@ -151,10 +137,16 @@ public class CXXCommandBuilder {
             cxxCmd.add(usingXLC() ? "-O3" : "-O2");
             cxxCmd.add(usingXLC() ? "-qinline" : "-finline-functions");
             cxxCmd.add("-DNO_TRACING");
-            if (usingXLC() && !bluegene()) {
-                cxxCmd.add("-qhot");
-                cxxCmd.add("-qtune=auto");
-                cxxCmd.add("-qarch=auto");
+            if (fx10()) {
+                cxxCmd.add("-Kfast");
+            }
+            if (usingXLC()) {
+                if (bluegeneQ()) {
+                    cxxCmd.add("-qhot");
+                    cxxCmd.add("-qtune=qp");
+                    cxxCmd.add("-qsimd=auto");
+                    cxxCmd.add("-qarch=qp");
+                }
             }
         }
 
@@ -163,6 +155,9 @@ public class CXXCommandBuilder {
                                + ":1540-1101"    // Do not warn about non-void functions with no return
                                + ":1540-1102"    // Do not warn about uninitialized variables
                                + ":1500-029");   // Do not warn about being unable to inline when optimizing
+        } else if (fx10()) {
+            cxxCmd.add("-Xg");        	
+            cxxCmd.add("-w");
         } else {
             cxxCmd.add("-Wno-long-long");        // Do not warn about using long long
             cxxCmd.add("-Wno-unused-parameter"); // Do not warn about unused parameters
@@ -226,7 +221,9 @@ public class CXXCommandBuilder {
         cxxCmd.addAll(x10rt.libs);
 
         if (options.gpt) {
+            cxxCmd.add("-Wl,--no-as-needed");
             cxxCmd.add("-lprofiler");
+            cxxCmd.add("-Wl,--as-needed");
         }
         
         if (options.buildX10Lib != null) {
@@ -372,17 +369,13 @@ public class CXXCommandBuilder {
             cbb = new Cygwin_CXXCommandBuilder();
         } else if (platform.startsWith("linux_")) {
         	cbb = new Linux_CXXCommandBuilder();
-        } else if (platform.startsWith("aix_")) {
-        	cbb = new AIX_CXXCommandBuilder();
-        } else if (platform.startsWith("sunos_")) {
-        	cbb = new SunOS_CXXCommandBuilder();
         } else if (platform.startsWith("macosx_") || platform.startsWith("darwin")) {
         	cbb = new MacOSX_CXXCommandBuilder();
         } else if (platform.startsWith("freebsd_")) {
         	cbb = new FreeBSD_CXXCommandBuilder();
-        } else if (platform.startsWith("bgp")) {
-        	cbb = new Linux_CXXCommandBuilder();            
         } else if (platform.startsWith("bgq")) {
+            cbb = new Linux_CXXCommandBuilder();            
+        } else if (platform.startsWith("fx10")) {
             cbb = new Linux_CXXCommandBuilder();            
         } else {   
             eq.enqueue(ErrorInfo.WARNING,
@@ -402,25 +395,84 @@ public class CXXCommandBuilder {
     public String getCUDAPostCompiler() {
     	return "nvcc";
     }
-    public List<String> getCUDAArchitectures() {
-        ArrayList<String> ans = new ArrayList<String>();
-    	ans.add("sm_10");
-    	ans.add("sm_11");
-    	ans.add("sm_12");
-    	ans.add("sm_13");
-    	ans.add("sm_20");
-    	ans.add("sm_21");
-    	//ans.add("sm_30");
-    	return ans;
+
+    public double getCUDAVersion() {
+        String output = null;
+        try {
+            ProcessBuilder pb = new ProcessBuilder(getCUDAPostCompiler(), "-V");
+            pb.redirectErrorStream(true);
+            Process proc = pb.start();
+            InputStreamReader stdout = new InputStreamReader(proc.getInputStream());
+            try {
+                char[] c = new char[72];
+                int len;
+                StringBuilder sb = new StringBuilder();
+                while ((len = stdout.read(c)) > 0) {
+                    sb.append(String.valueOf(c, 0, len));
+                }
+                if (sb.length() != 0) {
+                    output = sb.toString();
+                }
+            }
+            finally {
+                stdout.close();
+            }
+            int procExitValue = proc.waitFor();
+        } catch (Exception e) {
+        }
+
+        double version = -1.0; // unknown
+
+        if (output != null) {
+            String marker = "Cuda compilation tools, release ";
+            int markerPos = output.indexOf(marker);
+            if (markerPos >= 0) {
+                int startPos = markerPos + marker.length();
+                int endPos = startPos + 1;
+                for ( ; endPos < output.length(); ++endPos) {
+                    char c = output.charAt(endPos);
+                    if (!(Character.isDigit(c) || c == '.')) break;
+                }
+                version = Double.parseDouble(output.substring(startPos, endPos));
+            }
+        }
+
+        return version;
     }
 
-	public List<String> getCUDAPreFileArgs() {
+    public List<String> getCUDAArchitectures() {
+        double version = getCUDAVersion();
+        ArrayList<String> ans = new ArrayList<String>();
+//        ans.add("sm_10");
+//        ans.add("sm_11");
+//        ans.add("sm_12");
+//        ans.add("sm_13");
+        ans.add("sm_20");
+        ans.add("sm_21");
+        ans.add("sm_30");
+        if (version >= 5.0) {
+            ans.add("sm_35"); // requires CUDA Toolkit 5.0 or newer
+        }
+        if (version >= 6.0) {
+            ans.add("sm_50"); // requires CUDA Toolkit 6.0 or newer
+        }
+        if (version >= 6.5) {
+            ans.add("sm_32"); // requires CUDA Toolkit 6.5 or newer
+            ans.add("sm_37"); // requires CUDA Toolkit 6.5 or newer
+        }
+        return ans;
+    }
+
+    public List<String> getCUDAPreFileArgs() {
         ArrayList<String> ans = new ArrayList<String>();
         ans.add("-cubin");
         //ans.add("-Xptxas");
         //ans.add("-v");
         for (PrecompiledLibrary pcl : options.x10libs) {
-        	ans.add("-I"+pcl.absolutePathToRoot+"/include");
+            if (options.x10_config.DEBUG) {
+                ans.add("-I"+pcl.absolutePathToRoot+"/include-dbg");
+            }
+            ans.add("-I"+pcl.absolutePathToRoot+"/include");
         }
         return ans;
     }

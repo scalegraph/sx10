@@ -8,7 +8,7 @@
 #  You may obtain a copy of the License at
 #      http://www.opensource.org/licenses/eclipse-1.0.php
 #
-#  (C) Copyright IBM Corporation 2006-2011.
+#  (C) Copyright IBM Corporation 2006-2014.
 #
 
 #-----------------------------------------------------------------
@@ -44,7 +44,7 @@ printf "\#Set number of cores per node        : $ProcPerNode\n";
 #--------------------------
 
 # Batch job submition options. The following is an example used for Triloka cluster.
-$BatchModeOpt = "--mem=15000 -p Batch2h";
+$BatchModeOpt = "--mem=15000 -p all";
 printf "\#Set batch job submission options    : $BatchModeOpt\n";
 
 $gml_path="../../..";         # x10.gml root path

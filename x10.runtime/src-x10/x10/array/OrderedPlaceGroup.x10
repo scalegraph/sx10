@@ -12,7 +12,7 @@
 package x10.array;
 
 /**
- * <p>An implementation of PlaceGroup that simply uses a sorted Array[Place] to
+ * <p>An implementation of PlaceGroup that simply uses a sorted Rail[Place] to
  * represent the Places in the group.  This implementation is only suitable
  * when the PlaceGroup contains a fairly small number of places.
  * This can happen either becase the group is very sparse, or because the total 
@@ -34,18 +34,18 @@ public final class OrderedPlaceGroup extends PlaceGroup {
    */
   private val places:Rail[Place];
 
-  /**
-   * Construct a OrderedPlaceGroup from a Sequence[Place].
-   */
-  public def this(ps:Sequence[Place]) {
-    places = new Array[Place](ps.size(), (i:int)=>ps(i));
-  }
+  ///**
+  // * Construct a OrderedPlaceGroup from a Sequence[Place].
+  // */
+  //public def this(ps:Sequence[Place]) {
+  //  places = new Rail[Place](ps.size(), (i:int)=>ps(i));
+  //}
 
   /**
-   * Construct a OrderedPlaceGroup from a Array[Place](1). 
+   * Construct a OrderedPlaceGroup from a Rail[Place](1). 
    */
-  public def this(pa:Array[Place](1)) {
-    places = new Array[Place](pa.size, (i:int)=>pa(i));
+  public def this(pa:Rail[Place]) {
+    places = new Rail[Place](pa.size, (i:Long)=>pa(i));
   }
 
   /**
@@ -56,22 +56,26 @@ public final class OrderedPlaceGroup extends PlaceGroup {
     places = [p as Place];
   }
 
-  public operator this(i:int):Place = places(i);
+  public operator this(i:Long):Place = places(i);
 
-  public def iterator() = places.values().iterator();
+  public def iterator() = places.iterator();
+  //public def iterator() = places.values().iterator();
 
   public def numPlaces() = places.size;
 
-  public def contains(id:int):Boolean {
-    for ([i] in places) {
-        if (places(i).id == id) return true;
+  public def contains(id:Long):Boolean {
+	var cnt : Long = 0;
+    for (i in places) {
+        if (places(cnt++).id == id) return true;
     }
     return false;
   }
 
-  public def indexOf(id:int):int {
-    for ([i] in places) {
-        if (places(i).id == id) return i;
+  public def indexOf(id:Long):Long {
+	var cnt : Long = 0;
+    for (i in places) {
+        if (places(cnt).id == id) return cnt;
+		cnt++;
     }
     return -1;
   }

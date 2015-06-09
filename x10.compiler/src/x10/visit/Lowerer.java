@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.visit;
@@ -92,6 +92,7 @@ import x10.ast.X10CanonicalTypeNode;
 import x10.ast.X10Cast;
 import x10.ast.X10Formal;
 import x10.ast.X10Instanceof;
+import x10.ast.X10LocalDecl_c;
 import x10.ast.X10New;
 import x10.ast.X10Special;
 import x10.ast.X10Unary_c;
@@ -112,7 +113,6 @@ import x10.types.MethodInstance;
 import x10.types.X10Def;
 import x10.types.X10FieldInstance;
 import x10.types.X10ParsedClassType;
-
 import x10.types.checker.Converter;
 import x10.types.checker.PlaceChecker;
 import x10.types.constants.StringValue;
@@ -138,10 +138,13 @@ import x10cuda.ast.CUDAKernel;
 public class Lowerer extends ContextVisitor {
     private final Synthesizer synth;
     private final AltSynthesizer altsynth;
+    private final boolean isManagedX10;
+    
     public Lowerer(Job job, TypeSystem ts, NodeFactory nf) {
         super(job, ts, nf);
         synth = new Synthesizer(nf, ts);
         altsynth = new AltSynthesizer(ts, nf);
+        isManagedX10 = ((x10.ExtensionInfo) job.extensionInfo()).isManagedX10();
     }
 
     private int count;
@@ -158,6 +161,7 @@ public class Lowerer extends ContextVisitor {
     private static final Name EVAL_AT = Name.make("evalAt");
     private static final Name RUN_ASYNC = Name.make("runAsync");
     private static final Name RUN_UNCOUNTED_ASYNC = Name.make("runUncountedAsync");
+    private static final Name RUN_IMMEDIATE_ASYNC = Name.make("runImmediateAsync");
     private static final Name HOME = Name.make("home");
     private static final Name HERE_INT = Name.make("hereInt");
     private static final Name NEXT = Name.make("advanceAll");
@@ -178,15 +182,15 @@ public class Lowerer extends ContextVisitor {
     private static final Name CONVERT = Converter.operator_as;
     private static final Name CONVERT_IMPLICITLY = Converter.implicit_operator_as;
     private static final Name DIST = Name.make("dist");
+    private static final Name LOCAL_INDICES = Name.make("localIndices");
+    private static final Name PLACE_GROUP = Name.make("placeGroup");
     
-    private static final Name XOR = Name.make("xor");
-    private static final Name FENCE = Name.make("fence");
-    private static final QName IMMEDIATE = QName.make("x10.compiler.Immediate");
     private static final QName PRAGMA = QName.make("x10.compiler.Pragma");
     private static final QName REF = QName.make("x10.compiler.Ref");
     private static final QName UNCOUNTED = QName.make("x10.compiler.Uncounted");
-    private static final QName REMOTE_OPERATION = QName.make("x10.compiler.RemoteOperation");
+    private static final QName IMMEDIATE = QName.make("x10.compiler.Immediate");
     private static final QName ASYNC_CLOSURE = QName.make("x10.compiler.AsyncClosure");
+    private static final QName NAMED_MESSAGE = QName.make("x10.compiler.NamedMessage");
     
     private static final Name START_COLLECTING_FINISH = Name.make("startCollectingFinish");
     private static final Name STOP_COLLECTING_FINISH = Name.make("stopCollectingFinish");
@@ -196,6 +200,7 @@ public class Lowerer extends ContextVisitor {
     private static final Name START_LOCAL_FINISH = Name.make("startLocalFinish");
     private static final Name START_SIMPLE_FINISH = Name.make("startSimpleFinish");
     
+    @Override
     public Node override(Node parent, Node n) { 
     	if (n instanceof Finish) {
     		Finish finish = (Finish) n;
@@ -253,7 +258,7 @@ public class Lowerer extends ContextVisitor {
 			}
     	}
     	
-        // handle at(p) async S and treat it as the old async(p) S.
+    	// match at (p) async S and treat it as if it were async (p) S.
     	if (n instanceof AtStmt) {
     	    AtStmt atStm = (AtStmt) n;
     	    Stmt body = atStm.body();
@@ -261,36 +266,52 @@ public class Lowerer extends ContextVisitor {
     	    if (async==null)
     	        return null;
     	    Expr place = atStm.place();
-            if (ts.hasSameClassDef(Types.baseType(place.type()), ts.GlobalRef())) {
-                try {
-                    place = synth.makeFieldAccess(async.position(),place, ts.homeName(), context());
-                } catch (SemanticException e) {
-                }
-            }
-            List<Expr> clocks = async.clocks();
-            place = (Expr) visitEdgeNoOverride(atStm, place);
-            body = (Stmt) visitEdgeNoOverride(async, async.body());
-            if (clocks != null && ! clocks.isEmpty()) {
-                List<Expr> nclocks = new ArrayList<Expr>();
-                for (Expr c : clocks) {
-                    nclocks.add((Expr) visitEdgeNoOverride(async, c));
-                }
-                clocks =nclocks;
-            }
-            try {
-                Expr prof = getProfile(atStm.atDef());
-                return visitAsyncPlace(async, place, body, atStm.atDef().capturedEnvironment(), prof);
-            } catch (SemanticException z) {
-                return null;
-            }
+    	    if (ts.hasSameClassDef(Types.baseType(place.type()), ts.GlobalRef())) {
+    	        try {
+    	            place = synth.makeFieldAccess(async.position(),place, ts.homeName(), context());
+    	        } catch (SemanticException e) {
+    	        }
+    	    }
+    	    List<Expr> clocks = async.clocks();
+    	    place = (Expr) visitEdgeNoOverride(atStm, place);
+    	    body = (Stmt) visitEdgeNoOverride(async, async.body());
+    	    if (clocks != null && ! clocks.isEmpty()) {
+    	        List<Expr> nclocks = new ArrayList<Expr>();
+    	        for (Expr c : clocks) {
+    	            nclocks.add((Expr) visitEdgeNoOverride(async, c));
+    	        }
+    	        clocks =nclocks;
+    	    }
+    	    try {
+    	        Expr prof = getProfile(atStm.atDef());
+    	        List<X10ClassType> annotations = AnnotationUtils.getAnnotations(n);
+    	        if (annotations != null) {
+    	            List<X10ClassType> bodyAnnotations = AnnotationUtils.getAnnotations(async);
+    	            if (bodyAnnotations != null) {
+    	                annotations.addAll(bodyAnnotations);
+    	            }
+    	        } else {
+    	            annotations = AnnotationUtils.getAnnotations(async);;
+    	        }
+    	        return visitAsyncPlace(async, place, body, atStm.atDef().capturedEnvironment(), annotations, prof);
+    	    } catch (SemanticException z) {
+    	        return null;
+    	    }
     	}
-    	// handle async at(p) S and treat it as the old async(p) S.
+
+    	// CUDA KLUDGE: match async at(p) @CUDA S and compile it as if it were async(p) @CUDA S.
+    	// TODO: Think about whether we can instead use a pattern that matches current (X10 2.4.3)
+    	//       idioms for remote activity spawning.
     	if (n instanceof Async) {
     		Async async = (Async) n;
     		Stmt body = async.body();
     		AtStmt atStm = toAtStmt(body);
-    		if (atStm==null)
+    		if (atStm==null) {
     			return null;
+    		}
+            if (!(atStm.body() instanceof CUDAKernel)) {
+                return null;
+            }
     		Expr place = atStm.place(); 
     		if (ts.hasSameClassDef(Types.baseType(place.type()), ts.GlobalRef())) {
     			try {
@@ -298,7 +319,6 @@ public class Lowerer extends ContextVisitor {
     			} catch (SemanticException e) {
     			}
     		}
-            if (!ExpressionFlattener.isPrimary(place)) return null;
     		List<Expr> clocks = async.clocks();
     		place = (Expr) visitEdgeNoOverride(atStm, place);
     		body = (Stmt) visitEdgeNoOverride(atStm, atStm.body());
@@ -311,7 +331,16 @@ public class Lowerer extends ContextVisitor {
     		}
     		try {
                 Expr prof = getProfile(async.asyncDef());
-    			return visitAsyncPlace(async, place, body, atStm.atDef().capturedEnvironment(), prof);
+                List<X10ClassType> annotations = AnnotationUtils.getAnnotations(n);
+                if (annotations != null) {
+                    List<X10ClassType> bodyAnnotations = AnnotationUtils.getAnnotations(async);
+                    if (bodyAnnotations != null) {
+                        annotations.addAll(bodyAnnotations);
+                    }
+                } else {
+                    annotations = AnnotationUtils.getAnnotations(async);;
+                }
+    			return visitAsyncPlace(async, place, body, atStm.atDef().capturedEnvironment(), annotations, prof);
     		} catch (SemanticException z) {
     			return null;
     		}
@@ -390,8 +419,93 @@ public class Lowerer extends ContextVisitor {
         return n;
     }
 
+    /** Wrap the given statement in code to catch all exceptions and rethrow them wrapped to
+     * avoid having a checked exception escape a closure.  This is necessary since in javac
+     * we cannot generate code for a closure that throws a checked exception.  XRX code unwraps
+     * them on the completion message, or puts them into the MultipleExceptions in their wrapped form.
+     * @param useReturn whether or not to return a value of type returnType in the catch block
+     * @author Dave Cunningham
+     */
+    private Block atExceptionWrap(Position pos, Stmt atBody, boolean useReturn, Type returnType) throws SemanticException {
+    	TypeNode returnTypeNode = nf.CanonicalTypeNode(pos, returnType); 
+
+    	// try { at_body }
+        Block tryBlock = synth.toBlock(atBody);
+
+        List<Catch> catches = new ArrayList<Catch>();
+        // if return_type is null, return is omitted and T is Int, otherwise T is return_type 
+        { // catch (e:CheckedThrowable) { /*return*/ Runtime.wrapAtChecked[T](e); }
+	        Name catchFormalName = getTmp();
+	        LocalDef catchFormalLocalDef = ts.localDef(pos, ts.NoFlags(), Types.ref(ts.CheckedThrowable()), catchFormalName);
+	        Formal catchFormal = nf.Formal(pos, nf.FlagsNode(pos, ts.NoFlags()),
+	                nf.CanonicalTypeNode(pos, ts.CheckedThrowable()), nf.Id(pos, catchFormalName)).localDef(catchFormalLocalDef);                
+	        Expr catchLocal = nf.Local(pos, nf.Id(pos, catchFormalName)).localInstance(catchFormalLocalDef.asInstance()).type(ts.CheckedThrowable());
+	        Expr wrap = synth.makeStaticCall(pos, ts.Runtime(), Name.make("wrapAtChecked"), Collections.singletonList(returnTypeNode), Collections.singletonList(catchLocal), ts.Exception(), context());
+
+	        // [DC] managed backend weirdness... If i just return wrap here, i get errors due to missing $unbox call.  I have to put it in a local var and return the local var.
+	        Name wrapStoreName = getTmp();
+	        Id wrapStoreId = nf.Id(pos, wrapStoreName);
+	        LocalDef wrapStoreLocalDef = ts.localDef(pos, ts.NoFlags(), Types.ref(returnType), wrapStoreName);
+	        LocalDecl wrapStoreLocalDecl = nf.LocalDecl(pos, nf.FlagsNode(pos, ts.NoFlags()), returnTypeNode, wrapStoreId, wrap).localDef(wrapStoreLocalDef);
+	        Expr wrapStoreLocal = nf.Local(pos, wrapStoreId).localInstance(wrapStoreLocalDef.asInstance()).type(returnType);
+	        
+	        Block catchBlock;
+	        if (useReturn) {
+	        	catchBlock= nf.Block(pos, wrapStoreLocalDecl, nf.Return(pos, wrapStoreLocal));
+	        } else {
+	        	catchBlock= nf.Block(pos, wrapStoreLocalDecl);
+	        }
+	        catches.add(nf.Catch(pos, catchFormal, catchBlock));
+        }
+	        
+        Block closure_body = synth.toBlock(nf.Try(pos, tryBlock, catches, null));
+        
+        return closure_body;
+    }
+
     private Expr visitAtExpr(AtExpr e) throws SemanticException {
-        return visitRemoteClosure(e, EVAL_AT, e.place());
+		Position pos = e.position();
+		Expr place = getPlace(pos, e.place());
+
+		Position bPos = e.body().position();
+		ClosureDef cDef = e.closureDef().position(bPos);
+		
+		// If in a clocked context, must capture implicit clock variable 
+		// being added by the lowering phase.
+		if (!clockStack.isEmpty()) {
+		    cDef.addCapturedVariable(clockStack.peek().localInstance());
+		}
+		
+		Block at_body = e.body();
+		if (isManagedX10) {
+		    at_body = atExceptionWrap(bPos, at_body, true, e.returnType().type());
+		}
+
+		if (AnnotationUtils.hasAnnotation(e, ts.RemoteInvocation())) {
+		    throw new UnsupportedOperationException("Usage error: RemoteInvocation annotations not supported on at expressions");
+		}
+		
+		Closure closure_ = nf.Closure(bPos,  e.formals(), e.guard(), e.returnType(), at_body);
+		Expr closure = closure_.closureDef(cDef).type(cDef.classDef().asType());
+
+		List<TypeNode> typeArgs = Arrays.asList(new TypeNode[] { e.returnType() });
+		Expr prof = getProfile(e.closureDef()); 
+		List<Expr> args = new ArrayList<Expr>(Arrays.asList(new Expr[] { place, closure, prof }));
+		Expr result = synth.makeStaticCall(pos, ts.Runtime(), EVAL_AT,
+				typeArgs, args, e.type(), context());
+
+		// [DC] It seems this can sometimes be null, even though it ought not to be.
+		// I suspect some pass before this one is not filling it in, in some new code.
+		if (at_body.exceptions() != null) {
+		    for (Type thrown : at_body.exceptions()) {
+		    	TypeNode thrown_node = nf.UnknownTypeNode(pos).typeRef(Types.ref(thrown));
+		        //XTENLANG-3086 change from ts.CheckedThrowable() to ts.Runtime()
+				List<TypeNode> typeArgs2 = Arrays.asList(new TypeNode[] { thrown_node, e.returnType() });
+		        result = synth.makeStaticCall(pos, ts.CheckedThrowable(), Name.make("pretendToThrow"), typeArgs2, Collections.<Expr>singletonList(result),  e.returnType().type(), context());
+		    }
+		}
+
+		return result;
     }
 
     Expr getPlace(Position pos, Expr place) throws SemanticException{
@@ -399,27 +513,6 @@ public class Lowerer extends ContextVisitor {
             throw new InternalCompilerError("The place argument of an \"at\" is not of type Place", place.position());
         }
         return place;
-    }
-
-    private Expr visitRemoteClosure(Closure c, Name implName, Expr place) throws SemanticException {
-        Position pos = c.position();
-        place = getPlace(pos, place);
-        List<TypeNode> typeArgs = Arrays.asList(new TypeNode[] { c.returnType() });
-        Position bPos = c.body().position();
-        ClosureDef cDef = c.closureDef().position(bPos);
-        // If in a clocked context, must capture implicit clock variable 
-        // being added by the lowering phase.
-        if (!clockStack.isEmpty()) {
-            cDef.addCapturedVariable(clockStack.peek().localInstance());
-        }
-        Expr closure = nf.Closure(c, bPos)
-            .closureDef(cDef)
-        	.type(cDef.classDef().asType());
-        Expr prof = getProfile(c.closureDef()); 
-        List<Expr> args = new ArrayList<Expr>(Arrays.asList(new Expr[] { place, closure, prof }));
-        Expr result = synth.makeStaticCall(pos, ts.Runtime(), implName,
-        		typeArgs, args, c.type(), context());
-        return result;
     }
 
     private static CodeInstance<?> findEnclosingCode(CodeInstance<?> ci) {
@@ -472,59 +565,7 @@ public class Lowerer extends ContextVisitor {
         }
         return nodeFactory().NullLit(at.position()).type(typeSystem().Null());
     }
-
-    private Stmt atStmt(Position pos, Stmt at_body, Expr place,
-            List<VarInstance<? extends VarDef>> env, AtDef def) throws SemanticException {
-        place = getPlace(pos, place);
-        
-    	// try { at_body }
-        Block tryBlock = synth.toBlock(at_body);
-
-        List<Catch> catches = new ArrayList<Catch>();
-        { // catch (e:CheckedThrowable) { Runtime.wrapAtChecked(e); }
-	        Name catchFormalName = getTmp();
-	        LocalDef catchFormalLocalDef = ts.localDef(pos, ts.NoFlags(), Types.ref(ts.CheckedThrowable()), catchFormalName);
-	        Formal catchFormal = nf.Formal(pos, nf.FlagsNode(pos, ts.NoFlags()),
-	                nf.CanonicalTypeNode(pos, ts.CheckedThrowable()), nf.Id(pos, catchFormalName)).localDef(catchFormalLocalDef);                
-	        Expr catchLocal = nf.Local(pos, nf.Id(pos, catchFormalName)).localInstance(catchFormalLocalDef.asInstance()).type(ts.Error());
-	        Expr wrap = synth.makeStaticCall(pos, ts.Runtime(), Name.make("wrapAtChecked"), Collections.singletonList(catchLocal), ts.Exception(), context());
-	        Block catchBlock = nf.Block(pos, nf.Eval(pos, wrap));
-	        catches.add(nf.Catch(pos, catchFormal, catchBlock));
-        }
-	        
-        Block closure_body = synth.toBlock(nf.Try(pos, tryBlock, catches, null));
-        
-        Closure closure = synth.makeClosure(at_body.position(), ts.Void(), closure_body, context());
-        closure.closureDef().setCapturedEnvironment(env);
-        CodeInstance<?> mi = findEnclosingCode(Types.get(closure.closureDef().methodContainer()));
-        closure.closureDef().setMethodContainer(Types.ref(mi));
-        Expr[] args;
-        Expr profile = getProfile(def);
-        Expr endpoint = getEndpoint(def);
-        if (null != endpoint) {
-            args = new Expr[] { place, closure, profile, endpoint };
-        } else {
-            args = new Expr[] { place, closure, profile };
-        }
-        List<Stmt> statements = new ArrayList<Stmt>();
-        Stmt run_at = nf.Eval(pos,
-        		synth.makeStaticCall(pos, ts.Runtime(), RUN_AT,
-        				Arrays.asList(args), ts.Void(),
-        				context()));
-        statements.add(run_at);
-    	// [DC] It seems this can sometimes be null, even though it ought not to be.
-    	// I suspect some pass before this one is not filling it in, in some new code.
-        if (at_body.exceptions() != null) {
-	        for (Type thrown : at_body.exceptions()) {
-	        	TypeNode thrown_node = nf.UnknownTypeNode(pos).typeRef(Types.ref(thrown));
-	            //XTENLANG-3086 change from ts.CheckedThrowable() to ts.Runtime()
-		        Expr pretendToThrow = synth.makeStaticCall(pos, ts.CheckedThrowable(), Name.make("pretendToThrow"), Collections.singletonList(thrown_node), Collections.<Expr>emptyList(),  ts.Void(), context());
-	        	statements.add(nf.Eval(pos, pretendToThrow));
-	        }
-        }
-        return nf.Block(pos, statements);
-    }
-
+    
     private Stmt visitAtStmt(AtStmt a) throws SemanticException {
         Position pos = a.position();
 
@@ -535,8 +576,51 @@ public class Lowerer extends ContextVisitor {
             env = new ArrayList<VarInstance<? extends VarDef>>(env);
             env.add(clockStack.peek().localInstance());
         }
+
         
-        return atStmt(pos, a.body(), a.place(), env, a.atDef());
+        Stmt at_body = a.body();
+		Expr place = a.place();
+		AtDef def = a.atDef();
+        
+        place = getPlace(pos, place);
+		
+		Block closure_body;
+		if (isManagedX10) {
+		    closure_body = atExceptionWrap(pos, at_body, false, ts.Int());
+		} else {
+		   closure_body = synth.toBlock(at_body);		    
+		}
+		List<X10ClassType> annotations = AnnotationUtils.getAnnotations(a);
+
+		Closure closure = synth.makeClosure(at_body.position(), ts.Void(), closure_body, context(), annotations);
+		closure.closureDef().setCapturedEnvironment(env);
+		CodeInstance<?> mi = findEnclosingCode(Types.get(closure.closureDef().methodContainer()));
+		closure.closureDef().setMethodContainer(Types.ref(mi));
+		Expr[] args;
+		Expr profile = getProfile(def);
+		Expr endpoint = getEndpoint(def);
+		if (null != endpoint) {
+		    args = new Expr[] { place, closure, profile, endpoint };
+		} else {
+		    args = new Expr[] { place, closure, profile };
+		}
+		List<Stmt> statements = new ArrayList<Stmt>();
+		Stmt run_at = nf.Eval(pos,
+				synth.makeStaticCall(pos, ts.Runtime(), RUN_AT,
+						Arrays.asList(args), ts.Void(),
+						context()));
+		statements.add(run_at);
+		// [DC] It seems this can sometimes be null, even though it ought not to be.
+		// I suspect some pass before this one is not filling it in, in some new code.
+		if (at_body.exceptions() != null) {
+		    for (Type thrown : at_body.exceptions()) {
+		    	TypeNode thrown_node = nf.UnknownTypeNode(pos).typeRef(Types.ref(thrown));
+		        //XTENLANG-3086 change from ts.CheckedThrowable() to ts.Runtime()
+		        Expr pretendToThrow = synth.makeStaticCall(pos, ts.CheckedThrowable(), Name.make("pretendToThrow"), Collections.singletonList(thrown_node), Collections.<Expr>emptyList(),  ts.Void(), context());
+		    	statements.add(nf.Eval(pos, pretendToThrow));
+		    }
+		}
+		return nf.Block(pos, statements);
     }
 
     private AtStmt toAtStmt(Stmt body) {
@@ -585,142 +669,43 @@ public class Lowerer extends ContextVisitor {
     	List<Expr> clocks = clocks(a.clocked(), a.clocks());
         Position pos = a.position();
         X10Ext ext = (X10Ext) a.ext();
-        List<X10ClassType> refs = AnnotationUtils.annotationsNamed(a, REF);
+        List<X10ClassType> annotations = AnnotationUtils.getAnnotations(a);
         List<VarInstance<? extends VarDef>> env = a.asyncDef().capturedEnvironment();
         if (a.clocked()) {
             env = new ArrayList<VarInstance<? extends VarDef>>(env);
             env.add(clockStack.peek().localInstance());
         }
         if (isUncountedAsync(ts, a)) {
-        	if (old instanceof Async)
-            	 return uncountedAsync(pos, a.body(), env);
+        	if (old instanceof Async) {
+            	 return uncountedAsync(pos, a.body(), env, isImmediateAsync(ts, a), annotations);
+        	}
         }
-        if (old instanceof Async)
-            return async(pos, a.body(), clocks, refs, env);
-        Stmt specializedAsync = specializeAsync(a, null, a.body());
-        if (specializedAsync != null)
-            return specializedAsync;
-        return async(pos, a.body(), clocks, refs, env);
+
+        return async(pos, a.body(), clocks, annotations, env);
     }
     // Begin asyncs
     // rewrite @Uncounted async S, with special translation for @Uncounted async at (p) S.
-    private Stmt visitAsyncPlace(Async a, Expr place, Stmt body, List<VarInstance<? extends VarDef>> env, Expr prof) throws SemanticException {
+    private Stmt visitAsyncPlace(Async a, Expr place, Stmt body, List<VarInstance<? extends VarDef>> env, 
+                                 List<X10ClassType> annotations, Expr prof) throws SemanticException {
         List<Expr> clocks = clocks(a.clocked(), a.clocks());
         Position pos = a.position();
-        List<X10ClassType> refs = AnnotationUtils.annotationsNamed(a, REF);
         if (a.clocked()) {
             env = new ArrayList<VarInstance<? extends VarDef>>(env);
             env.add(clockStack.peek().localInstance());
         }
         if (isUncountedAsync(ts, a)) {
-            return uncountedAsync(pos, body, place, env);
+            return uncountedAsync(pos, body, place, env, prof, isImmediateAsync(ts, a), annotations);
         }
-        Stmt specializedAsync = specializeAsync(a, place, body);
-        if (specializedAsync != null)
-            return specializedAsync;
-        return async(pos, body, clocks, place, refs, env, prof);
-    }
 
-    // TODO: add more rules from SPMDcppCodeGenerator
-    private boolean isGloballyAvailable(Expr e) {
-        if (e instanceof Local)
-            return true;
-        return false;
+        return async(pos, body, clocks, place, annotations, env, prof);
     }
 
     public static boolean isUncountedAsync(TypeSystem ts, Async a) {
         return AnnotationUtils.hasAnnotation(ts, a, UNCOUNTED);
     }
-
-    /**
-     * Recognize the following pattern:
-     * <pre>
-     * @Immediate async at(p) {
-     *     r(i) ^= v;
-     * }
-     * </pre>
-     * where <tt>p: Place</tt>, <tt>r: Rail[T]!p</tt>, <tt>i:Int</tt>, and <tt>v:T</tt>,
-     * and compile it into an optimized remote operation.
-     * @param a the async statement
-     * @return an invocation of the remote operation, or null if no match
-     * @throws SemanticException
-     * TODO: move into a separate pass!
-     */
-    private Stmt specializeAsync(Async a, Expr p, Stmt body) throws SemanticException {
-        if (!AnnotationUtils.hasAnnotation(ts, a, IMMEDIATE))
-            return null;
-        if (a.clocks().size() != 0)
-            return null;
-        
-        if (body instanceof Block) {
-            List<Stmt> stmts = ((Block) body).statements();
-            if (stmts.size() != 1)
-                return null;
-            body = stmts.get(0);
-        }
-        if (!(body instanceof Eval))
-            return null;
-        Expr e = ((Eval) body).expr();
-        if (!(e instanceof SettableAssign))
-            return null;
-        SettableAssign sa = (SettableAssign) e;
-        if (sa.operator() != Assign.BIT_XOR_ASSIGN)
-            return null;
-        List<Expr> is = sa.index();
-        if (is.size() != 1)
-            return null;
-        Expr i = is.get(0);
-        if (p instanceof X10New) {
-            // TODO: make sure we calling the place constructor
-            // TODO: decide between rail and place-local handle
-            X10New n = (X10New) p;
-            Expr q =  n.arguments().get(0);
-            Expr r = sa.array();
-            Expr v = sa.right();
-            if (/*!isGloballyAvailable(r) || */!isGloballyAvailable(i) || !isGloballyAvailable(v))
-                return null;
-    /*        List<Type> ta = ((X10ClassType) X10TypeMixin.baseType(r.type())).typeArguments();
-            if (!v.type().isLong() || !ts.isRailOf(r.type(), ts.Long()))
-                return null;
-            if (!PlaceChecker.isAtPlace(r, p, xContext()))
-                return null;
-    */
-            ClassType RemoteOperation = (ClassType) ts.forName(REMOTE_OPERATION);
-            Position pos = a.position();
-            List<Expr> args = new ArrayList<Expr>();
-            Expr p1 = (Expr) leaveCall(null, q, this);
-            args.add(p1);
-            args.add((Expr) leaveCall(null, r, this));
-            args.add((Expr) leaveCall(null, i, this));
-            args.add((Expr) leaveCall(null, v, this));
-            Stmt alt = nf.Eval(pos, synth.makeStaticCall(pos, RemoteOperation, XOR, args, ts.Void(), context()));
-            Expr cond = nf.Binary(pos, q, X10Binary_c.EQ, call(pos, HERE_INT, ts.Int())).type(ts.Boolean());
-            Stmt cns = a.body();
-            return nf.If(pos, cond, cns, alt);
-        } else {
-            Expr r = sa.array();
-            Expr v = sa.right();
-            if (/*!isGloballyAvailable(r) || */!isGloballyAvailable(i) || !isGloballyAvailable(v))
-                return null;
-    /*        List<Type> ta = ((X10ClassType) X10TypeMixin.baseType(r.type())).typeArguments();
-            if (!v.type().isLong() || !ts.isRailOf(r.type(), ts.Long()))
-                return null;
-            if (!PlaceChecker.isAtPlace(r, p, xContext()))
-                return null;
-    */
-            ClassType RemoteOperation = (ClassType) ts.forName(REMOTE_OPERATION);
-            Position pos = a.position();
-            List<Expr> args = new ArrayList<Expr>();
-            Expr p1 = (Expr) leaveCall(null, p, this);
-            args.add(p1);
-            args.add((Expr) leaveCall(null, r, this));
-            args.add((Expr) leaveCall(null, i, this));
-            args.add((Expr) leaveCall(null, v, this));
-            Stmt alt = nf.Eval(pos, synth.makeStaticCall(pos, RemoteOperation, XOR, args, ts.Void(), context()));
-            Expr cond = nf.Binary(pos, p, X10Binary_c.EQ, call(pos, HOME, ts.Place())).type(ts.Boolean());
-            Stmt cns = a.body();
-            return nf.If(pos, cond, cns, alt);
-        }
+    
+    public static boolean isImmediateAsync(TypeSystem ts, Async a) {
+        return AnnotationUtils.hasAnnotation(ts, a, IMMEDIATE);
     }
 
     private Stmt async(Position pos, Stmt body, List<Expr> clocks, Expr place, List<X10ClassType> annotations,
@@ -730,7 +715,7 @@ public class Lowerer extends ContextVisitor {
         }
         if (clocks.size() == 0)
         	return async(pos, body, place, annotations, env, prof);
-        Type clockRailType = Types.makeArrayRailOf(ts.Clock(), pos);
+        Type clockRailType = ts.Rail(ts.Clock());
         Tuple clockRail = (Tuple) nf.Tuple(pos, clocks).type(clockRailType);
 
         return makeAsyncBody(pos, new ArrayList<Expr>(Arrays.asList(new Expr[] { place, clockRail })),
@@ -751,7 +736,7 @@ public class Lowerer extends ContextVisitor {
             List<VarInstance<? extends VarDef>> env) throws SemanticException {
         if (clocks.size() == 0)
         	return async(pos, body, annotations, env);
-        Type clockRailType = Types.makeArrayRailOf(ts.Clock(), pos);
+        Type clockRailType = ts.Rail(ts.Clock());
         Tuple clockRail = (Tuple) nf.Tuple(pos, clocks).type(clockRailType);
         return makeAsyncBody(pos, new ArrayList<Expr>(Arrays.asList(new Expr[] { clockRail })),
                              new ArrayList<Type>(Arrays.asList(new Type[] { clockRailType})), body,
@@ -774,12 +759,9 @@ public class Lowerer extends ContextVisitor {
 
         Stmt closure_body = async_body;
 
-        // [DC] don't add the try/catch if this is a CUDA kernel
-        // rationale: CUDA kernels may not throw exceptions (although this is not enforced)
-        // in particular, it is hard to think of why an interop exception would emerge from a CUDA kernel
-        // So, the lack of enforcement is very unlikely to create a noticable problem.
-
-        if (!(async_body instanceof CUDAKernel)) {
+        if (isManagedX10) {
+            // A closure's apply method can't throw checked exceptions in Java.
+            // So wrap in a try/catch and wrap & rethrow any checked exceptions that arise.
 
             // try { async_body }
             Block tryBlock = synth.toBlock(async_body);
@@ -799,7 +781,7 @@ public class Lowerer extends ContextVisitor {
                 LocalDef catchFormalLocalDef = ts.localDef(pos, ts.NoFlags(), Types.ref(ts.CheckedThrowable()), catchFormalName);
                 Formal catchFormal = nf.Formal(pos, nf.FlagsNode(pos, ts.NoFlags()),
                         nf.CanonicalTypeNode(pos, ts.CheckedThrowable()), nf.Id(pos, catchFormalName)).localDef(catchFormalLocalDef);                
-                Expr catchLocal = nf.Local(pos, nf.Id(pos, catchFormalName)).localInstance(catchFormalLocalDef.asInstance()).type(ts.Error());
+                Expr catchLocal = nf.Local(pos, nf.Id(pos, catchFormalName)).localInstance(catchFormalLocalDef.asInstance()).type(ts.CheckedThrowable());
                 Expr wrap = synth.makeStaticCall(pos, ts.Exception(), Name.make("ensureException"), Collections.singletonList(catchLocal), ts.Exception(), context());
                 Block catchBlock = nf.Block(pos, nf.Throw(pos, wrap));
                 catches.add(nf.Catch(pos, catchFormal, catchBlock));
@@ -826,31 +808,37 @@ public class Lowerer extends ContextVisitor {
     }
 
     private Stmt uncountedAsync(Position pos, Stmt body, Expr place,
-            List<VarInstance<? extends VarDef>> env) throws SemanticException {
+            List<VarInstance<? extends VarDef>> env, Expr prof, boolean isImmediate,
+            List<X10ClassType> annotations) throws SemanticException {
         List<Expr> l = new ArrayList<Expr>(1);
         l.add(place);
         List<Type> t = new ArrayList<Type>(1);
         t.add(ts.Place());
-        return makeUncountedAsyncBody(pos, l, t, body, env);
+        return makeUncountedAsyncBody(pos, l, t, body, env, prof, isImmediate, annotations);
     }
 
     private Stmt uncountedAsync(Position pos, Stmt body,
-            List<VarInstance<? extends VarDef>> env) throws SemanticException {
+            List<VarInstance<? extends VarDef>> env, boolean isImmediate, List<X10ClassType> annotations) throws SemanticException {
         return makeUncountedAsyncBody(pos, new LinkedList<Expr>(),
-                new LinkedList<Type>(), body, env);
+                new LinkedList<Type>(), body, env, null, isImmediate, annotations);
     }
 
     private Stmt makeUncountedAsyncBody(Position pos, List<Expr> exprs, List<Type> types, Stmt body,
-            List<VarInstance<? extends VarDef>> env) throws SemanticException {
-        Closure closure = synth.makeClosure(body.position(), ts.Void(), synth.toBlock(body), context());
+            List<VarInstance<? extends VarDef>> env, Expr prof, boolean isImmediate, List<X10ClassType> annotations) throws SemanticException {
+        Closure closure = synth.makeClosure(body.position(), ts.Void(), synth.toBlock(body), context(), annotations);
         closure.closureDef().setCapturedEnvironment(env);
         CodeInstance<?> mi = findEnclosingCode(Types.get(closure.closureDef().methodContainer()));
         closure.closureDef().setMethodContainer(Types.ref(mi));
         exprs.add(closure);
         types.add(closure.closureDef().asType());
+        if (prof != null) { 
+            exprs.add(prof);
+            types.add(prof.type());
+        }	
         Stmt result = nf.Eval(pos,
-                synth.makeStaticCall(pos, ts.Runtime(), RUN_UNCOUNTED_ASYNC, exprs,
-                        ts.Void(), types, context()));
+                              synth.makeStaticCall(pos, ts.Runtime(), 
+                                                   isImmediate ? RUN_IMMEDIATE_ASYNC : RUN_UNCOUNTED_ASYNC, 
+                                                   exprs, ts.Void(), types, context()));
         return result;
     }
     // end Async
@@ -926,27 +914,6 @@ public class Lowerer extends ContextVisitor {
     protected Expr call(Position pos, Name name, Expr arg, Type returnType) throws SemanticException {
         return synth.makeStaticCall(pos, ts.Runtime(), name, Collections.singletonList(arg), returnType, context());
     }
-
-    /**
-     * Recognize the following pattern:
-     * <pre>
-     * @Immediate finish S;
-     * </pre>
-     * where <tt>S</tt> is any statement,
-     * and compile it into S followed by an optimized remote fence operation.
-     * @param f the finish statement
-     * @return a block consisting of S followed by the invocation of a remote fence operation, or null if no match
-     * @throws SemanticException
-     * TODO: move into a separate pass!
-     */
-    private Stmt specializeFinish(Finish f) throws SemanticException {
-        if (!AnnotationUtils.hasAnnotation(ts, f, IMMEDIATE))
-            return null;
-        Position pos = f.position();
-        ClassType target = (ClassType) ts.forName(REMOTE_OPERATION);
-        List<Expr> args = new ArrayList<Expr>();
-        return nf.Block(pos, f.body(), nf.Eval(pos, synth.makeStaticCall(pos, target, FENCE, args, ts.Void(), context())));
-    }
     
     private int getPatternFromAnnotation(AnnotationNode a){
     	Ref<? extends Type> r = a.annotationType().typeRef();
@@ -1017,21 +984,26 @@ public class Lowerer extends ContextVisitor {
     }
 
     // finish S; ->
+    // Native X10:
     //    {
     //    Runtime.ensureNotInAtomic();
     //    val fresh = Runtime.startFinish();
     //    try { S; }
-    //    catch (t:Throwable) { Runtime.pushException(t); throw new Exception(); }
+    //    catch (t:CheckedThrowable) { Runtime.pushException(t); }
+    //    Runtime.stopFinish(fresh);
+    //    }
+    // Managed X10:
+    //    {
+    //    Runtime.ensureNotInAtomic();
+    //    val fresh = Runtime.startFinish();
+    //    try { S; }
+    //    catch (t:CheckedThrowable) { Runtime.pushException(t); throw new RuntimeException)(); }
     //    finally { Runtime.stopFinish(fresh); }
     //    }
     private Stmt visitFinish(Finish f) throws SemanticException {
         Position pos = f.position();
-        Name tmp = getTmp();
-
-        Stmt specializedFinish = specializeFinish(f);
-        if (specializedFinish != null)
-            return specializedFinish;
-
+        Name tmp = Name.makeFresh("ct");
+        
         // TODO: merge with the call() function
         Type catchType = ts.CheckedThrowable();
         MethodInstance mi = ts.findMethod(ts.Runtime(),
@@ -1040,14 +1012,13 @@ public class Lowerer extends ContextVisitor {
         Formal formal = nf.Formal(pos, nf.FlagsNode(pos, ts.NoFlags()),
             nf.CanonicalTypeNode(pos, catchType), nf.Id(pos, tmp)).localDef(lDef);
         Expr local = nf.Local(pos, nf.Id(pos, tmp)).localInstance(lDef.asInstance()).type(catchType);
-        Expr call = nf.X10Call(pos, nf.CanonicalTypeNode(pos, ts.Runtime()),
+        Expr peCall = nf.X10Call(pos, nf.CanonicalTypeNode(pos, ts.Runtime()),
                 nf.Id(pos, PUSH_EXCEPTION), Collections.<TypeNode>emptyList(),
                 Collections.singletonList(local)).methodInstance(mi).type(ts.Void());
-        Throw thr = throwException(pos);
         Expr startCall = specializedFinish2(f);
 
         Context xc = context();
-        final Name varName = xc.getNewVarName();
+        final Name varName = Name.makeFresh("fs");
         final Type type = ts.FinishState();
         final LocalDef li = ts.localDef(pos, ts.Final(), Types.ref(type), varName);
         final Id varId = nf.Id(pos, varName);
@@ -1055,36 +1026,64 @@ public class Lowerer extends ContextVisitor {
         final Local ldRef = (Local) nf.Local(pos, varId).localInstance(li.asInstance()).type(type);
 
         Block tryBlock = nf.Block(pos, f.body());
-        Catch catchBlock = nf.Catch(pos, formal, nf.Block(pos, nf.Eval(pos, call), thr));
-        Block finallyBlock = nf.Block(pos, nf.Eval(pos, call(pos, STOP_FINISH, ldRef, ts.Void())));
-
-        Try tcfBlock = nf.Try(pos, tryBlock, Collections.singletonList(catchBlock), finallyBlock);
-
-        // propagate async initialization info to backend
-        X10Ext_c ext = (X10Ext_c) f.ext();
-        if (ext.initVals != null) {
-            tcfBlock = (Try)((X10Ext_c)tcfBlock.ext()).asyncInitVal(ext.initVals);
+        Catch catchBlock;
+        if (isManagedX10) {
+            // Need to confuse Java's definite assignment analysis so it won't complain...
+            Type re = ts.Exception();
+            X10ConstructorInstance ci = ts.findConstructor(re, ts.ConstructorMatcher(re, Collections.<Type>emptyList(), context()));
+            Expr newRE = nf.New(pos, nf.CanonicalTypeNode(pos, re), Collections.<Expr>emptyList()).constructorInstance(ci).type(re);
+            catchBlock = nf.Catch(pos, formal, nf.Block(pos, nf.Eval(pos, peCall), nf.Throw(pos, newRE)));
+        } else {
+            catchBlock = nf.Catch(pos, formal, nf.Block(pos, nf.Eval(pos, peCall)));            
         }
+        Stmt endCall = nf.Eval(pos, call(pos, STOP_FINISH, ldRef, ts.Void()));
 
-        return nf.Block(pos,
-        		nf.Eval(pos, call(pos, ENSURE_NOT_IN_ATOMIC, ts.Void())),
-        		ld,
-        		tcfBlock);
-    }
-
-    // Generates a throw of a new Exception().
-    private Throw throwException(Position pos) throws SemanticException {
-        Type re = ts.Exception();
-        X10ConstructorInstance ci = ts.findConstructor(re, ts.ConstructorMatcher(re, Collections.<Type>emptyList(), context()));
-        Expr newRE = nf.New(pos, nf.CanonicalTypeNode(pos, re), Collections.<Expr>emptyList()).constructorInstance(ci).type(re);
-        return nf.Throw(pos, newRE);
+        // For ManagedX10, we generate as a try/catch/finally block as the simplest way to
+        // deal with definite assignment checking and ensuring a well-defined block
+        // to generate async initialization code.
+        // For NativeX10, we do not need the finally block, so use a simpler try/catch
+        // followed by the stopFinish.
+        if (isManagedX10) {
+            Try tcfBlock = nf.Try(pos, tryBlock, Collections.singletonList(catchBlock), nf.Block(pos, endCall));
+            
+            X10Ext_c ext = (X10Ext_c) f.ext();
+            if (ext.initVals != null) {
+                tcfBlock = (Try)((X10Ext_c)tcfBlock.ext()).asyncInitVal(ext.initVals);
+            }
+            
+            return nf.Block(pos,
+                            nf.Eval(pos, call(pos, ENSURE_NOT_IN_ATOMIC, ts.Void())),
+                            ld,
+                            tcfBlock);
+        } else {
+            Try tcBlock = nf.Try(pos, tryBlock, Collections.singletonList(catchBlock));
+            
+            X10Ext_c ext = (X10Ext_c) f.ext();
+            if (ext.initVals != null) {
+                tcBlock = (Try)((X10Ext_c)tcBlock.ext()).asyncInitVal(ext.initVals);
+            }
+            
+            return nf.Block(pos,
+                            nf.Eval(pos, call(pos, ENSURE_NOT_IN_ATOMIC, ts.Void())),
+                            ld,
+                            tcBlock,
+                            endCall);
+        }
     }
 
     // x = finish (R) S; ->
+    // Native X10:
     //    {
     //    val fresh = Runtime.startCollectingFinish(R);
     //    try { S; }
-    //    catch (t:Throwable) { Runtime.pushException(t); throw new Exception(); }
+    //    catch (t:CheckedThrowable) { Runtime.pushException(t); }
+    //    x = Runtime.stopCollectingFinish(fresh);
+    //    }
+    // Managed X10:
+    //    {
+    //    val fresh = Runtime.startCollectingFinish(R);
+    //    try { S; }
+    //    catch (t:CheckedThrowable) { Runtime.pushException(t); throw new RuntimeException() }
     //    finally { x = Runtime.stopCollectingFinish(fresh); }
     //    }
     private Stmt visitFinishExpr(Assign n, LocalDecl l, Return r) throws SemanticException {
@@ -1117,7 +1116,7 @@ public class Lowerer extends ContextVisitor {
         Call myCall = synth.makeStaticCall(pos, ts.Runtime(), START_COLLECTING_FINISH, Collections.<TypeNode>singletonList(nf.CanonicalTypeNode(pos, reducerTarget)), Collections.singletonList(reducer), ts.Void(), Collections.singletonList(reducerType), context());
 
         Context xc = context();
-        final Name varName = xc.getNewVarName();
+        final Name varName = Name.makeFresh("fs");
         final Type type = ts.FinishState();
         final LocalDef li = ts.localDef(pos, ts.Final(), Types.ref(type), varName);
         final Id varId = nf.Id(pos, varName);
@@ -1138,10 +1137,18 @@ public class Lowerer extends ContextVisitor {
         Expr call = nf.X10Call(pos, nf.CanonicalTypeNode(pos, ts.Runtime()),
                 nf.Id(pos, PUSH_EXCEPTION), Collections.<TypeNode>emptyList(),
                 Collections.singletonList(local)).methodInstance(mi).type(ts.Void());
-        Throw thr = throwException(pos);
-        Catch catchBlock = nf.Catch(pos, formal, nf.Block(pos, nf.Eval(pos, call), thr));
+        Catch catchBlock;
+        if (isManagedX10) {
+            // Need to confuse Java's definite assignment analysis so it won't complain...
+            Type re = ts.Exception();
+            X10ConstructorInstance ci = ts.findConstructor(re, ts.ConstructorMatcher(re, Collections.<Type>emptyList(), context()));
+            Expr newRE = nf.New(pos, nf.CanonicalTypeNode(pos, re), Collections.<Expr>emptyList()).constructorInstance(ci).type(re);
+            catchBlock = nf.Catch(pos, formal, nf.Block(pos, nf.Eval(pos, call), nf.Throw(pos, newRE)));
+        } else {
+            catchBlock = nf.Catch(pos, formal, nf.Block(pos, nf.Eval(pos, call)));            
+        }
         
-        // Begin finally block
+        // Begin stopCollectingFinish stmt
         Stmt returnS = null;
         Call staticCall = synth.makeStaticCall(pos, ts.Runtime(), STOP_COLLECTING_FINISH, Collections.<TypeNode>singletonList(nf.CanonicalTypeNode(pos, reducerTarget)), Collections.<Expr>singletonList(ldRef), reducerTarget, Collections.<Type>singletonList(type), context());
         if ((l==null) && (n!=null)&& (r==null)) {
@@ -1158,13 +1165,16 @@ public class Lowerer extends ContextVisitor {
             returnS = nf.X10Return(pos, staticCall, true);
         }
         
-        Block finalBlock = nf.Block(pos, returnS);
-        if(reducerS.size()>0) reducerS.pop();
-        return nf.Block(pos, s1, nf.Try(pos, tryBlock, Collections.singletonList(catchBlock), finalBlock));
+        if (reducerS.size()>0) reducerS.pop();
+        if (isManagedX10) {
+            return nf.Block(pos, s1, nf.Try(pos, tryBlock, Collections.singletonList(catchBlock), nf.Block(pos, returnS)));            
+        } else {
+            return nf.Block(pos, s1, nf.Try(pos, tryBlock, Collections.singletonList(catchBlock)), returnS);            
+        }
     }
 
     //  offer e ->
-    //  x10.lang.Runtime.offer(e);      
+    //  x10.xrx.Runtime.offer(e);      
     private Stmt visitOffer(Offer n) throws SemanticException {		
     	Position pos = n.position();
     	Expr offerTarget = n.expr();
@@ -1241,8 +1251,10 @@ public class Lowerer extends ContextVisitor {
       	return n;
     }
 
-    // ateach (p in D) S; ->
+    // ateach (pt in D) S; ->
     //    { Runtime.ensureNotInAtomic(); val d = D.dist; for (p in d.places()) async (p) for (pt in d|here) async S; }
+    // or 
+    //    { Runtime.ensureNotInAtomic(); val d = D.pg; for (p in d.places()) async (p) for (pt in D.localIndices()) async S; }
     private Stmt visitAtEach(AtEach a) throws SemanticException {
         Position pos = a.position();
         Position bpos = a.body().position();
@@ -1250,39 +1262,56 @@ public class Lowerer extends ContextVisitor {
 
         Expr domain = a.domain();
         Type dType = domain.type();
-        if (ts.isX10DistArray(dType)) {
+        if (ts.isX10RegionDistArray(dType)) {
             domain = altsynth.createFieldRef(pos, domain, DIST);
             dType = domain.type();
         }
+  
         LocalDef lDef = ts.localDef(pos, ts.Final(), Types.ref(dType), tmp);
         LocalDecl local = nf.LocalDecl(pos, nf.FlagsNode(pos, ts.Final()),
-                nf.CanonicalTypeNode(pos, dType), nf.Id(pos, tmp), domain).localDef(lDef);
+                                       nf.CanonicalTypeNode(pos, dType), nf.Id(pos, tmp), domain).localDef(lDef);
         X10Formal formal = (X10Formal) a.formal();
         Type fType = formal.type().type();
         assert (ts.isPoint(fType));
-        assert (ts.isDistribution(dType));
-        // Have to desugar some newly-created nodes
-        Type pType = ts.Place();
-        MethodInstance rmi = ts.findMethod(dType,
-                ts.MethodMatcher(dType, RESTRICTION, Collections.singletonList(pType), context()));
-        Expr here = visitHere(nf.Here(bpos));
-        Expr dAtPlace = nf.Call(bpos,
-                nf.Local(pos, nf.Id(pos, tmp)).localInstance(lDef.asInstance()).type(dType),
-                nf.Id(bpos, RESTRICTION),
-                here).methodInstance(rmi).type(rmi.returnType());
-        Expr here1 = visitHere(nf.Here(bpos));
+        
+        // Construct inner forloop
+        Stmt inner;
         List<VarInstance<? extends VarDef>> env = a.atDef().capturedEnvironment();
-        Stmt body = async(a.body().position(), a.body(), a.clocks(), here1, null, env, nf.NullLit(bpos).type(ts.Null()));
-        Stmt inner = nf.ForLoop(pos, formal, dAtPlace, body).locals(formal.explode(this));
-        MethodInstance pmi = ts.findMethod(dType,
-                ts.MethodMatcher(dType, PLACES, Collections.<Type>emptyList(), context()));
-        Expr places = nf.Call(bpos,
-                nf.Local(pos, nf.Id(pos, tmp)).localInstance(lDef.asInstance()).type(dType),
-                nf.Id(bpos, PLACES)).methodInstance(pmi).type(pmi.returnType());
+        if (ts.isDistArray(dType)) {
+            MethodInstance rmi = ts.findMethod(dType, ts.MethodMatcher(dType, LOCAL_INDICES, Collections.EMPTY_LIST, context));
+            Expr indices = altsynth.createInstanceCall(pos, altsynth.createLocal(pos, local), rmi);
+            
+            Stmt body = async(a.body().position(), a.body(), a.clocks(), null, env);
+            inner = nf.ForLoop(pos, formal, indices, body).locals(formal.explode(this));
+        } else {
+            MethodInstance rmi = ts.findMethod(dType,
+                                               ts.MethodMatcher(dType, RESTRICTION, Collections.singletonList((Type)ts.Place()), context()));
+            Expr here = visitHere(nf.Here(bpos));
+            Expr dAtPlace = nf.Call(bpos,
+                                    nf.Local(pos, nf.Id(pos, tmp)).localInstance(lDef.asInstance()).type(dType),
+                                    nf.Id(bpos, RESTRICTION),
+                                    here).methodInstance(rmi).type(rmi.returnType());
+            Expr here1 = visitHere(nf.Here(bpos));
+            Stmt body = async(a.body().position(), a.body(), a.clocks(), here1, null, env, nf.NullLit(bpos).type(ts.Null()));
+            inner = nf.ForLoop(pos, formal, dAtPlace, body).locals(formal.explode(this));
+        }
+        
+        // Construct outer forloop and adjust captured environments
+        Expr places;
+        if (ts.isDistArray(dType)) {
+            places = altsynth.createInstanceCall(pos, altsynth.createLocal(pos, local), PLACE_GROUP, context);
+            
+        } else {
+            MethodInstance pmi = ts.findMethod(dType,
+                                               ts.MethodMatcher(dType, PLACES, Collections.<Type>emptyList(), context()));
+            places = nf.Call(bpos,
+                             nf.Local(pos, nf.Id(pos, tmp)).localInstance(lDef.asInstance()).type(dType),
+                             nf.Id(bpos, PLACES)).methodInstance(pmi).type(pmi.returnType());
+        }
         Name pTmp = getTmp();
-        LocalDef pDef = ts.localDef(pos, ts.Final(), Types.ref(pType), pTmp);
+        LocalDef pDef = ts.localDef(pos, ts.Final(), Types.ref(ts.Place()), pTmp);
         Formal pFormal = nf.Formal(pos, nf.FlagsNode(pos, ts.Final()),
-                nf.CanonicalTypeNode(pos, pType), nf.Id(pos, pTmp)).localDef(pDef);
+                                   nf.CanonicalTypeNode(pos, ts.Place()), nf.Id(pos, pTmp)).localDef(pDef);
         List<VarInstance<? extends VarDef>> env1 = new ArrayList<VarInstance<? extends VarDef>>(env);
         removeLocalInstance(env1, formal.localDef().asInstance());
         for (int i = 0; i < formal.localInstances().length; i++) {
@@ -1290,19 +1319,16 @@ public class Lowerer extends ContextVisitor {
         }
         env1.add(lDef.asInstance());
         Stmt body1 = async(bpos, inner, a.clocks(),
-                nf.Local(bpos, nf.Id(bpos, pTmp)).localInstance(pDef.asInstance()).type(pType),
-                null, env1, nf.NullLit(bpos).type(ts.Null()));
+                           nf.Local(bpos, nf.Id(bpos, pTmp)).localInstance(pDef.asInstance()).type(ts.Place()),
+                           null, env1, nf.NullLit(bpos).type(ts.Null()));
         Stmt outer = nf.ForLoop(pos, pFormal, places, body1);
 
-        // TODO: Instead of creating ForLoop's and then removing them, 
-        //       change the code above to create simple For's in the first place.
         ForLoopOptimizer flo = new ForLoopOptimizer(job, ts, nf);
         For newLoop = (For)outer.visit(((ContextVisitor)flo.begin()).context(context()));
-        
         return nf.Block(pos, 
-        		nf.Eval(pos, call(pos, ENSURE_NOT_IN_ATOMIC, ts.Void())),
-        		local, 
-        		newLoop);
+                        nf.Eval(pos, call(pos, ENSURE_NOT_IN_ATOMIC, ts.Void())),
+                        local, 
+                        newLoop);
     }
 
     private boolean removeLocalInstance(List<VarInstance<? extends VarDef>> env, VarInstance<? extends VarDef> li) {

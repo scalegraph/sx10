@@ -6,7 +6,7 @@
 #  You may obtain a copy of the License at
 #      http://www.opensource.org/licenses/eclipse-1.0.php
 #
-#  (C) Copyright IBM Corporation 2006-2010.
+#  (C) Copyright IBM Corporation 2006-2014.
 #
 
 TESTS += $(patsubst test/%,test/%.sockets,$(BASE_TESTS))
@@ -25,10 +25,6 @@ PROPERTIES += etc/x10rt_sockets.properties
 LAUNCHER_OBJS = sockets/Launcher_Init.o sockets/DebugHelper.o sockets/Launcher.o sockets/tcp.o 
 
 EXECUTABLES += sockets/X10Launcher
-
-ifeq ($(X10RT_PLATFORM), sunos)
-  SOLARIS_LDLIBS += -lresolv -lnsl -lsocket -lrt
-endif
 
 MOV_LDFLAGS_SOCKETS = $(MOV_LDFLAGS) $(SOLARIS_LDLIBS)
 MOV_LDLIBS_SOCKETS = $(MOV_LDLIBS) $(SOLARIS_LDLIBS)

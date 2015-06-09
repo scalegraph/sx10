@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 #ifndef X10_LANG_LOCK__REENTRANT_LOCK_H
@@ -29,15 +29,15 @@ namespace x10 {
         * is not owned by another thread.  The method will return
         * immediately if the calling thread already owns the lock.
         */
-        class Lock__ReentrantLock : public x10::lang::X10Class {
+        class Lock__ReentrantLock : public ::x10::lang::X10Class {
         public:
             RTT_H_DECLS_CLASS;
     
-            virtual x10aux::serialization_id_t _get_serialization_id() {
+            virtual ::x10aux::serialization_id_t _get_serialization_id() {
                 fprintf(stderr, "Lock cannot be serialized.  (Lock__ReentrantLock.h)\n");
                 abort();
             }
-            virtual void _serialize_body(x10aux::serialization_buffer&) {
+            virtual void _serialize_body(::x10aux::serialization_buffer&) {
                 fprintf(stderr, "Lock cannot be serialized.  (Lock__ReentrantLock.h)\n");
                 abort();
             }
@@ -94,7 +94,7 @@ namespace x10 {
             x10_int getHoldCount() { return _lock.getHoldCount(); }
 
         private:
-            x10aux::reentrant_lock _lock;
+            ::x10aux::reentrant_lock _lock;
             void raiseException();
         };
     }

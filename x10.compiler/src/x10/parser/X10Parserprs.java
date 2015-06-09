@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 /********************************************************************
  * WARNING!  THIS JAVA FILE IS AUTO-GENERATED FROM x10/parser/x10.g *
@@ -4295,11 +4295,11 @@ public class X10Parserprs implements lpg.runtime.ParseTable, X10Parsersym {
             "<>=",
             "><=",
             "$empty",
-            "IntegerLiteral",
+            "IntLiteral",
             "LongLiteral",
             "ByteLiteral",
             "ShortLiteral",
-            "UnsignedIntegerLiteral",
+            "UnsignedIntLiteral",
             "UnsignedLongLiteral",
             "UnsignedByteLiteral",
             "UnsignedShortLiteral",

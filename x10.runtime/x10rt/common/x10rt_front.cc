@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2013.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 #if defined(__CYGWIN__) || defined(__FreeBSD__)
@@ -27,16 +27,9 @@ static x10rt_msg_type counter = 0;
 
 static bool run_as_library = false;
 
-char* x10rt_preinit() {
+x10rt_error x10rt_preinit (char* connInfoBuffer, int connInfoBufferSize) {
 	run_as_library = true;
-	// Because we don't want to break the old PGAS-BG/P implementation of x10rt_net.h, we
-	// can't add methods to lower API layers.  So instead, we set environment variables
-	// to pass & return values needed inside the regular x10rt_init method call of sockets.
-	// Yuck.
-	setenv("X10_LIBRARY_MODE", "preinit", 1);
-	x10rt_net_init(NULL, NULL, &counter);
-	char* connInfo = getenv("X10_LIBRARY_MODE");
-	return connInfo;
+	return x10rt_lgl_preinit(connInfoBuffer, connInfoBufferSize);
 }
 
 bool x10rt_run_as_library (void)
@@ -86,6 +79,15 @@ x10rt_place x10rt_nplaces (void)
 x10rt_place x10rt_nhosts (void)
 { return x10rt_lgl_nhosts(); }
 
+x10rt_place x10rt_ndead (void)
+{ return x10rt_lgl_ndead(); }
+
+bool x10rt_is_place_dead (x10rt_place p)
+{ return x10rt_lgl_is_place_dead(p); }
+
+x10rt_error x10rt_get_dead (x10rt_place *dead_places, x10rt_place len)
+{ return x10rt_lgl_get_dead(dead_places, len); }
+
 x10rt_place x10rt_here (void)
 { return x10rt_lgl_here(); }
 
@@ -94,9 +96,6 @@ bool x10rt_is_host (x10rt_place place)
 
 bool x10rt_is_cuda (x10rt_place place)
 { return x10rt_lgl_type(place) == X10RT_LGL_CUDA; }
-
-bool x10rt_is_spe (x10rt_place place)
-{ return x10rt_lgl_type(place) == X10RT_LGL_SPE; }
 
 x10rt_place x10rt_parent (x10rt_place place)
 { return x10rt_lgl_parent(place); }
@@ -157,13 +156,21 @@ void x10rt_blocks_threads (x10rt_place d, x10rt_msg_type type, int dyn_shm,
                            int *blocks, int *threads, const int *cfg)
 { x10rt_lgl_blocks_threads (d, type, dyn_shm, blocks, threads, cfg); }
 
+void x10rt_device_sync (x10rt_place d)
+{ x10rt_lgl_device_sync (d); }
 
 x10rt_error x10rt_probe (void)
 { return x10rt_lgl_probe(); }
 
+
+bool x10rt_blocking_probe_support (void)
+{ return x10rt_lgl_blocking_probe_support(); }
+
 x10rt_error x10rt_blocking_probe (void)
 { return x10rt_lgl_blocking_probe(); }
 
+x10rt_error x10rt_unblock_probe (void)
+{ return x10rt_lgl_unblock_probe(); }
 
 void x10rt_finalize (void)
 { x10rt_lgl_finalize(); }
@@ -174,6 +181,9 @@ void x10rt_team_members (x10rt_team team, x10rt_place *members)
     x10rt_lgl_team_members(team, members);
 }
 
+x10rt_coll_type x10rt_coll_support () {
+	return x10rt_lgl_coll_support();
+}
 
 void x10rt_team_new (x10rt_place placec, x10rt_place *placev,
                      x10rt_completion_handler2 *ch, void *arg)

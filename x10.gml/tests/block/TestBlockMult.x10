@@ -6,109 +6,83 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
-import x10.io.Console;
+import harness.x10Test;
 
-import x10.matrix.Debug;
 import x10.matrix.Matrix;
 import x10.matrix.DenseMatrix;
+import x10.matrix.ElemType;
 
-import x10.matrix.sparse.SparseCSC;
 import x10.matrix.block.Grid;
-
 import x10.matrix.block.BlockMatrix;
 import x10.matrix.block.BlockBlockMult;
 
-/**
-   <p>
+public class TestBlockMult extends x10Test {
+    static def ET(a:Double)= a as ElemType;
+    static def ET(a:Float)= a as ElemType;
+	public val M:Long;
+	public val K:Long;
+	public val N:Long;
+	public val bM:Long;
+	public val bK:Long;
+	public val bN:Long;
+	public val nzd:Float;
 
-   <p>
- */
-public class TestBlockMult {
-	
-    public static def main(args:Array[String](1)) {
-		val testcase = new RunBlockMult(args);
-		testcase.run();
-	}
-}
-
-class RunBlockMult {
-	public val M:Int;
-	public val K:Int;
-	public val N:Int;
-	public val bM:Int;
-	public val bK:Int;
-	public val bN:Int;
-	public val nzd:Double;
-	
-	//-------------
 	val gA:Grid, gB:Grid, gC:Grid, gTransA:Grid, gTransB:Grid;
-	//val A:BlockMatrix(M,K), B:BlockMatrix(K,N), C:BlockMatrix(M,N);
 	
-    public def this(args:Array[String](1)) {
-		M = args.size > 0 ?Int.parse(args(0)):10;
-		K = args.size > 1 ?Int.parse(args(1)):M+2;
-		N = args.size > 2 ?Int.parse(args(2)):M+4;
-		bM = args.size > 3 ?Int.parse(args(3)):2;
-		bK = args.size > 4 ?Int.parse(args(4)):3;
-		bN = args.size > 5 ?Int.parse(args(5)):4;
-		nzd =  args.size > 6 ?Double.parse(args(6)):0.99;
+    public def this(args:Rail[String]) {
+		M = args.size > 0 ? Long.parse(args(0)):10;
+		K = args.size > 1 ? Long.parse(args(1)):(M as Int)+2;
+		N = args.size > 2 ? Long.parse(args(2)):(M as Int)+4;
+		bM = args.size > 3 ? Long.parse(args(3)):2;
+		bK = args.size > 4 ? Long.parse(args(4)):3;
+		bN = args.size > 5 ? Long.parse(args(5)):4;
+		nzd =  args.size > 6 ? Float.parse(args(6)):0.99f;
 		
 		gA = new Grid(M, K, bM, bK);
 		gB = new Grid(K, N, bK, bN);
 		gC = new Grid(M, N, bM, bN);
 		gTransA = new Grid(K, M, bK, bM);
 		gTransB = new Grid(N, K, bN, bK);
-		
 	}
 
-    public def run (): void {
-		Console.OUT.println("Starting block-block matrix multiply tests");
+    public def run():Boolean {
+		Console.OUT.println("Block-block matrix multiply tests");
 		Console.OUT.printf("Matrix (%d,%d) mult (%d,%d) ", M, K, K, N);
 		Console.OUT.printf(" partitioned in (%dx%d) and (%dx%d) blocks, nzd:%f\n", 
 						    bM, bK, bK, bN, nzd);
 
 		var ret:Boolean = true;
- 		// Set the matrix function
  		ret &= (testMult());
  		ret &= (ret && testTransMult());
  		ret &= (ret && testMultTrans());
 
-		if (ret)
-			Console.OUT.println("Block matrix multiply test passed!");
-		else
-			Console.OUT.println("----------------Block matrix multiply test failed!----------------");
+		return ret;
 	}
 
 	public def testMult():Boolean{
 		var ret:Boolean = true;
-		Console.OUT.println("Starting block matrix multiply test");
+		Console.OUT.println("Block matrix multiply test");
 		val A = BlockMatrix.makeDense(gA) as BlockMatrix(M,K);
 		//val B = BlockMatrix.makeSparse(gB, nzd) as BlockMatrix(K,N);
 		val B = BlockMatrix.makeDense(gB) as BlockMatrix(K,N);
 		val C = BlockMatrix.makeDense(gC) as BlockMatrix(M,N);
 		
-		A.init((r:Int,c:Int)=>1.0*((r+c)));
-		B.init((r:Int,c:Int)=>1.0*((r+c)));
+		A.init((r:Long,c:Long)=>ET(1.0)*((r+c)));
+		B.init((r:Long,c:Long)=>ET(1.0)*((r+c)));
 		
 		BlockBlockMult.mult(A, B, C, false);
-		//A.printMatrix();
-		//B.printMatrix();
-		//C.printMatrix();
 		
 		val dA = A.toDense() as DenseMatrix(M,K);
 		val dB = B.toDense() as DenseMatrix(K,N);
 		val dC = DenseMatrix.make(M,N);
 		dC.mult(dA, dB, false);
-		//dC.printMatrix();
 		
 		ret &= dC.equals(C as Matrix(dC.M,dC.N));
 
-		if (ret)
-			Console.OUT.println("Block matrix multiply test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Block matrix multiply test failed!--------");
 		return ret;
 	}
@@ -116,62 +90,52 @@ class RunBlockMult {
 
 	public def testTransMult():Boolean{
 		var ret:Boolean = true;
-		Console.OUT.println("Starting block matrix trans-multiply test (transpose 1st operand)");
+		Console.OUT.println("Block matrix trans-multiply test (transpose 1st operand)");
 		val A = BlockMatrix.makeDense(gTransA) as BlockMatrix(K,M);
 		val B = BlockMatrix.makeDense(gB) as BlockMatrix(K,N);
 		val C = BlockMatrix.makeDense(gC) as BlockMatrix(M,N);
 		
-		A.init((r:Int,c:Int)=>1.0*((r+c)));
-		B.init((r:Int,c:Int)=>1.0*((r+c)));
+		A.init((r:Long,c:Long)=>ET(1.0)*((r+c)));
+		B.init((r:Long,c:Long)=>ET(1.0)*((r+c)));
 		BlockBlockMult.transMult(A, B, C, false);
-		
-		//A.printMatrix();
-		//B.printMatrix();
-		//C.printMatrix();
 		
 		val dA = A.toDense() as DenseMatrix(K,M);
 		val dB = B.toDense() as DenseMatrix(K,N);
 		val dC = DenseMatrix.make(M,N);
 		dC.transMult(dA, dB, false);
-		//dC.printMatrix();
 		
 		ret &= dC.equals(C as Matrix(dC.M,dC.N));
 
-		if (ret)
-			Console.OUT.println("Block matrix trans-multiply test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Block matrix trans-multiply test failed!--------");
 		return ret;
 	}
 	
 	public def testMultTrans():Boolean{
 		var ret:Boolean = true;
-		Console.OUT.println("Starting block matrix multiply-transpose test (transpose on 2nd operand)");
+		Console.OUT.println("Block matrix multiply-transpose test (transpose on 2nd operand)");
 		val A = BlockMatrix.makeDense(gA) as BlockMatrix(M,K);
 		val B = BlockMatrix.makeDense(gTransB) as BlockMatrix(N,K);
 		val C = BlockMatrix.makeDense(gC) as BlockMatrix(M,N);
 		
-		A.init((r:Int,c:Int)=>1.0*((r+c)));
-		B.init((r:Int,c:Int)=>1.0*((r+c)));
+		A.init((r:Long,c:Long)=>ET(1.0)*((r+c)));
+		B.init((r:Long,c:Long)=>ET(1.0)*((r+c)));
 		
 		BlockBlockMult.multTrans(A, B, C, false);
-		//A.printMatrix();
-		//B.printMatrix();
-		//C.printMatrix();
 		
 		val dA = A.toDense() as DenseMatrix(M,K);
 		val dB = B.toDense() as DenseMatrix(N,K);
 		val dC = DenseMatrix.make(M,N);
 		dC.multTrans(dA, dB, false);
-		//dC.printMatrix();
 		
 		ret &= dC.equals(C as Matrix(dC.M,dC.N));
 
-		if (ret)
-			Console.OUT.println("Block matrix multiply-transpose test passed!");
-		else
+		if (!ret)
 			Console.OUT.println("--------Block matrix multiply-transpose test failed!--------");
 		return ret;
 	}
 
+    public static def main(args:Rail[String]) {
+		new TestBlockMult(args).execute();
+	}
 } 

@@ -6,20 +6,9 @@
 #  You may obtain a copy of the License at
 #      http://www.opensource.org/licenses/eclipse-1.0.php
 #
-#  (C) Copyright IBM Corporation 2006-2011.
+#  (C) Copyright IBM Corporation 2006-2014.
 #
 
-###################################################
-###################################################
-## Name:  	X10 application test
-## Created by: 	Juemin Zhang
-## Contact:   	zhangj@us.ibm.com
-###################################################
-###################################################
-
-# Build [mpi|sockets|lapi] transport: make [mpi|sock|lapi]
-# Build java backend: make java
-# Build all excutable and java backend: make all
 ###################################################
 # Source and target file
 ###################################################
@@ -32,17 +21,15 @@ depend_src  = SeqLogReg.x10 LogisticRegression.x10
 #-------------------------------------
 # build path
 build_path	= build
-
-# GML path
-gml_path    = ../..
+gml_path    = $(X10_HOME)/x10.gml
 
 # compile options
-X10_FLAG	= -sourcepath ../.  -d $(build_path) -report postcompile=2 -v -errors 5 -VERBOSE_CHECKS -O -NO_CHECKS
+X10_FLAG	=  -sourcepath ../. -d $(build_path) -report postcompile=2 -v -errors 5 -VERBOSE_CHECKS -O -NO_CHECKS
 
 # runtime settings
 runtime_list = mpi sock java
 numplaces = 4
-test_args = 
+test_args = -m 10000 -n 4 --density 0.9 --iterations 10 --verify 
 
 ###################################################
 # Build rules

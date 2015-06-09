@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.core.io;
@@ -15,9 +15,11 @@ import x10.rtt.NamedType;
 import x10.rtt.RuntimeType;
 import x10.rtt.Type;
 
+/*
+ * NOTE: In X10, all FileInputStreams are buffered (matches libC)
+ */
 public class FileInputStream extends InputStream {
-    
-    private static final long serialVersionUID = 1L;
+    java.io.FileInputStream fis;
 
     // constructor just for allocation
     public FileInputStream(java.lang.System[] $dummy) {
@@ -26,24 +28,23 @@ public class FileInputStream extends InputStream {
 
     public final FileInputStream x10$io$FileReader$FileInputStream$$init$S(String name) {
         try {
-            super.x10$io$InputStreamReader$InputStream$$init$S(new java.io.FileInputStream(name));
+            this.fis = new java.io.FileInputStream(name);
+            super.x10$io$InputStreamReader$InputStream$$init$S(new java.io.BufferedInputStream(fis));
             return this;
         } catch (java.io.FileNotFoundException e) {
             throw new x10.io.FileNotFoundException(e.getMessage());
         }
     }
 
-    // not used
-//    // creation method for java code (factory method)
-//    public static FileInputStream $make(String name) {
-//        return new FileInputStream((java.lang.System[]) null).$init(name);
-//    }
     // creation method for java code (1-phase java constructor)
     public FileInputStream(String name) {
         this((java.lang.System[]) null);
         x10$io$FileReader$FileInputStream$$init$S(name);
     }
 
+    public long offset() throws java.io.IOException {
+        return fis.getChannel().position();
+    }
 
     //
     // Runtime type information

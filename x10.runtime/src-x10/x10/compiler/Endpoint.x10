@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.compiler;
@@ -16,6 +16,8 @@ import x10.lang.annotations.StatementAnnotation;
 
 /**
  * Used to specify the target endpoint of an active message as in:
+ * <code>
  * @Endpoint(endpoint) at (place) statement
+ * </code>
  */
 public interface Endpoint(n:Int) extends ExpressionAnnotation, StatementAnnotation { }

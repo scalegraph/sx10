@@ -6,62 +6,48 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2011.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.matrix.dist;
 
-import x10.io.Console;
+import x10.regionarray.Dist;
+import x10.regionarray.DistArray;
 import x10.util.Timer;
-//
-import x10.matrix.Debug;
-import x10.matrix.MathTool;
-import x10.matrix.VerifyTools;
 
 import x10.matrix.Matrix;
 import x10.matrix.DenseMatrix;
+import x10.matrix.ElemType;
 
-import x10.matrix.comm.CommHandle;
+import x10.matrix.comm.MatrixBcast;
+import x10.matrix.comm.MatrixReduce;
 
-public  type DupDenseMatrix(M:Int)=DupDenseMatrix{self.M==M};
-public  type DupDenseMatrix(M:Int, N:Int)=DupDenseMatrix{self.M==M, self.N==N};
+public  type DupDenseMatrix(M:Long)=DupDenseMatrix{self.M==M};
+public  type DupDenseMatrix(M:Long, N:Long)=DupDenseMatrix{self.M==M, self.N==N};
 public  type DupDenseMatrix(C:Matrix)=DupDenseMatrix{self==C};
 
 /**
  * Implementation of duplicated dense matrix. All duplicated dense matrices 
  * are stored in DistArray.  Distribution of dense matrices is unique, and one
  * duplication maps to one place.
- * 
  */
 public class DupDenseMatrix extends Matrix {
-
-    //===================================================
 	/**
 	 * Data duplication
 	 */
 	public val dist:Dist(1);
+
 	/**
 	 * Distributed array of matrix data
 	 */
     public val dupMs:DistArray[DenseMatrix](1);
 
-	/**
-	 * Inter-place collective communication handle
-	 */
-	public var comm:CommHandle;
-
-	//----------- Temporary space used in inter-place communication -----
 	public val tmpMs:DistArray[DenseMatrix](1);
 	private var tmpReady:Boolean;
-	
-	//----------- Profiling -----------
+
     public var calcTime:Long=0;
     public var commTime:Long=0;
 
-
-	//==================================================================
-	// Constructor
-	//==================================================================
 	/**
 	 * Constructor, using DistArray of DenseMatrix. 
 	 *
@@ -70,17 +56,13 @@ public class DupDenseMatrix extends Matrix {
 	 */
 	public def this(dms:DistArray[DenseMatrix](1)) {
 		super(dms(here.id()).M, dms(here.id()).N);
-		//
+
 		dist = dms.dist;
-		//count = dms.region.size();
 		dupMs = dms;
-		//
 		tmpMs = DistArray.make[DenseMatrix](dms.dist);//,([p]:Point)=>(null));
 		tmpReady=false;
-		comm = new CommHandle();
 	}
 
-	//-----------------------------------------------------------------
 	// No bcast is performed
 	/**
 	 * Create duplicated dense matrix based on an existing dense matrix.
@@ -93,7 +75,7 @@ public class DupDenseMatrix extends Matrix {
 		val n = mat.N;
 		val dms  = DistArray.make[DenseMatrix](dist);
 		val root = here.id();
-		finish ateach (val [p]:Point in dms.dist) {
+		finish ateach(val [p]:Point in dms.dist) {
 			val mypid = here.id();
 			if (mypid != root) 
 				dms(mypid) = new DenseMatrix(m, n);
@@ -104,7 +86,6 @@ public class DupDenseMatrix extends Matrix {
 		return dm;
 	}
 
-	//===
 	// Only memory space is allocated on all places
 	/**
 	 * Create duplicated dense matrix with specified dimension 
@@ -112,17 +93,17 @@ public class DupDenseMatrix extends Matrix {
 	 * @param m     number of rows in dense matrix
 	 * @param n     number of columns in dense matrix
 	 */
-	public static def make(m:Int, n:Int): DupDenseMatrix(m,n) {
+	public static def make(m:Long, n:Long): DupDenseMatrix(m,n) {
 		val dist = Dist.makeUnique();
 		val dms  = DistArray.make[DenseMatrix](dist);
-		finish ateach (val [p]:Point in dms.dist) {
+		finish ateach(val [p]:Point in dms.dist) {
 			val mypid = here.id();
 			dms(mypid) = new DenseMatrix(m, n);
 		}
 		val dm  = new DupDenseMatrix(dms) as DupDenseMatrix(m,n);
 		return dm;
 	}
-;
+
 	/**
 	 * Create duplicated dense matrix by using specified DistArray storage in all places
 	 * 
@@ -130,37 +111,17 @@ public class DupDenseMatrix extends Matrix {
 	 * @param n     number of columns in dense matrix
 	 * @param da     distributed arrays of array in double
 	 */
-	public static def make(m:Int, n:Int, 
-						   da:DistArray[Array[Double](1){rail}](1)): DupDenseMatrix(m,n) {
+	public static def make(m:Long, n:Long, 
+						   da:DistArray[Rail[ElemType]](1)): DupDenseMatrix(m,n) {
 		val dms = DistArray.make[DenseMatrix](da.dist);
-		finish ateach (val [p]:Point in dms.dist) {
+		finish ateach(val [p]:Point in dms.dist) {
 			val mypid = here.id();
-			dms(mypid) = new DenseMatrix(m, n, da(mypid) as Array[Double](1){rail});
+			dms(mypid) = new DenseMatrix(m, n, da(mypid) as Rail[ElemType]{self!=null});
 		}
 		val dm  = new DupDenseMatrix(dms) as DupDenseMatrix(m,n);
 		return dm;
 	}	
-	
-	/**
-	 * Create duplicated dense matrix by using PlaceLocalHandle
-	 * 
-	 * @param m     number of rows in dense matrix
-	 * @param n     number of columns in dense matrix
-	 * @param da     arrays accessed by PlaceLocalHandle
-	 */
-	public static def make(m:Int, n:Int, 
-						   da:PlaceLocalHandle[Array[Double](1){rail}]
-						   ): DupDenseMatrix(m,n) {
-		val dms = DistArray.make[DenseMatrix](Dist.makeUnique());
-		finish ateach (val [p]:Point in dms.dist) {
-			val mypid = here.id();
-			dms(mypid) = new DenseMatrix(m, n, da() as Array[Double](1){rail});
-		}
-		val dm  = new DupDenseMatrix(dms) as DupDenseMatrix(m,n);
-		return dm;
-	}
-	
-	//=====================================
+
 	/**
 	 * Create duplicated dense matrix with specified dimension and
 	 * initial the copy at root random values. The copies at other
@@ -169,13 +130,12 @@ public class DupDenseMatrix extends Matrix {
 	 * @param m     number of rows in dense matrix
 	 * @param n     number of columns in dense matrix
 	 */
-	public static def makeRand(m:Int, n:Int): DupDenseMatrix(m,n) {
+	public static def makeRand(m:Long, n:Long): DupDenseMatrix(m,n) {
 		val ddm = make(m, n);
 		ddm.initRandom();
 		return ddm;
 	}
 
-	//---
 	/**
 	 * For testing purpose.
 	 *
@@ -188,11 +148,12 @@ public class DupDenseMatrix extends Matrix {
 		return this;
 	}
 	
-	public def initRandom(lo:Int, up:Int) : DupDenseMatrix(this) {
+	public def initRandom(lo:Long, up:Long) : DupDenseMatrix(this) {
 		local().initRandom(lo,up);
 		sync();
 		return this;
 	}
+
 	/**
 	 * For testing purpose.
 	 *
@@ -201,7 +162,7 @@ public class DupDenseMatrix extends Matrix {
 	 *
 	 * @param ival     initial value for all elements
 	 */
-	public def init(ival:Double) : DupDenseMatrix(this) {
+	public def init(ival:ElemType) : DupDenseMatrix(this) {
 		local().init(ival);
 		sync();
 		return this;
@@ -213,20 +174,18 @@ public class DupDenseMatrix extends Matrix {
 	 * @param f    The function to use to initialize the matrix, mapping (row, column) => double
 	 * @return this object
 	 */
-	public def init(f:(Int,Int)=>Double): DupDenseMatrix(this) {
-		finish ateach (val [p]:Point in dupMs.dist) {
+	public def init(f:(Long,Long)=>ElemType): DupDenseMatrix(this) {
+		finish ateach(val [p]:Point in dupMs.dist) {
 			val pid=here.id();
 			dupMs(pid).init(f);
 		}
 		return this;
 	}
 	
-	//================================================================
-	/**;
+	/**
 	 * Allocate memory space to hold duplicated dense matrix(m,n)
 	 */
-	public def alloc(m:Int, n:Int)  = make(m, n);
-	//---
+	public def alloc(m:Long, n:Long)  = make(m, n);
 
 	/**
 	 * Make a copy of all duplicated dense matrix in all places.
@@ -235,7 +194,7 @@ public class DupDenseMatrix extends Matrix {
 	 */		
 	public def clone() : DupDenseMatrix(this.M, this.N) {
 		val dds  = DistArray.make[DenseMatrix](dupMs.dist);
-		finish ateach (val [p]:Point in dds.dist) {
+		finish ateach(val [p]:Point in dds.dist) {
 			val mypid = here.id();
 			dds(mypid) = this.dupMs(mypid).clone();
 		}
@@ -249,29 +208,33 @@ public class DupDenseMatrix extends Matrix {
 	 */
 	public def allocTemp():void {
 		if (tmpReady) return;
-		finish ateach (val [p]:Point in tmpMs.dist) {
+		finish ateach(val [p]:Point in tmpMs.dist) {
 			val mypid = here.id();
 			tmpMs(mypid) = dupMs(mypid).alloc();
 		}		
 		tmpReady = true;
 	}
-	//-------------------------------------------------
+
 	// Copy 
-	//-------------------------------------------------
 	public  def copyTo(that:DupDenseMatrix(M,N)):void {
 		finish ateach(val [p] :Point in this.dist) {
 			val mypid=here.id();
 			val sden = this.dupMs(p);
 			sden.copyTo(that.dupMs(p) as DenseMatrix(sden.M, sden.N));
 		}
-	}		
+	}	
+
+    public def copyFrom(that:DenseMatrix(M,N)):void {
+        that.copyTo(local());
+        sync();
+    }	
+
 	/**
 	 * Copy data at local copy to another dense matrix.
 	 *
 	 * @param   dm  the target dense matrix
 	 */
 	public def copyTo(dm:DenseMatrix(M,N)):void {
-		//DenseMatrix.copyCols(local(), 0, dm, 0, N);
 		local().copyTo(dm);
 	}
 
@@ -281,31 +244,22 @@ public class DupDenseMatrix extends Matrix {
 		else if (that instanceof DenseMatrix)
 			copyTo(that as DenseMatrix);
 		else
-			Debug.exit("CopyTo: target matrix type is not supportede");
+			throw new UnsupportedOperationException("CopyTo: target matrix type is not supportede");
 	}
-	//================================================================
-	// Data access
-	//================================================================
-	//public def apply(x:Int, y:Int) = this.dupMs(here.id()).apply(x, y);
+
 	/**
-	 * Access data at (x, y)
+	 * Access data at(x, y)
 	 */
-    public operator this(x:Int, y:Int):Double=local()(y*this.M+x);
-	/**
-	 * 
-	 */
-	//public operator this(x:Int):Double=this.dupMs(here.id()).d(x);
+    public operator this(x:Long, y:Long):ElemType=local()(y*this.M+x);
 
 	/**
 	 * Assign v to (x, y) in the copy at here. Other copies are not
 	 * modified.
 	 */
-	public operator this(x:Int,y:Int) = (v:Double):Double{
+	public operator this(x:Long,y:Long) = (v:ElemType):ElemType{
 		local()(x, y) = v;
-		//this.dupMs(here.id()).d(y*this.M+x) = v;
 		return v;
 	}
-
 
 	/**
 	 * Return the matrix copy at here.
@@ -318,16 +272,10 @@ public class DupDenseMatrix extends Matrix {
 	public def local():DenseMatrix(M,N) = this.dupMs(here.id()) as DenseMatrix(M,N);
 
 	/**
-	 * Return the copy of dense matrix at place p. Must be executed at
-	 * place p.
-	 */
-	//public def getMatrix(p:Int):DenseMatrix(M,N) = this.dupMs(p) as DenseMatrix(M,N) ;
-
-	/**
 	 * Reset matrix and all copies.
 	 */
 	public def reset():void {
-		finish ateach (val [p]:Point in this.dupMs.dist) {
+		finish ateach(val [p]:Point in this.dupMs.dist) {
 			local().reset();
 		}
 		calcTime=0;
@@ -339,16 +287,14 @@ public class DupDenseMatrix extends Matrix {
 	public def likeMe(A:Matrix):Boolean =
 	    (A instanceof DupDenseMatrix && 
 	    		(A as DupDenseMatrix).dupMs.dist.equals(this.dupMs.dist));
-	
-	//================================================================
-	//================================================================
+
 
 	/**
 	 * Broadcast the copy of dense matrix from here to all other places.
 	 */
 	public def sync() : void {
 		/* Timing */ val st:Long = Timer.milliTime();
-		comm.bcast(dupMs);
+		MatrixBcast.bcast(dupMs);
 		/* Timing */ commTime += Timer.milliTime() - st;
 	}
 
@@ -361,7 +307,7 @@ public class DupDenseMatrix extends Matrix {
 	public def reduceSum(): void {
 		allocTemp();
 		/* Timing */ val st:Long = Timer.milliTime();
-		comm.reduceSum(this.dupMs, tmpMs);
+		MatrixReduce.reduceSum(this.dupMs, tmpMs);
 		/* Timing */ commTime += Timer.milliTime() - st;
 	}
 
@@ -375,53 +321,44 @@ public class DupDenseMatrix extends Matrix {
 	public def allReduceSum(): void {
 		allocTemp();
 		/* Timing */ val st:Long = Timer.milliTime();
-		   //Debug.flush("Perform MPI all reduce sum operation");
-		   comm.allReduceSum(this.dupMs, tmpMs);
-		   /* Timing */ commTime += Timer.milliTime() - st;
+        MatrixReduce.allReduceSum(this.dupMs, tmpMs);
+        /* Timing */ commTime += Timer.milliTime() - st;
 	}
-	
-	//====================================================================
-	//====================================================================
+
 	/**
-	 * Transpose matrix and all copies and store the result at user provided ddm.
+	 * Transpose input matrix and store the result in this matrix.
 	 */
-	public def T(ddm:DupDenseMatrix(N,M)): void{
-		finish ateach (val [p]:Point in this.dupMs) {
+	public def T(ddm:DupDenseMatrix(N,M)):void {
+		finish ateach(val [p]:Point in this.dupMs) {
 			val tm = ddm.local();
 			val m  = local();
-			Debug.assure(m.M==tm.N&&m.N==tm.M);
+			assert (m.M==tm.N && m.N==tm.M);
 			local().T(tm);
 		}
 	}
 
 	/**
-	 * Transpose matrix and all copies and store a new DupDenseMatrix instance.
+	 * Transpose this matrix and store in a new DupDenseMatrix instance.
 	 */
 	public def T():DupDenseMatrix(N,M) {
 		val tm = DupDenseMatrix.make(this.N, this.M);
-		this.T(tm);
+		tm.T(this);
 		return tm;
 	}
-
-	//====================================================================
-	// Cellwise operation
-	//====================================================================
 
 	/**
 	 * Scaling method. All copies are updated concurrently
 	 */
- 	public def scale(a:Double) {
+ 	public def scale(a:ElemType) {
 		finish ateach(val [p] :Point in this.dupMs) {
 			this.local().scale(a);
 		}
 		return this;
     }
 
-	//--------------------------------
-	// Cellwise addition
-	//--------------------------------
+
 	/**
-	 * Cellwise multiplication. 
+	 * Cellwise addition. 
 	 */
 	public def cellAdd(A:Matrix(M,N)) {
 		local().cellAdd(A);
@@ -443,7 +380,7 @@ public class DupDenseMatrix extends Matrix {
 	 * Concurrently perform cellwise addition on all copies.
 	 */
 	public def cellAdd(A:DupDenseMatrix(M,N))  {
-		//Debug.assure(this.M==A.M&&this.N==A.N);
+		//assert (this.M==A.M && this.N==A.N);
 	    finish ateach([p]  in this.dupMs) {
 			val sm = A.local();
 	        val dm = local();
@@ -452,8 +389,8 @@ public class DupDenseMatrix extends Matrix {
 		return this;
 	}
 
-	public def cellAdd(d:Double)  {
-		//Debug.assure(this.M==A.M&&this.N==A.N);
+	public def cellAdd(d:ElemType)  {
+		//assert (this.M==A.M && this.N==A.N);
 	    finish ateach([p]  in this.dupMs) {
 	        val dm = local();
 	        dm.cellAdd(d);
@@ -472,9 +409,6 @@ public class DupDenseMatrix extends Matrix {
 		return x;
 	}
 
-	//--------------------------------
-	// Cellwise subtraction
-	//--------------------------------
 	/**
 	 * Cellwise subtraction. 
 	 */
@@ -504,18 +438,6 @@ public class DupDenseMatrix extends Matrix {
 	    }
 		return this;
 	}
-
-	/**
-	 * this = v - this
-	 */
-	public def cellSubFrom(v:Double):DupDenseMatrix(this) {
-		
-		finish ateach([p] in this.dupMs) {
-			val mat = local();
-			mat.cellSubFrom(v);
-		}
-		return this;
-	}
 	
 	/**
 	 * Perform cell-wise subtraction  x = x - this.
@@ -529,7 +451,7 @@ public class DupDenseMatrix extends Matrix {
 	 * Perform cell-wise subtraction  x = x - this.
 	 */
 	public def cellSubFrom(x:DupDenseMatrix(M,N)) {
-		//Debug.assure(this.M==A.M&&this.N==A.N);
+		//assert (this.M==A.M && this.N==A.N);
 		/* Timing */ val st= Timer.milliTime();
 		finish ateach([p] in this.dupMs) {
 			val sm = x.local();
@@ -539,9 +461,7 @@ public class DupDenseMatrix extends Matrix {
 		/* Timing */ calcTime += Timer.milliTime() - st;
 		return this;
 	}
-	//--------------------------------
-	// Cellwise multiplication
-	//--------------------------------
+
 	/**
 	 * Cellwise multiplication. 
 	 */
@@ -566,9 +486,9 @@ public class DupDenseMatrix extends Matrix {
 	 * the corresponding dense matrix copies.
 	 */
 	public def cellMult(A:DupDenseMatrix(M,N))  {
-		//Debug.assure(this.M==A.M&&this.N==A.N);
+		//assert (this.M==A.M && this.N==A.N);
 		/* Timing */ val st= Timer.milliTime();
-		finish ateach (val [p]:Point in this.dupMs) {
+		finish ateach(val [p]:Point in this.dupMs) {
 			val sm = A.local();
 			val dm = local();
 			dm.cellMult(sm);
@@ -576,7 +496,6 @@ public class DupDenseMatrix extends Matrix {
 		/* Timing */ calcTime += Timer.milliTime() - st;
 		return this;
 	}
-
 
 	/**
 	 * Perform cell-wise multiply operation x = this &#42 x 
@@ -586,9 +505,6 @@ public class DupDenseMatrix extends Matrix {
 		return dst;
 	}
 
-	//--------------------------------
-	// Cellwise division
-	//--------------------------------
 	/**
 	 * Cellwise division. 
 	 */
@@ -613,9 +529,9 @@ public class DupDenseMatrix extends Matrix {
 	 * the corresponding dense matrix copies.
 	 */	
 	public def cellDiv(A:DupDenseMatrix(M,N)) {
-		//Debug.assure(this.M==A.M&&this.N==A.N);
+		//assert (this.M==A.M && this.N==A.N);
 		/* Timing */ val st= Timer.milliTime();
-		finish ateach (val [p]:Point in this.dupMs) {
+		finish ateach(val [p]:Point in this.dupMs) {
 			val sm = A.local();
 			val dm = local();			
 			dm.cellDiv(sm);
@@ -632,10 +548,6 @@ public class DupDenseMatrix extends Matrix {
 		return x;
 	}
 
-
-	//====================================================================
-	// Operator overload
-	//====================================================================
 	/**
 	 * Perform cell-wise addition, return this + that in a new dup dense matrix. 
 	 */
@@ -670,10 +582,6 @@ public class DupDenseMatrix extends Matrix {
 	    return x;
 	}
 
-	//====================================================================
-	// Multiplication operations 
-	//====================================================================
-
 	/**
 	 * Multiplication method by using X10 driver. All copies are updated.
 	 * this = A &#42 B if plus is false, else this += A &#42 B
@@ -688,8 +596,7 @@ public class DupDenseMatrix extends Matrix {
 		else if (A instanceof DupDenseMatrix(A) && B instanceof DupDenseMatrix(B))
 			return mult(A as DupDenseMatrix(A), B as DupDenseMatrix(B), plus);
 
-		Debug.flushln("Not support using Matrix instances as parameters");
-		throw new UnsupportedOperationException();
+		throw new UnsupportedOperationException("Not support using Matrix instances as parameters");
 	}
 
 	/**
@@ -718,7 +625,7 @@ public class DupDenseMatrix extends Matrix {
 		DupMultToDup.comp(A, B, this, plus);
 
 
-	//---------------------------------------------------
+
 	/**
 	 * this += A<sup>T</sup> &#42 B if plus is true. Result copies are 
 	 * synchronized in every place.
@@ -741,8 +648,7 @@ public class DupDenseMatrix extends Matrix {
 		else if (A instanceof DistDenseMatrix(A) && B instanceof DistSparseMatrix(B))
 			return transMult(A as DistDenseMatrix(A), B as DistSparseMatrix(B), plus);
 		
-		Debug.flushln("Not support using Matrix instances as parameters");
-		throw new UnsupportedOperationException();
+		throw new UnsupportedOperationException("Not support using Matrix instances as parameters");
 	}
 
 	/**
@@ -774,7 +680,6 @@ public class DupDenseMatrix extends Matrix {
 			plus:Boolean) = 
         DupMultToDup.compTransMult(A, B, this, plus);
 
-	//----------------------------------------------
 	/**
 	 * this += A<sup>T</sup> &#42 B if plus is true, result copies are 
 	 * synchronized in every place
@@ -802,7 +707,6 @@ public class DupDenseMatrix extends Matrix {
 			B:DistSparseMatrix(A.M,this.N)) =
 		DistMultDistToDup.compTransMult(A, B, this, false);
 
-	//----------------------------------------------
 	/**
 	 * this += A<sup>T</sup> &#42 B if plus is true, result copies are 
 	 * synchronized in every place.
@@ -816,8 +720,6 @@ public class DupDenseMatrix extends Matrix {
 			B:DistDenseMatrix(A.M,this.N), 
 			plus:Boolean) =
 		DistMultDistToDup.compTransMult(A, B, this, plus); 
-	
-	//------------------------------------------------
 	
 	/**
 	 * this += A<sup>T</sup> &#42 B if plus is true, results are synchronized 
@@ -846,8 +748,6 @@ public class DupDenseMatrix extends Matrix {
 			B:DistDenseMatrix(A.M,this.N)) =
 		DistMultDistToDup.compTransMult(A, B, this, false);
 
-	//-----------------------------------------------------------------
-
 	/**
 	 * this = A &#42 B<sup>T</sup>
 	 */
@@ -861,8 +761,7 @@ public class DupDenseMatrix extends Matrix {
 		else if (A instanceof DupDenseMatrix(A) && B instanceof DupDenseMatrix(B))
 			return multTrans(A as DupDenseMatrix(A), B as DupDenseMatrix(B), plus);
 		
-		Debug.flushln("Not support using Matrix instances as parameters");
-		throw new UnsupportedOperationException();
+		throw new UnsupportedOperationException("Not support using Matrix instances as parameters");
 	}
 
 	public def multTrans(
@@ -887,7 +786,6 @@ public class DupDenseMatrix extends Matrix {
 			B:DupDenseMatrix(this.N,A.N)) =
 		DupMultToDup.compMultTrans(A, B, this, false);
 
-	//----------------------------------------------------------------
 	/**
 	 * this = A &#42 B, results are synchronized at every place
 	 */
@@ -895,14 +793,11 @@ public class DupDenseMatrix extends Matrix {
 			A:DupDenseMatrix(this.M), 
 			B:DupDenseMatrix(A.N,this.N)) =
 		DupMultToDup.comp(A, B, this, false);
-
 	
 	public def transMult(
 			A:DenseMatrix{self.N==this.M}, 
 			B:DenseMatrix(A.M,N)) =
 		DupMultToDup.compTransMult(A, B, this, false);
-
-	//----------------------------------------------------------------
 
 	/**
 	 * Operator % performs duplicated dense matrix multiplication
@@ -922,23 +817,16 @@ public class DupDenseMatrix extends Matrix {
 		return dm;
 	}
 
-
-	//====================================================================
-	// Util
-	//====================================================================
-
- 	//------------
 	public def getCommTime():Long = this.commTime;
 	public def getCalcTime():Long = this.calcTime;
-	//------------
 
-	// Check integrity 
+	/** Check integrity */
 	public def syncCheck():Boolean {
 		val m = local();
-		for (var p:Int=0; p<Place.MAX_PLACES; p++) {
+		for (var p:Long=0; p<Place.numPlaces(); p++) {
 			//if (p == here.id()) Clock.advanceAll();
 			val pid = p;
-			val dm = at (dupMs.dist(pid)) local();
+			val dm = at(dupMs.dist(pid)) local();
 			if (!m.equals(dm)) {
 				Console.OUT.println("Integrity check found differences between the copy at here and copy at "+pid);
 				Console.OUT.flush();
@@ -948,44 +836,20 @@ public class DupDenseMatrix extends Matrix {
 		return true;
 	}
 
-	//==================================================================
 	public def toString() :String {
 		var output:String = "---Duplicated Dense Matrix size:["+M+"x"+N+"]---\n";
 		output += dupMs(here.id()).toString();
 		output += "--------------------------------------------------\n";
 		return output;
 	}
-	//
-	public def print()  { this.print("");}
-	public def print(msg:String) {
-		Console.OUT.print(msg);
-		Console.OUT.print(this.toString());
-		Console.OUT.flush();
-	}
-	//
-	public def debugPrint() { debugPrint(""); }
-	public def debugPrint(msg:String) {
-		if (Debug.disable) return;
-		val dbstr:String = msg+ this.toString();
-		Debug.println(dbstr);
-		Debug.flush();
-	}
-	
-	//
+
 	public def allToString() : String {
 		var output:String = "Duplicated Dense Matrix size:["+M+"x"+N+"]\n";
-		for (var p:Int=0; p<Place.MAX_PLACES; p++) { 
+		for (var p:Long=0; p<Place.numPlaces(); p++) { 
 			val pid = p;
-			val mstr = at (dupMs.dist(pid)) dupMs(pid).toString();
+			val mstr = at(dupMs.dist(pid)) dupMs(pid).toString();
 			output += "Duplication at place " + pid + "\n"+mstr;
 		}
 		return output;
 	}
-
-	public def printAll(msg:String) {
-		Console.OUT.print(msg+allToString());
-		Console.OUT.flush();
-	}
-	public def printAll() { printAll("");}
-		
 }

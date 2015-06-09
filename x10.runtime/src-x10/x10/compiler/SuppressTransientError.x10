@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2010.
+ *  (C) Copyright IBM Corporation 2006-2015.
  */
 
 package x10.compiler;
@@ -14,6 +14,7 @@ package x10.compiler;
 import x10.lang.annotations.FieldAnnotation;
 
 /**
- * We use this annotation to tell the compiler not to give errors on transient fields without a default value.
+ * This annotation on a transient field tells the compiler not to generate an 
+ * error if the field does not have a default value.
  */
 public interface SuppressTransientError extends FieldAnnotation { }

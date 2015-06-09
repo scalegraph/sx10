@@ -6,42 +6,24 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2006-2012.
+ *  (C) Copyright IBM Corporation 2006-2014.
  */
 
 package x10.matrix.builder;
 
 import x10.compiler.Inline;
-import x10.io.Console;
-import x10.util.Random;
-import x10.util.Timer;
-import x10.util.ArrayList;
-import x10.util.StringBuilder;
 
-import x10.matrix.Matrix;
-import x10.matrix.DenseMatrix;
-import x10.matrix.Debug;
-import x10.matrix.MathTool;
-import x10.matrix.RandTool;
+import x10.matrix.ElemType;
 
+import x10.matrix.util.MathTool;
+import x10.matrix.util.RandTool;
 import x10.matrix.sparse.SparseCSC;
 import x10.matrix.sparse.SymSparseCSC;
-import x10.matrix.sparse.CompressArray;
-import x10.matrix.sparse.Compress1D;
 
 public type SymSparseBuilder(bld:SymSparseBuilder)=SymSparseBuilder{self==bld};
-public type SymSparseBuilder(m:Int)=SymSparseBuilder{self.M==m};
+public type SymSparseBuilder(m:Long)=SymSparseBuilder{self.M==m};
 
-/**
- * 
- * <p>
- * 
- */
-//public class SymSparseBuilder(M:Int) implements MatrixBuilder {
-//public val builder:SparseCSCBuilder(M,M);
 public class SymSparseBuilder extends SparseCSCBuilder{self.M==self.N} implements MatrixBuilder {
-	//===================================
-	
 	/**
 	 * Cast Sparse matrix builder to symmetric sparse matrix, while using the 
 	 * same memory allocation space.
@@ -50,28 +32,38 @@ public class SymSparseBuilder extends SparseCSCBuilder{self.M==self.N} implement
 		super(sbld);
 	}
 	
-	public def this(spa:SparseCSC{self.M==self.N}) {
+	public def this(spa:SparseCSC{self.M==self.N}):SymSparseBuilder(spa.M) {
 		super(spa);
 	}
 	
-	//=====================================
-	public static def make(m:Int) : SymSparseBuilder(m) {
+	public static def make(m:Long) : SymSparseBuilder(m) {
 		val bdr =  new SymSparseBuilder(SparseCSCBuilder.make(m,m));
 		return bdr as SymSparseBuilder(m);
 	}
 
-	//=====================================
-	//=====================================
 	/**
 	 * Initialize symmetric sparse builder using matrix data generator function.
 	 */
-	public def init(fval:(Int, Int)=>Double) :SymSparseBuilder(this) {
-		for (var c:Int=0; c<N; c++) {
-			for (var r:Int=c; r<M; r++) {
+	public def init(fval:(Long,Long)=>ElemType) :SymSparseBuilder(this) {
+		for (var c:Long=0; c<N; c++) {
+			for (var r:Long=c; r<M; r++) {
 				val v = fval(r, c);
 				if (! MathTool.isZero(v)) {
 					this.append(r, c, v);
 				}
+			}
+		}
+		return this;
+	}
+
+    // replicated from superclass to workaround xlC bug with using & itables
+	public def init(spamat:SparseCSC(M,N)): SparseCSCBuilder(this) {
+		val ca = spamat.getStorage();
+		var offset:Long = 0;
+		for (var c:Long=0; c<N; c++) {
+			val cnt = spamat.ccdata.cLine(c).length;
+			for (var i:Long=0; i<cnt; i++, offset++) {
+				append(ca.index(offset), c, ca.value(offset));
 			}
 		}
 		return this;
@@ -84,15 +76,15 @@ public class SymSparseBuilder extends SparseCSCBuilder{self.M==self.N} implement
 	 * @param nzd    nonzero sparsity. Used to computing row index distance between two nonzeros.
 	 * @param fval   return a double value using row and column index as inputs. 
 	 */
-	public def initRandom(nzd:Double, fval:(Int, Int)=>Double):SymSparseBuilder(this) {
+	public def initRandom(nzd:Float, fval:(Long,Long)=>ElemType):SymSparseBuilder(this) {
 		val rgen = RandTool.getRandGen();
-		val maxdst:Int = ((1.0/nzd) as Int) * 2 - 1;
-		var r:Int = rgen.nextInt(maxdst/2);
-		var c:Int = 0;
+		val maxdst:Long = ((1.0/nzd) as Int) * 2 - 1;
+		var r:Long = rgen.nextLong(maxdst/2);
+		var c:Long = 0;
 		while (true) {
-			if (r < M){
+            if (r < M) {
 				append(r, c, fval(r, c));
-				r+= rgen.nextInt(maxdst) + 1;
+				r+= rgen.nextLong(maxdst) + 1;
 			} else {
 				c++;
 				r -= (M-c);
@@ -104,25 +96,24 @@ public class SymSparseBuilder extends SparseCSCBuilder{self.M==self.N} implement
 	}
 	
 	/**
-	 * Initial with random value in specified sparsity.
+     * Initialize with random values in specified sparsity.
 	 */
-	public def initRandom(nzd:Double) : SymSparseBuilder(this) =
-		initRandom(nzd, (r:Int,c:Int)=>RandTool.getRandGen().nextDouble());
+	public def initRandom(nzd:Float) : SymSparseBuilder(this) =
+		initRandom(nzd, (r:Long,c:Long)=>RandTool.nextElemType[ElemType]());
 	
-	//=====================================
 	/**
-	 * Initial symmetric sparse builder using an existing matrix.
-	 * @param up       upper triangulor flag
+     * Initialize symmetric sparse builder using an existing matrix.
+     * @param up       upper triangular flag
 	 * @param src      source matrix.
 	 */
 	public def init(up:Boolean, src:SparseCSC(M,M)): SymSparseBuilder(this) {
 		val ca = src.getStorage();
 
-		for (var c:Int=0; c<M; c++) {
+		for (var c:Long=0; c<M; c++) {
 			val srcln = src.ccdata.cLine(c);
 			val cpylen = up?srcln.countIndexRangeBefore(c):srcln.countIndexRangeAfter(c, src.M);
-			var off :Int = up?srcln.offset:srcln.offset+srcln.length-cpylen;
-			for (var i:Int=off; i<off+cpylen; i++) {
+			var off:Long = up?srcln.offset:srcln.offset+srcln.length-cpylen;
+			for (var i:Long=off; i<off+cpylen; i++) {
 				val r = ca.index(i);
 				val v = ca.value(i);
 				append(r, c, v);
@@ -131,12 +122,11 @@ public class SymSparseBuilder extends SparseCSCBuilder{self.M==self.N} implement
 		return this;
 	}
 	
-	//=====================================
 	/**
 	 * Add new nonzero entry. Keep the new nonzero entry in order
 	 */
 	@Inline
-	public def add(r:Int, c:Int, v:Double) {
+	public def add(r:Long, c:Long, v:ElemType) {
 		super.insert(r, c, v);
 		if (r!=c)
 			super.insert(c, r, v);
@@ -146,7 +136,7 @@ public class SymSparseBuilder extends SparseCSCBuilder{self.M==self.N} implement
 	 * Append nonzero at the end of nonzero list of the specified column. 
 	 */
 	@Inline
-	public def append(r:Int, c:Int, v:Double) {
+	public def append(r:Long, c:Long, v:ElemType) {
 		super.append(r, c, v);
 		if (r!= c)
 			super.append(c, r, v);
@@ -155,28 +145,28 @@ public class SymSparseBuilder extends SparseCSCBuilder{self.M==self.N} implement
 	/*
 	 * Return the value at given row and column; If not found in nonzero list, 0 is returned.
 	 */
-	public def get(r:Int, c:Int) : Double = findEntry(r,c).value;
+	public def get(r:Long, c:Long) : ElemType = findEntry(r,c).value;
 	
 	/*
 	 * Set the entry of given row and column to value, if it is found. Otherwise append
 	 * new nonzero entry at the end of nonzero list;
 	 */
 	@Inline
-	public def set(r:Int, c:Int, v:Double) : void {
+	public def set(r:Long, c:Long, v:ElemType) : void {
 		super.set(r, c, v);
 		if (r != c)
 			super.set(c, r, v);
 	}
 	
-	public def reset(r:Int, c:Int) : Boolean = super.remove(r,c);
-	//================================
+	public def reset(r:Long, c:Long) : Boolean = super.remove(r,c);
+
 	/**
 	 * Copy upper triangular part to lower. The lower part must contain none nonzero entries.
 	 * The original builder must be a upper triangular 
 	 */
 	public def mirrorToLower() {
-		var r:Int =0;
-		for (var c:Int=1; c<N; c++) {
+		var r:Long =0;
+		for (var c:Long=1; c<N; c++) {
 			val nzc = nzcol(c);
 			val itr = nzc.iterator();
 			while (itr.hasNext()){
@@ -192,8 +182,8 @@ public class SymSparseBuilder extends SparseCSCBuilder{self.M==self.N} implement
 	 * Copy lower triangular part to upper. Upper part must contains none nonzero entries.
 	 */
 	public def mirrorToUpper() {
-		var r:Int =0;
-		for (var c:Int=1; c<N; c++) {
+		var r:Long =0;
+		for (var c:Long=1; c<N; c++) {
 			val nzc = nzcol(c);
 			val itr = nzc.iterator();
 			while (itr.hasNext()){
@@ -203,29 +193,22 @@ public class SymSparseBuilder extends SparseCSCBuilder{self.M==self.N} implement
 			}
 		}
 	}
-	//================================
+
 	public def checkSymmetric():Boolean {
 		var ret:Boolean = true;
-		for (var c:Int=0; c<N&&ret; c++)
-			for (var r:Int=0; r<M&&ret; r++) {
+		for (var c:Long=0; c<N&&ret; c++)
+			for (var r:Long=0; r<M&&ret; r++) {
 				ret &= get(r,c) == get(c,r);
 			}
 				
 		return ret;
 	}
-	//=================================
-	public def toSymSparseCSC() : SymSparseCSC(M) {
+
+	public def toSymSparseCSC():SymSparseCSC(M) {
 		val spa = toSparseCSC();
 		val bdr = new SymSparseCSC(M, spa.ccdata);
 		return bdr as SymSparseCSC(M);
 	}
 	
-	//public def toSparseCSC() : SparseCSC(M,M) = toSparseCSC() as SparseCSC(M,M);
-	
-
-	//public def toMatrix():Matrix(M,M) = toSparseCSC() as Matrix(M,M);
-
-	
-	//===============================
 	public def toString() :String = "Symmetric sparse builder\n"+toString();
 }

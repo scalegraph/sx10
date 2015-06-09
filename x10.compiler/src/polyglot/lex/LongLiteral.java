@@ -9,7 +9,7 @@
  * This file was originally derived from the Polyglot extensible compiler framework.
  *
  *  (C) Copyright 2000-2007 Polyglot project group, Cornell University
- *  (C) Copyright IBM Corporation 2007-2012.
+ *  (C) Copyright IBM Corporation 2007-2014.
  */
 
 package polyglot.lex;
@@ -20,6 +20,6 @@ import polyglot.util.Position;
 public class LongLiteral extends NumericLiteral {
   public LongLiteral(Position position, long l, int sym) {
       super(position, sym);
-      this.val = new Long(l);
+      this.val = Long.valueOf(l);
   }
 }
