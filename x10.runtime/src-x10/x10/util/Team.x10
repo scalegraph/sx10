@@ -1826,7 +1826,7 @@ if (DEBUGINTERNALS) Runtime.println(here+" allocated local_temp_buff size " + (m
 
     private def flatten[T] (src:Rail[Rail[T]]) : Pair[Rail[T], Pair[Rail[Int], Rail[Int]]] {
         //val sizes:Rail[Int] = src.map((x:Rail[T])=>x.size as Int);
-        val sizes = new Rail[Int](1);
+        val sizes = new Rail[Int](src.size);
         RailUtils.map(src, sizes, (x:Rail[T])=>x.size as Int);
         //val size = sizes.reduce((x:Int, y:Int)=>x+y, 0n);
         val size = RailUtils.reduce(sizes, (x:Int, y:Int)=>x+y, 0n);

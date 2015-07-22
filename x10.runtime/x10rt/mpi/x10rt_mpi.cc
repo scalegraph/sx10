@@ -2934,7 +2934,7 @@ void x10rt_net_scatterv (x10rt_team team, x10rt_place role, x10rt_place root, co
     }
 
     X10RT_NET_DEBUG("%s", "pre scatterv");
-    MPI_COLLECTIVE(Scatterv, Iscatterv, (void *)sbuf, scounts_, soffsets_, get_mpi_datatype(el), buf, dcount * el, get_mpi_datatype(el), root, comm);
+    MPI_COLLECTIVE(Scatterv, Iscatterv, (void *)sbuf, scounts_, soffsets_, get_mpi_datatype(el), buf, dcount /** el*/, get_mpi_datatype(el), root, comm);
     X10RT_NET_DEBUG("%s", "pro scatterv");
 
     MPI_COLLECTIVE_SAVE(team);
