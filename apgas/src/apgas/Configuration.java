@@ -29,16 +29,35 @@ public final class Configuration {
   public static final String APGAS_RUNTIME = "apgas.runtime";
 
   /**
-   * Number of places to spawn (Integer property).
+   * Name of the network transport class implementation to instantiate (String
+   * property).
    * <p>
-   * All the places are spawned on the localhost.
+   * Currently "{@code apgas.impl.Transport}" and "
+   * {@code apgas.sockets.SocketTransport}" are supported. Defaults to "
+   * {@code apgas.impl.Transport}".
    *
-   * @see GlobalRuntime
+   */
+  public static final String APGAS_TRANSPORT = "apgas.transport";
+
+  /**
+   * Enables or disables compression on the network links when using transport "
+   * {@code apgas.sockets.SocketTransport}".
+   * <p>
+   * Set to "none" or "snappy", which is the default.
+   */
+  public static final String APGAS_TRANSPORT_COMPRESSION = "apgas.transport.compression";
+
+  /**
+   * Desired number of places (Integer property).
+   * <p>
+   * Defaults to 1. If "{@code apgas.my.master}" is not set the global runtime
+   * will spawn the desired number of places, otherwise it will wait for the
+   * places to appear.
    */
   public static final String APGAS_PLACES = "apgas.places";
 
   /**
-   * Number of threads in the thread pool (Integer property).
+   * Desired level of parallelism (Integer property).
    * <p>
    * The return value of "{@code Runtime.getRuntime().availableProcessors()}" is
    * used if this property is not set.
@@ -46,8 +65,15 @@ public final class Configuration {
   public static final String APGAS_THREADS = "apgas.threads";
 
   /**
-   * Reduces the number of threads used by the JVM and Hazelcast if set (Boolean
+   * Upper bound on the number of persistent threads in the thread pool (Integer
    * property).
+   * <p>
+   * Defaults to 256.
+   */
+  public static final String APGAS_MAX_THREADS = "apgas.max.threads";
+
+  /**
+   * Reduces the number of threads used by Hazelcast if set (Boolean property).
    */
   public static final String APGAS_COMPACT = "apgas.compact";
 
@@ -69,28 +95,51 @@ public final class Configuration {
    * set to "ip" the global runtime will connect to the first available
    * Hazelcast instance at this ip within the default port range.
    */
-  public static final String APGAS_MASTER = "apgas.master";
+  public static final String APGAS_MY_MASTER = "apgas.my.master";
 
   /**
-   * Disables the implicit shutdown of the global runtime when thread with ID 1
-   * terminates (Boolean property).
+   * Optionally specifies the preferred ip of this host (String property).
    */
-  public static final String APGAS_DAEMON = "apgas.daemon";
+  public static final String APGAS_MY_IP = "apgas.my.ip";
 
   /**
    * Specifies the java command to run for spawning places (String property).
    * <p>
-   * Defaults to "java".
+   * Defaults to "{@code java}".
    */
   public static final String APGAS_JAVA = "apgas.java";
 
   /**
-   * Turns on resiliency.
+   * Enables or disables resiliency.
    */
   public static final String APGAS_RESILIENT = "apgas.resilient";
 
   /**
    * Name of the finish implementation class to instantiate (String property).
+   * <p>
+   * Defaults to "{@code apgas.impl.DefaultFinish}" or "
+   * {@code apgas.impl.ResilientFinish}".
    */
   public static final String APGAS_FINISH = "apgas.finish";
+
+  /**
+   * Name of the launcher implementation class to instantiate (String property).
+   * <p>
+   * Defaults to "{@code apgas.impl.LocalLauncher}".
+   */
+  public static final String APGAS_LAUNCHER = "apgas.launcher";
+
+  /**
+   * If set the runtime will ouput on stderr the command line used to launch
+   * places (Boolean property).
+   */
+  public static final String APGAS_LAUNCHER_VERBOSE = "apgas.launcher.verbose";
+
+  /**
+   * Specifies the hostfile when using a compatible launcher such as "
+   * {@code apgas.impl.SshLauncher}" (String property).
+   * <p>
+   * Defaults tp "{@code hostfile}".
+   */
+  public static final String APGAS_HOSTFILE = "apgas.hostfile";
 }

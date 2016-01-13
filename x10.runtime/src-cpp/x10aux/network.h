@@ -25,8 +25,6 @@ namespace x10 { namespace xrx { class Runtime__Profile; } }
 
 namespace x10aux {
 
-    extern x10_int num_local_cores;
-
     typedef x10_short serialization_id_t;
 
     typedef x10rt_msg_type msg_type;
@@ -43,16 +41,12 @@ namespace x10aux {
     typedef void (*CUDAPost)(deserialization_buffer &buf, place p,
                              size_t blocks, size_t threads, size_t shm, size_t argc, char *argv, size_t cmemc, char *cmemv);
 
-    typedef void *(*BufferFinder)(deserialization_buffer &buf, x10_int len);
-
     typedef void (*Notifier)(deserialization_buffer &buf, x10_int len);
     
     // a message type used for putting serialised kernel data on a gpu 
     extern msg_type kernel_put;
 
     // caches to avoid repeatedly calling into x10rt for trivial things
-    extern place num_places;
-    extern place num_hosts;
     extern place here;
 
     // can be used to test whether the above caches contain valid data
@@ -196,18 +190,20 @@ namespace x10aux {
     class serialization_buffer;
 
     void send_get (place p, serialization_id_t id,
-                   serialization_buffer &buf, void *data, ::x10aux::copy_sz len);
+                   serialization_buffer &buf, void *srcAddr, void *dstAddr, ::x10aux::copy_sz len);
    
     void send_put (place p, serialization_id_t id,
-                   serialization_buffer &buf, void *data, ::x10aux::copy_sz len);
+                   serialization_buffer &buf, void *srcAddr, void *dstAddr, ::x10aux::copy_sz len);
 
-    void cuda_put (place gpu, x10_ulong addr, void *var, size_t sz);
+    void cuda_put (place gpu, void *srcAddr, void *dstAddr, size_t sz);
 
     // teams
     void *coll_enter();
     void coll_handler(void *arg);
     void *coll_enter2(void *arg);
     void coll_handler2(x10rt_team t, void *arg);
+    
+    void failed_coll_handler(void *arg);
 }
 #endif
 // vim:tabstop=4:shiftwidth=4:expandtab

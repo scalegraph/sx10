@@ -1,7 +1,6 @@
 ###################################################
 # Source and target file
 ###################################################
-#target_list 	= TestMult TestSparse TestSparseDense TestDenseSparse TestDistBlockMatrix TestMultMPI
 target_list 	= TestMult TestSparse TestSparseDense TestDenseSparse TestDistBlockMatrix
 
 target		= TestDistBlockMatrix
@@ -13,11 +12,11 @@ build_path	= build
 gml_path    = ../../
 
 # compile options
-X10_FLAG	= -sourcepath $(X10_HOME)/../x10.tests/tests/x10lib -d $(build_path)  -errors 5 -VERBOSE_CHECKS 
+X10_FLAG	= -sourcepath $(X10_HOME)/x10.tests/tests/x10lib -d $(build_path)  -errors 5 -VERBOSE_CHECKS 
 
 
 # runtime settings
-runtime_list = mpi sock java
+runtime_list = sock java
 numplaces = 4
 test_args = 
 
@@ -35,6 +34,5 @@ run		: run_java
 include $(gml_path)/scripts/build_common.mk
 include $(gml_path)/scripts/build_managed.mk
 include $(gml_path)/scripts/build_native.mk
-include $(gml_path)/scripts/build_native_mpi.mk
 include $(gml_path)/scripts/test_run.mk
 

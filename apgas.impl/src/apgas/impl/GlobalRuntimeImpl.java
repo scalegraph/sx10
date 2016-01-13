@@ -13,16 +13,17 @@ package apgas.impl;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.lang.ProcessBuilder.Redirect;
+import java.lang.management.ManagementFactory;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.RecursiveAction;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import apgas.Configuration;
@@ -35,11 +36,13 @@ import apgas.SerializableCallable;
 import apgas.SerializableJob;
 import apgas.util.GlobalID;
 
+import com.hazelcast.core.IMap;
+
 /**
  * The {@link GlobalRuntimeImpl} class implements the
  * {@link apgas.GlobalRuntime} class.
  */
-final class GlobalRuntimeImpl extends GlobalRuntime {
+public final class GlobalRuntimeImpl extends GlobalRuntime {
   /**
    * The value of the APGAS_SERIALIZATION_EXCEPTION system property.
    */
@@ -86,31 +89,28 @@ final class GlobalRuntimeImpl extends GlobalRuntime {
   List<Place> places;
 
   /**
-   * The processes we spawned.
+   * The launcher used to spawn additional places.
    */
-  final List<Process> processes = new ArrayList<Process>();
-
-  /**
-   * Status of the shutdown sequence (0 live, 1 shutting down the Global
-   * Runtime, 2 shutting down the JVM).
-   */
-  int dying;
+  final Launcher launcher;
 
   /**
    * The registered place failure handler.
    */
   Consumer<Place> handler;
 
+  /**
+   * True if shutdown is in progress.
+   */
+  private boolean dying;
+
+  /**
+   * The resilient map from finish IDs to finish states.
+   */
+  final IMap<GlobalID, ResilientFinishState> resilientFinishMap;
+
   private static Worker currentWorker() {
     final Thread t = Thread.currentThread();
     return t instanceof Worker ? (Worker) t : null;
-  }
-
-  private static Process exec(List<String> command) throws IOException {
-    final ProcessBuilder pb = new ProcessBuilder(command);
-    pb.redirectOutput(Redirect.INHERIT);
-    pb.redirectError(Redirect.INHERIT);
-    return pb.start();
   }
 
   public static GlobalRuntimeImpl getRuntime() {
@@ -157,15 +157,28 @@ final class GlobalRuntimeImpl extends GlobalRuntime {
 
     // initialize scheduler and transport
     pool = new ForkJoinPool(threads, new WorkerFactory(), null, false);
-    transport = new Transport(this, master, InetAddress.getLocalHost()
-        .getHostAddress(), compact);
+    final String transportClassName = System.getProperty(
+        Configuration.APGAS_NETWORKTRANSPORT, "apgas.impl.Transport");
+    @SuppressWarnings("rawtypes")
+    Class transportClass;
+    try {
+      transportClass = Class.forName(transportClassName);
+    } catch (final ClassNotFoundException e) {
+      // TODO: currently we fall back to the hazelcast transport. Should we
+      // throw an error and stop instead?
+      transportClass = Class.forName("apgas.impl.Transport");
+    }
+    transport = (Transport) transportClass.getDeclaredConstructor(
+        GlobalRuntimeImpl.class, String.class, String.class, boolean.class)
+        .newInstance(this, master, InetAddress.getLocalHost().getHostAddress(),
+            compact);
 
     // initialize here
     here = transport.here();
     home = new Place(here);
 
-    // install shutdown hook
-    Runtime.getRuntime().addShutdownHook(new Thread(() -> terminate()));
+    resilientFinishMap = resilient ? transport
+        .<GlobalID, ResilientFinishState> getResilientFinishMap() : null;
 
     // install hook on thread 1
     if (!daemon) {
@@ -190,11 +203,18 @@ final class GlobalRuntimeImpl extends GlobalRuntime {
     // start monitoring cluster
     transport.start();
 
-    if (p > 1) {
+    if (p == 0) {
+      launcher = null;
+    } else {
+      final String name = System.getProperty(Configuration.APGAS_LAUNCHER);
+      launcher = (name == null) ? new LocalLauncher() : (Launcher) Class
+          .forName(name).newInstance();
       // launch additional places
       try {
         final ArrayList<String> command = new ArrayList<String>();
         command.add(java);
+        command.add("-Xbootclasspath:"
+            + ManagementFactory.getRuntimeMXBean().getBootClassPath());
         command.add("-cp");
         command.add(System.getProperty("java.class.path"));
         if (resilient) {
@@ -206,8 +226,8 @@ final class GlobalRuntimeImpl extends GlobalRuntime {
         }
         if (compact) {
           command.add("-D" + Configuration.APGAS_COMPACT + "=true");
-          command.add("-XX:CICompilerCount=3");
-          command.add("-XX:ParallelGCThreads=2");
+          // command.add("-XX:CICompilerCount=3");
+          // command.add("-XX:ParallelGCThreads=2");
         }
         if (factory != null) {
           command.add("-D" + Configuration.APGAS_FINISH + "=" + finishConfig);
@@ -218,22 +238,16 @@ final class GlobalRuntimeImpl extends GlobalRuntime {
             + (master == null ? transport.getAddress() : master));
         command.add(getClass().getSuperclass().getCanonicalName());
 
-        final String name = System.getProperty("apgas.launcher");
-        @SuppressWarnings("unchecked")
-        final BiConsumer<Integer, List<String>> launcher = name == null ? new Launcher()
-            : (BiConsumer<Integer, List<String>>) Class.forName(name)
-                .newInstance();
-        launcher.accept(p, command);
+        launcher.launch(p - 1, command);
+
         // wait for spawned places to join the global runtime
         while (maxPlace() < p) {
           try {
             Thread.sleep(100);
           } catch (final InterruptedException e) {
           }
-          for (final Process process : processes) {
-            if (!process.isAlive()) {
-              throw new IOException("A process exited prematurely");
-            }
+          if (!launcher.healthy()) {
+            throw new IOException("A process exited prematurely");
           }
         }
       } catch (final Throwable t) {
@@ -241,43 +255,6 @@ final class GlobalRuntimeImpl extends GlobalRuntime {
         shutdown();
         throw t;
       }
-    }
-  }
-
-  private class Launcher implements BiConsumer<Integer, List<String>> {
-    @Override
-    public void accept(Integer p, List<String> command) {
-      try {
-        for (int i = 0; i < p - 1; i++) {
-          Process process = exec(command);
-          synchronized (processes) {
-            if (dying <= 1) {
-              processes.add(process);
-              process = null;
-            }
-          }
-          if (process != null) {
-            process.destroyForcibly();
-            throw new IllegalStateException("Shutdown in progress");
-          }
-        }
-      } catch (final RuntimeException e) {
-        throw e;
-      } catch (final Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  /**
-   * Kills all spawned processes.
-   */
-  private void terminate() {
-    synchronized (processes) {
-      dying = 2;
-    }
-    for (final Process process : processes) {
-      process.destroyForcibly();
     }
   }
 
@@ -289,15 +266,17 @@ final class GlobalRuntimeImpl extends GlobalRuntime {
    * @param removed
    *          removed places
    */
-  void updatePlaces(List<Integer> added, List<Integer> removed) {
-    for (final int id : added) {
-      placeSet.add(new Place(id));
+  public void updatePlaces(List<Integer> added, List<Integer> removed) {
+    synchronized (placeSet) {
+      for (final int id : added) {
+        placeSet.add(new Place(id));
+      }
+      for (final int id : removed) {
+        placeSet.remove(new Place(id));
+      }
+      places = Collections.<Place> unmodifiableList(new ArrayList<Place>(
+          placeSet));
     }
-    for (final int id : removed) {
-      placeSet.remove(new Place(id));
-    }
-    places = Collections
-        .<Place> unmodifiableList(new ArrayList<Place>(placeSet));
     if (removed.isEmpty()) {
       return;
     }
@@ -306,7 +285,7 @@ final class GlobalRuntimeImpl extends GlobalRuntime {
       return;
     }
     final Consumer<Place> handler = this.handler;
-    pool.execute(new RecursiveAction() {
+    execute(new RecursiveAction() {
       private static final long serialVersionUID = 1052937749744648347L;
 
       @Override
@@ -328,16 +307,16 @@ final class GlobalRuntimeImpl extends GlobalRuntime {
     this.handler = handler;
   }
 
-  /**
-   * Asks the scheduler and the transport to shutdown.
-   */
   @Override
   public void shutdown() {
-    synchronized (processes) {
-      if (dying > 0) {
+    synchronized (this) {
+      if (dying) {
         return;
       }
-      dying = 1;
+      dying = true;
+    }
+    if (launcher != null) {
+      launcher.shutdown();
     }
     pool.shutdown();
     transport.shutdown();
@@ -358,37 +337,29 @@ final class GlobalRuntimeImpl extends GlobalRuntime {
   @Override
   public void async(Job f) {
     final Worker worker = currentWorker();
-    final Finish finish;
-    if (worker == null) {
-      finish = NullFinish.SINGLETON;
-    } else {
-      finish = worker.task.finish;
-      finish.spawn(here);
-    }
+    final Finish finish = worker == null ? NullFinish.SINGLETON
+        : worker.task.finish;
+    finish.spawn(here);
     new Task(finish, f, here).async(worker);
   }
 
   @Override
-  public void asyncat(Place p, SerializableJob f) {
+  public void asyncAt(Place p, SerializableJob f) {
     final Worker worker = currentWorker();
-    final Finish finish;
-    if (worker == null) {
-      finish = NullFinish.SINGLETON;
-    } else {
-      finish = worker.task.finish;
-      finish.spawn(p.id);
-    }
-    new Task(finish, f, here).asyncat(p);
+    final Finish finish = worker == null ? NullFinish.SINGLETON
+        : worker.task.finish;
+    finish.spawn(p.id);
+    new Task(finish, f, here).asyncat(p.id);
   }
 
   @Override
-  public void uncountedasyncat(Place p, SerializableJob f) {
-    new UncountedTask(f).uncountedasyncat(p);
+  public void uncountedAsyncAt(Place p, SerializableJob f) {
+    new UncountedTask(f).uncountedasyncat(p.id);
   }
 
   @Override
   public void at(Place p, SerializableJob f) {
-    Constructs.finish(() -> Constructs.asyncat(p, f));
+    Constructs.finish(() -> Constructs.asyncAt(p, f));
   }
 
   @SuppressWarnings("unchecked")
@@ -396,11 +367,11 @@ final class GlobalRuntimeImpl extends GlobalRuntime {
   public <T extends Serializable> T at(Place p, SerializableCallable<T> f) {
     final GlobalID id = new GlobalID();
     final Place home = here();
-    Constructs.finish(() -> Constructs.asyncat(p, () -> {
+    Constructs.finish(() -> Constructs.asyncAt(p, () -> {
       final T result = f.call();
-      Constructs.asyncat(home, () -> id.putHere(result));
+      Constructs.asyncAt(home, () -> id.putHere(result));
     }));
-    return (T) id.getHere();
+    return (T) id.removeHere();
   }
 
   @Override
@@ -425,5 +396,21 @@ final class GlobalRuntimeImpl extends GlobalRuntime {
    */
   public int maxPlace() {
     return transport.maxPlace();
+  }
+
+  @Override
+  public ExecutorService getExecutorService() {
+    return pool;
+  }
+
+  /**
+   * Submits a task to the pool making sure that a thread will be available to
+   * run it. run.
+   *
+   * @param task
+   *          the task
+   */
+  void execute(ForkJoinTask<?> task) {
+    pool.execute(task);
   }
 }

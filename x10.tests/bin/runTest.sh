@@ -271,6 +271,14 @@ function resolveParams {
         tcresilient_x10_only=0
     fi
 
+    ${EGREP} -q 'SKIP_HAZELCAST' $1
+    if [[ $? == 0 ]]; then
+        tcresilient_skip_hazelcast=1
+    else 
+        tcresilient_skip_hazelcast=0
+    fi
+
+
     # update expected counters
     case "${tcvcode}" in
 	"SUCCEED")
@@ -363,10 +371,11 @@ thrunstate="UNKNOWN_STATE"
 tcbackend="native"
 
 # resiliency modes
-tc_all_resilient_modes="0 1 12 99"
+tc_all_resilient_modes="0 1 12 22"
 tc_default_resilient_mode="0"
 tcresilient_modes="$tc_default_resilient_mode"
 typeset -i tcresilient_x10_only=0
+typeset -i tcresilient_skip_hazelcast=0
 
 # enable/disable timeout option
 # default: enable
@@ -729,6 +738,11 @@ function main {
 	if [[ -n "$numplaces_annotation" ]]; then
 	    my_nplaces=$numplaces_annotation
 	fi
+	timeout_annotation="$(sed -ne 's|^[[:space:]]*//[[:space:]]*TIMEOUT*\:[[:space:]]*\(.*\)|\1|p' $tc)"
+	my_timeout=$tctoutval
+	if [[ -n "$timeout_annotation" ]]; then
+	    my_timeout=$timeout_annotation
+	fi
 
 	# DAVE: 1/20/14 -- disabling this code block as it isn't clear to me why 
 	#       it is needed and I'm wondering if it is causing spurious timeout 
@@ -759,6 +773,9 @@ function main {
 		12) 
 		    mode_name="hc_resilient_finish"
 		    ;;
+		22) 
+		    mode_name="hc_opt_resilient_finish"
+		    ;;
 		99) 
 		    mode_name="resilient_x10rt"
 		    ;;
@@ -772,8 +789,13 @@ function main {
 		continue;
 	    fi
 
-            if [[ "$tcbackend" == "native" && "$mode_name" == "hc_resilient_finish" ]]; then
-		printf "\nSkipping hc_resilient_finish mode for Native X10\n";
+            if [[ "$tcbackend" == "native" && ( "$mode_name" == "hc_resilient_finish" || "$mode_name" == "hc_opt_resilient_finish" ) ]]; then
+		printf "\nSkipping hazelcast-based mode for Native X10\n";
+		continue;
+	    fi
+
+            if [[ $tcresilient_skip_hazelcast == 1 && ( "$mode_name" == "hc_resilient_finish" || "$mode_name" == "hc_opt_resilient_finish" ) ]]; then
+		printf "\nSkipping hazelcast-based mode; test case not applicable for hazelcast\n";
 		continue;
 	    fi
 
@@ -791,21 +813,17 @@ function main {
 	    else
 		managed_x10_extra_resiliency_args=""
 		if [[ "$jen_resiliency_mode" != "0" ]]; then
-		    if [[ $"$jen_resiliency_mode" == "12" ]]; then
-			managed_x10_extra_resiliency_args="-DX10RT_IMPL=JavaSockets -DX10RT_DATASTORE=Hazelcast"
-		    else
-			managed_x10_extra_resiliency_args="-DX10RT_IMPL=JavaSockets"
-		    fi
+		    managed_x10_extra_resiliency_args="-DX10RT_IMPL=JavaSockets"
 		fi
 		run_cmd="X10_RESILIENT_MODE=${jen_resiliency_mode} X10_NPLACES=${my_nplaces} X10_HOSTLIST=localhost $X10_HOME/x10.dist/bin/x10 -ms128M -mx512M ${managed_x10_extra_resiliency_args} ${managed_x10_extra_args} -t -v -J-ea ${className}"
 	    fi
 	    printf "\n${run_cmd}\n" >> $tcoutdat
 
-	    __jen_test_x10_timeout="$tctoutval"
+	    __jen_test_x10_timeout="$my_timeout"
 	    if [[ $tctimeout == 0 ]]; then
 		__jen_test_x10_command="$(echo $run_cmd >> $tcoutdat)"
 	    else
-		__jen_test_x10_command="$(echo execTimeOut $tctoutval $tcoutdat \"${run_cmd}\")"
+		__jen_test_x10_command="$(echo execTimeOut $my_timeout $tcoutdat \"${run_cmd}\")"
 	    fi
 
 	    printf "\n ++ E [EXECUTION]"
@@ -815,7 +833,7 @@ function main {
 		printf "\n===> $run_cmd >> $tcoutdat\n\n" 1>&2; \
 		$run_cmd >> $tcoutdat; \
 		else \
-		execTimeOut $tctoutval $tcoutdat "${run_cmd}"; \
+		execTimeOut $my_timeout $tcoutdat "${run_cmd}"; \
 		fi;
 	    )
 	    rc=$?

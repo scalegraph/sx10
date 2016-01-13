@@ -52,21 +52,19 @@ x10rt_msg_type x10rt_register_msg_receiver (x10rt_handler *cb,
     return counter++;
 }
 
-x10rt_msg_type x10rt_register_get_receiver (x10rt_finder *cb1, x10rt_notifier *cb2,
-                                            x10rt_finder *cuda_cb1, x10rt_notifier *cuda_cb2)
+x10rt_msg_type x10rt_register_get_receiver (x10rt_notifier *cb, x10rt_notifier *cuda_cb)
 {
-    x10rt_lgl_register_get_receiver(counter, cb1, cb2);
-    if (cuda_cb1!=NULL)
-        x10rt_lgl_register_get_receiver_cuda(counter, cuda_cb1, cuda_cb2);
+    x10rt_lgl_register_get_receiver(counter, cb);
+    if (cuda_cb!=NULL)
+        x10rt_lgl_register_get_receiver_cuda(counter, cuda_cb);
     return counter++;
 }
 
-x10rt_msg_type x10rt_register_put_receiver (x10rt_finder *cb1, x10rt_notifier *cb2,
-                                            x10rt_finder *cuda_cb1, x10rt_notifier *cuda_cb2)
+x10rt_msg_type x10rt_register_put_receiver (x10rt_notifier *cb, x10rt_notifier *cuda_cb)
 {
-    x10rt_lgl_register_put_receiver(counter, cb1, cb2);
-    if (cuda_cb1!=NULL)
-        x10rt_lgl_register_put_receiver_cuda(counter, cuda_cb1, cuda_cb2);
+    x10rt_lgl_register_put_receiver(counter, cb);
+    if (cuda_cb!=NULL)
+        x10rt_lgl_register_put_receiver_cuda(counter, cuda_cb);
     return counter++;
 }
 
@@ -129,11 +127,11 @@ void x10rt_send_msg (x10rt_msg_params *p)
 }
 
 
-void x10rt_send_get (x10rt_msg_params *p, void *buf, x10rt_copy_sz len)
-{ return x10rt_lgl_send_get(p, buf, len); }
+void x10rt_send_get (x10rt_msg_params *p, void *srcAddr, void*dstAddr, x10rt_copy_sz len)
+{ return x10rt_lgl_send_get(p, srcAddr, dstAddr, len); }
 
-void x10rt_send_put (x10rt_msg_params *p, void *buf, x10rt_copy_sz len)
-{ return x10rt_lgl_send_put(p, buf, len); }
+void x10rt_send_put (x10rt_msg_params *p, void *srcAddr, void *dstAddr, x10rt_copy_sz len)
+{ return x10rt_lgl_send_put(p, srcAddr, dstAddr, len); }
 
 void x10rt_remote_alloc (x10rt_place place, x10rt_remote_ptr sz,
                          x10rt_completion_handler3 *ch, void *arg)
@@ -151,6 +149,9 @@ void x10rt_remote_ops (x10rt_remote_op_params *opv, size_t opc)
 
 void x10rt_register_mem (void *ptr, size_t len)
 { x10rt_lgl_register_mem(ptr, len); }
+
+void x10rt_deregister_mem (void *ptr)
+{ x10rt_lgl_deregister_mem(ptr); }
 
 void x10rt_blocks_threads (x10rt_place d, x10rt_msg_type type, int dyn_shm,
                            int *blocks, int *threads, const int *cfg)
@@ -215,12 +216,13 @@ void x10rt_barrier (x10rt_team team, x10rt_place role,
     x10rt_lgl_barrier(team, role, ch, arg);
 }
 
-void x10rt_bcast (x10rt_team team, x10rt_place role,
+bool x10rt_bcast (x10rt_team team, x10rt_place role,
                   x10rt_place root, const void *sbuf, void *dbuf,
                   size_t el, size_t count,
+                  x10rt_completion_handler *errch,
                   x10rt_completion_handler *ch, void *arg)
 {
-    x10rt_lgl_bcast(team, role, root, sbuf, dbuf, el, count, ch, arg);
+    return x10rt_lgl_bcast(team, role, root, sbuf, dbuf, el, count, errch, ch, arg);
 }
 
 void x10rt_scatter (x10rt_team team, x10rt_place role,
@@ -231,28 +233,32 @@ void x10rt_scatter (x10rt_team team, x10rt_place role,
     x10rt_lgl_scatter(team, role, root, sbuf, dbuf, el, count, ch, arg);
 }
 
-void x10rt_scatterv (x10rt_team team, x10rt_place role,
-                    x10rt_place root, const void *sbuf, const void *soffsets, const void *scounts,
-                    void *dbuf, size_t dcount,
-                    size_t el, x10rt_completion_handler *ch, void *arg)
+bool x10rt_scatterv (x10rt_team team, x10rt_place role,
+                     x10rt_place root, const void *sbuf,
+                     const void *soffsets, const void *scounts,
+                     void *dbuf, size_t dcount, size_t el,
+                     x10rt_completion_handler *errch,
+                     x10rt_completion_handler *ch, void *arg)
 {
-    x10rt_lgl_scatterv(team, role, root, sbuf, soffsets, scounts, dbuf, dcount, el, ch, arg);
+    return x10rt_lgl_scatterv(team, role, root, sbuf, soffsets, scounts, dbuf, dcount, el, errch, ch, arg);
 }
+
 
 void x10rt_gather (x10rt_team team, x10rt_place role,
-                    x10rt_place root, const void *sbuf, void *dbuf,
-                    size_t el, size_t count,
-                    x10rt_completion_handler *ch, void *arg)
+                               x10rt_place root, const void *sbuf,
+                                   void *dbuf, size_t el, size_t count,
+                                   x10rt_completion_handler *ch, void *arg)
 {
-    x10rt_lgl_gather(team, role, root, sbuf, dbuf, el, count, ch, arg);
+        x10rt_lgl_gather (team, role, root, sbuf, dbuf, el, count, ch, arg);
 }
 
-void x10rt_gatherv (x10rt_team team, x10rt_place role,
-                    x10rt_place root, const void *sbuf, size_t scount,
-                    void *dbuf, const void *doffsets, const void *dcounts,
-                    size_t el, x10rt_completion_handler *ch, void *arg)
+bool x10rt_gatherv (x10rt_team team, x10rt_place role, x10rt_place root,
+                            const void *sbuf, size_t scount, void *dbuf, const void *doffsets, const void *dcounts,
+                            size_t el,
+                            x10rt_completion_handler *errch,
+                            x10rt_completion_handler *ch, void *arg)
 {
-    x10rt_lgl_gatherv(team, role, root, sbuf, scount, dbuf, doffsets, dcounts, el, ch, arg);
+        return x10rt_lgl_gatherv (team, role, root, sbuf, scount, dbuf, doffsets, dcounts, el, errch, ch, arg);
 }
 
 void x10rt_allgather (x10rt_team team, x10rt_place role,
@@ -270,6 +276,7 @@ void x10rt_allgatherv (x10rt_team team, x10rt_place role,
 {
 	x10rt_lgl_allgatherv(team, role, sbuf, scount, dbuf, doffsets, dcounts, el, ch, arg);
 }
+
 void x10rt_alltoall (x10rt_team team, x10rt_place role,
                      const void *sbuf, void *dbuf,
                      size_t el, size_t count,
@@ -297,14 +304,15 @@ void x10rt_reduce (x10rt_team team, x10rt_place role,
     x10rt_lgl_reduce(team, role, root, sbuf, dbuf, op, dtype, count, ch, arg);
 }
 
-void x10rt_allreduce (x10rt_team team, x10rt_place role,
+bool x10rt_allreduce (x10rt_team team, x10rt_place role,
                       const void *sbuf, void *dbuf,
                       x10rt_red_op_type op, 
                       x10rt_red_type dtype,
                       size_t count,
+                      x10rt_completion_handler *errch,
                       x10rt_completion_handler *ch, void *arg)
 {
-    x10rt_lgl_allreduce(team, role, sbuf, dbuf, op, dtype, count, ch, arg);
+    return x10rt_lgl_allreduce(team, role, sbuf, dbuf, op, dtype, count, errch, ch, arg);
 }
 
 void x10rt_one_setter (void *arg)

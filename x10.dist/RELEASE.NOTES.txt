@@ -1,32 +1,15 @@
-X10 Release 2.5.2
+X10 Release 2.5.4
 
 HIGHLIGHTS OF THIS RELEASE
 
-Although there were no X10 language changes in X10 2.5.2, this release
-does contain user-visible changes to the structure of the X10 class
-library.  
-   (1)  The implementation of the X10 Runtime was moved from the
-        x10.lang package to a new x10.xrx package.  Unlike x10.lang,
-	this package is not auto-imported into all programs. Programs
-	that make calls to x10.xrx.Runtime (or other impacted classes)
-	will need to be updated to import the used XRX classes. 
-   (2)  We continue to improve Resilient/Elastic X10 and have made a
-        number of API improvements to classes in the
-	x10.util.resilient package.
-   (3)  We have added built-in support for ghost regions to the
-        x10.regionarray.DistArray class.  Some mostly internal changes
-	to the DistArray API were made to enable this new
-	functionality (XTENLANG-3488,3489).
-
-This release also contains significant enhancements to the x10rt_mpi
-implementation, including exploitation of MPI-3 non-blocking
-collections by X10 Team operations to enable unrestricted mixing of
-APGAS asynchronous messaging with Team collective operations.
-
-This release is also the first time we are bundling the Lulesh proxy
-application with the X10 benchmarks. We continue to improve our Lulesh
-code, but believe it has now reached a level of stability and
-performance that make it generally usable as a X10 benchmark.
+The main features of this release are improvements in Resilient X10.
+  (a) Significant performance improvements to the implementations of
+      resilient finish to eliminate resiliency overheads of local
+      activity creation. 
+  (b) The addition of ULFM-MPI as a network transport for Resilient
+      X10 applications.
+  (c) Enhanced standard library support for writing Resilient X10
+      applications and frameworks (see x10.util.resilient).
 
 LIMITATIONS OF THIS RELEASE
 
@@ -54,30 +37,31 @@ we do almost all of our testing against g++ 4.4.
 
 SUMMARY OF ISSUES RESOLVED IN THIS RELEASE
 
-Below is a summary of JIRA issues addressed for the X10 2.5.2
+Below is a summary of JIRA issues addressed for the X10 2.5.4
 
-Release Notes - X10 - Version X10 2.5.2
+Release Notes - X10 - Version X10 2.5.4
 
 ** New Features and Improvements
-    * [XTENLANG-1373] - Support for ghost cells in distributed arrays
-    * [XTENLANG-3447] - Splittable PNRG
-    * [XTENLANG-3479] - Add FileReader.offset()
-    * [XTENLANG-3480] - GML: add rank-one update (DGER)
-    * [XTENLANG-3484] - Move XRX runtime to x10.xrx package (out of x10.lang)
-    * [XTENLANG-3488] - Replace Dist.offset with Region.indexOf
-    * [XTENLANG-3490] - x10rt_mpi should default to MPI_THREAD_MULTIPLE
+    * [XTENLANG-3536] - Indicate cancellation via CancellationException
+    * [XTENLANG-3539] - Update X10DT to Eclipse Luna (4.4) Release
+    * [XTENLANG-3540] - SparsePlaceGroup should support any set of Places; don't require ordering
 
 ** Bugs
-    * [XTENLANG-3354] - asyncCopy deadlocks on BG/Q
-    * [XTENLANG-3355] - alltoall segfaults on BG/Q
-    * [XTENLANG-3485] - On MacOs the jblas library must have extension .jnilib and not .so
-    * [XTENLANG-3486] - GML: transpose DenseMatrix.T(DenseMatrix) should store to invocation target
-    * [XTENLANG-3489] - Replace x10.regionarray.PeriodicDist with x10.regionarray.PeriodicBoundaryConditions
-    * [XTENLANG-3492] - Team creation fails over SparsePlaceGroup
+    * [XTENLANG-1551] - AST incompleteness -- ClassDecl has no body
+    * [XTENLANG-1834] - Missing comma in parameter list, but compiler error message points to the first valid line of code in the file
+    * [XTENLANG-1841] - Spurious initial error message when method body doens't parse
+    * [XTENLANG-2860] - Compiler crashes on string++
+    * [XTENLANG-3500] - NativeX10: poor performance of array indexing in loop in Lulesh
+    * [XTENLANG-3501] - Combination of @StackAllocateUninitialized rails and NO_CHECKS yields incorrect results on Lulesh
+    * [XTENLANG-3509] - Problem creating new team from a non-member place
+    * [XTENLANG-3510] - Bug in generated Java code for tuple of generic types
+    * [XTENLANG-3541] - Resilient X10: 'at' unblocked too soon on place failure
+    * [XTENLANG-3545] - Team collectives fail for user-defined types over X10RT=MPI
+
 
 For the details of JIRA issues fixed in this release, see
-http://jira.codehaus.org/secure/ReleaseNote.jspa?projectId=11812&version=20767
+  https://xtenlang.atlassian.net/jira/secure/ReleaseNote.jspa?projectId=10005&version=10300
 
 Please use the X10 JIRA to report bugs, after ensuring the problem is
 not already reported:
-http://jira.codehaus.org/secure/IssueNavigator.jspa?reset=true&&pid=11812&resolution=-1
+  https://xtenlang.atlassian.net/projects/XTENLANG/issues

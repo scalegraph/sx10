@@ -30,6 +30,7 @@
 #include <x10rt_front.h>
 
 #define ESCAPE_IF_ERR if (g.error_code != X10RT_ERR_OK) return; else { }
+#define ESCAPE_IF_ERR_BOOL if (g.error_code != X10RT_ERR_OK) return false; else { }
 #define CHECK_ERR_AND_RETURN if (g.error_code != X10RT_ERR_OK) return g.error_code; else { }
 
 #define PROP_ERR(x, y) do { \
@@ -528,18 +529,16 @@ void x10rt_lgl_register_msg_receiver (x10rt_msg_type msg_type, x10rt_handler *cb
     x10rt_net_register_msg_receiver(msg_type, cb);
 }
 
-void x10rt_lgl_register_get_receiver (x10rt_msg_type msg_type,
-                                      x10rt_finder *cb1, x10rt_notifier *cb2)
+void x10rt_lgl_register_get_receiver (x10rt_msg_type msg_type, x10rt_notifier *cb)
 {
     ESCAPE_IF_ERR;
-    x10rt_net_register_get_receiver(msg_type, cb1, cb2);
+    x10rt_net_register_get_receiver(msg_type, cb);
 }
 
-void x10rt_lgl_register_put_receiver (x10rt_msg_type msg_type,
-                                      x10rt_finder *cb1, x10rt_notifier *cb2)
+void x10rt_lgl_register_put_receiver (x10rt_msg_type msg_type, x10rt_notifier *cb)
 {
     ESCAPE_IF_ERR;
-    x10rt_net_register_put_receiver(msg_type, cb1, cb2);
+    x10rt_net_register_put_receiver(msg_type, cb);
 }
 
 void x10rt_lgl_register_msg_receiver_cuda (x10rt_msg_type msg_type,
@@ -559,15 +558,14 @@ void x10rt_lgl_register_msg_receiver_cuda (x10rt_msg_type msg_type,
     }
 }
 
-void x10rt_lgl_register_get_receiver_cuda (x10rt_msg_type msg_type,
-                                           x10rt_finder *cb1, x10rt_notifier *cb2)
+void x10rt_lgl_register_get_receiver_cuda (x10rt_msg_type msg_type, x10rt_notifier *cb)
 {
     ESCAPE_IF_ERR;
     for (x10rt_place i=0 ; i<g.naccels[x10rt_lgl_here()] ; ++i) {
         switch (g.type[g.child[x10rt_lgl_here()][i]]) {
             case X10RT_LGL_CUDA: {
                 x10rt_cuda_ctx *cctx = static_cast<x10rt_cuda_ctx*>(g.accel_ctxs[i]);
-                x10rt_cuda_register_get_receiver(cctx, msg_type, cb1, cb2);
+                x10rt_cuda_register_get_receiver(cctx, msg_type, cb);
             } break;
             default:
             fatal("Invalid node category.\n");
@@ -575,15 +573,14 @@ void x10rt_lgl_register_get_receiver_cuda (x10rt_msg_type msg_type,
     }
 }
 
-void x10rt_lgl_register_put_receiver_cuda (x10rt_msg_type msg_type,
-                                           x10rt_finder *cb1, x10rt_notifier *cb2)
+void x10rt_lgl_register_put_receiver_cuda (x10rt_msg_type msg_type, x10rt_notifier *cb)
 {
     ESCAPE_IF_ERR;
     for (x10rt_place i=0 ; i<g.naccels[x10rt_lgl_here()] ; ++i) {
         switch (g.type[g.child[x10rt_lgl_here()][i]]) {
             case X10RT_LGL_CUDA: {
                 x10rt_cuda_ctx *cctx = static_cast<x10rt_cuda_ctx*>(g.accel_ctxs[i]);
-                x10rt_cuda_register_put_receiver(cctx, msg_type, cb1, cb2);
+                x10rt_cuda_register_put_receiver(cctx, msg_type, cb);
             } break;
             default:
             fatal("Invalid node category.\n");
@@ -638,7 +635,7 @@ void x10rt_lgl_send_msg (x10rt_msg_params *p)
     }
 }
 
-void x10rt_lgl_send_get (x10rt_msg_params *p, void *buf, x10rt_copy_sz len)
+void x10rt_lgl_send_get (x10rt_msg_params *p, void *srcAddr, void *dstAddr, x10rt_copy_sz len)
 {
     ESCAPE_IF_ERR;
     x10rt_place d = p->dest_place;
@@ -646,13 +643,13 @@ void x10rt_lgl_send_get (x10rt_msg_params *p, void *buf, x10rt_copy_sz len)
     assert(d < x10rt_lgl_nplaces());
 
     if (d < x10rt_lgl_nhosts()) {
-        x10rt_net_send_get(p, buf, len);
+        x10rt_net_send_get(p, srcAddr, dstAddr, len);
     } else if (x10rt_lgl_parent(d) == x10rt_lgl_here()) {
         // local accelerator
         switch (x10rt_lgl_type(d)) {
             case X10RT_LGL_CUDA: {
                 x10rt_cuda_ctx *cctx = static_cast<x10rt_cuda_ctx*>(g.accel_ctxs[g.index[d]]);
-                x10rt_cuda_send_get(cctx, p, buf, len);
+                x10rt_cuda_send_get(cctx, p, srcAddr, dstAddr, len);
                 x10rt_net_unblock_probe();
             } break;
             default: {
@@ -665,7 +662,7 @@ void x10rt_lgl_send_get (x10rt_msg_params *p, void *buf, x10rt_copy_sz len)
     }
 }
 
-void x10rt_lgl_send_put (x10rt_msg_params *p, void *buf, x10rt_copy_sz len)
+void x10rt_lgl_send_put (x10rt_msg_params *p, void *srcAddr, void *dstAddr, x10rt_copy_sz len)
 {
     ESCAPE_IF_ERR;
     x10rt_place d = p->dest_place;
@@ -673,13 +670,13 @@ void x10rt_lgl_send_put (x10rt_msg_params *p, void *buf, x10rt_copy_sz len)
     assert(d < x10rt_lgl_nplaces());
 
     if (d < x10rt_lgl_nhosts()) {
-        x10rt_net_send_put(p, buf, len);
+        x10rt_net_send_put(p, srcAddr, dstAddr, len);
     } else if (x10rt_lgl_parent(d) == x10rt_lgl_here()) {
         // local accelerator
         switch (x10rt_lgl_type(d)) {
             case X10RT_LGL_CUDA: {
                 x10rt_cuda_ctx *cctx = static_cast<x10rt_cuda_ctx*>(g.accel_ctxs[g.index[d]]);
-                x10rt_cuda_send_put(cctx, p, buf, len);
+                x10rt_cuda_send_put(cctx, p, srcAddr, dstAddr, len);
                	x10rt_net_unblock_probe();
             } break;
             default: {
@@ -809,6 +806,12 @@ void x10rt_lgl_register_mem (void *ptr, size_t len)
 {
     ESCAPE_IF_ERR;
     x10rt_net_register_mem(ptr, len);
+}
+
+void x10rt_lgl_deregister_mem (void *ptr)
+{
+    ESCAPE_IF_ERR;
+    x10rt_net_deregister_mem(ptr);
 }
 
 void x10rt_lgl_blocks_threads (x10rt_place d, x10rt_msg_type type, int dyn_shm,
@@ -1075,17 +1078,19 @@ void x10rt_lgl_barrier (x10rt_team team, x10rt_place role,
     }
 }
 
-void x10rt_lgl_bcast (x10rt_team team, x10rt_place role,
+bool x10rt_lgl_bcast (x10rt_team team, x10rt_place role,
                       x10rt_place root, const void *sbuf, void *dbuf,
                       size_t el, size_t count,
+                      x10rt_completion_handler *errch,
                       x10rt_completion_handler *ch, void *arg)
 {
-    ESCAPE_IF_ERR;
+    ESCAPE_IF_ERR_BOOL;
     if (has_collectives >= X10RT_COLL_ALLBLOCKINGCOLLECTIVES) {
-        x10rt_net_bcast(team, role, root, sbuf, dbuf, el, count, ch, arg);
+        return x10rt_net_bcast(team, role, root, sbuf, dbuf, el, count, errch, ch, arg);
     } else {
-        x10rt_emu_bcast(team, role, root, sbuf, dbuf, el, count, ch, arg);
+        x10rt_emu_bcast(team, role, root, sbuf, dbuf, el, count, errch, ch, arg);
         while (x10rt_emu_coll_probe());
+        return true; //TODO: should not always return true, but x10rt_emu_bcast is not used in Team.x10
     }
 }
 
@@ -1101,6 +1106,54 @@ void x10rt_lgl_scatter (x10rt_team team, x10rt_place role,
         x10rt_emu_scatter(team, role, root, sbuf, dbuf, el, count, ch, arg);
         while (x10rt_emu_coll_probe());
     }
+}
+
+bool x10rt_lgl_scatterv (x10rt_team team, x10rt_place role,
+                        x10rt_place root, const void *sbuf, const void *soffsets, const void *scounts,
+                        void *dbuf, size_t dcount,
+                        size_t el,
+                        x10rt_completion_handler *errch,
+                        x10rt_completion_handler *ch, void *arg)
+{
+    ESCAPE_IF_ERR_BOOL;
+    if (has_collectives >= X10RT_COLL_ALLBLOCKINGCOLLECTIVES) {
+        return x10rt_net_scatterv(team, role, root, sbuf, soffsets, scounts, dbuf, dcount, el, errch, ch, arg);
+    } else {
+        x10rt_emu_scatterv(team, role, root, sbuf, soffsets, scounts, dbuf, dcount, el, errch, ch, arg);
+        while (x10rt_emu_coll_probe());
+        return true; //TODO: should not always return true, but x10rt_emu_scatterv is not used in Team.x10
+    }
+}
+
+void x10rt_lgl_gather (x10rt_team team, x10rt_place role,
+					  x10rt_place root, const void *sbuf,
+					  void *dbuf, size_t el, size_t count,
+					  x10rt_completion_handler *ch, void *arg)
+{
+	ESCAPE_IF_ERR;
+	if (has_collectives >= X10RT_COLL_ALLBLOCKINGCOLLECTIVES) {
+	    x10rt_net_gather(team, role, root, sbuf, dbuf, el, count, ch, arg);
+	} else {
+	    x10rt_emu_gather(team, role, root, sbuf, dbuf, el, count, ch, arg);
+	    while (x10rt_emu_coll_probe());
+	}
+}
+
+bool x10rt_lgl_gatherv (x10rt_team team, x10rt_place role, x10rt_place root,
+		               const void *sbuf, size_t scount, void *dbuf,
+		               const void *doffsets, const void *dcounts,
+		               size_t el,
+		               x10rt_completion_handler *errch,
+		               x10rt_completion_handler *ch, void *arg)
+{
+	ESCAPE_IF_ERR_BOOL;
+	if (has_collectives >= X10RT_COLL_ALLBLOCKINGCOLLECTIVES) {
+	    return x10rt_net_gatherv(team, role, root, sbuf, scount, dbuf, doffsets, dcounts, el, errch, ch, arg);
+	} else {
+	    x10rt_emu_gatherv(team, role, root, sbuf, scount, dbuf, doffsets, dcounts, el, errch, ch, arg);
+	    while (x10rt_emu_coll_probe());
+	    return true;  //TODO: should not always return true, but x10rt_emu_gatherv is not used by Team.x10
+	}
 }
 
 void x10rt_lgl_alltoall (x10rt_team team, x10rt_place role,
@@ -1133,19 +1186,21 @@ void x10rt_lgl_reduce (x10rt_team team, x10rt_place role,
     }
 }
 
-void x10rt_lgl_allreduce (x10rt_team team, x10rt_place role,
+bool x10rt_lgl_allreduce (x10rt_team team, x10rt_place role,
                           const void *sbuf, void *dbuf,
                           x10rt_red_op_type op, 
                           x10rt_red_type dtype,
                           size_t count,
+                          x10rt_completion_handler *errch,
                           x10rt_completion_handler *ch, void *arg)
 {
-    ESCAPE_IF_ERR;
+	ESCAPE_IF_ERR_BOOL;
     if (has_collectives >= X10RT_COLL_ALLBLOCKINGCOLLECTIVES) {
-        x10rt_net_allreduce(team, role, sbuf, dbuf, op, dtype, count, ch, arg);
+        return x10rt_net_allreduce(team, role, sbuf, dbuf, op, dtype, count, errch, ch, arg);
     } else {
         x10rt_emu_reduce(team, role, 0, sbuf, dbuf, op, dtype, count, ch, arg, true);
         while (x10rt_emu_coll_probe());
+        return true; //TODO: should not always return true, but x10rt_emu_reduce is not used
     }
 }
 

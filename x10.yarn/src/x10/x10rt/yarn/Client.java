@@ -195,7 +195,7 @@ public class Client {
 		
 		StringBuilder uploadedFiles = new StringBuilder();
 		
-		// upload any files specified via -copy argument
+		// upload any files specified via -upload argument to the x10 script
 		String upload = System.getProperty(ApplicationMaster.X10_YARNUPLOAD);
 		if (upload != null) {
 			String[] files = upload.split(",");
@@ -248,6 +248,7 @@ public class Client {
 		if (upload != null) vargs.add("-D"+ApplicationMaster.X10_YARNUPLOAD+"="+uploadedFiles.toString());
 		
 		vargs.add("-D"+ApplicationMaster.X10_YARN_MAIN+"="+appName);
+		vargs.add("-Dorg.apache.commons.logging.simplelog.showdatetime=true");
 		// Set class name
 		vargs.add(appMasterMainClass);
 		
