@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2014.
+ *  (C) Copyright IBM Corporation 2014-2015.
  */
 import harness.x10Test;
 
@@ -19,8 +19,9 @@ public class BenchmarkAllreduce extends x10Test {
     private static ITERS = 10;
     private static MAX_SIZE = 2<<19;
 
-	public def run(): Boolean = {
+	public def run(): Boolean {
         finish for (place in Place.places()) at (place) async {
+            Team.WORLD.allreduce(1.0, Team.ADD); // warm up comms layer
             for (var s:Long= 1; s <= MAX_SIZE; s *= 2) {
                 val src = new Rail[Double](s, (i:Long) => i as Double);
                 val dst = new Rail[Double](s);
@@ -42,7 +43,7 @@ public class BenchmarkAllreduce extends x10Test {
         return true;
 	}
 
-	public static def main(var args: Rail[String]): void = {
+	public static def main(var args: Rail[String]): void {
 		new BenchmarkAllreduce().execute();
 	}
 }

@@ -66,11 +66,9 @@ X10RT_C void x10rt_net_register_msg_receiver (x10rt_msg_type msg_type, x10rt_han
  *
  * \param msg_type As in x10rt_lgl_register_get_receiver
  *
- * \param cb1 As in x10rt_lgl_register_get_receiver
- * \param cb2 As in x10rt_lgl_register_get_receiver
+ * \param cb As in x10rt_lgl_register_get_receiver
  */
-X10RT_C void x10rt_net_register_get_receiver (x10rt_msg_type msg_type,
-                                              x10rt_finder *cb1, x10rt_notifier *cb2);
+X10RT_C void x10rt_net_register_get_receiver (x10rt_msg_type msg_type, x10rt_notifier *cb);
 
 
 /** Register handlers for a put message.
@@ -79,11 +77,9 @@ X10RT_C void x10rt_net_register_get_receiver (x10rt_msg_type msg_type,
  *
  * \param msg_type As in x10rt_lgl_register_put_receiver
  *
- * \param cb1 As in x10rt_lgl_register_put_receiver
- * \param cb2 As in x10rt_lgl_register_put_receiver
+ * \param cb As in x10rt_lgl_register_put_receiver
  */
-X10RT_C void x10rt_net_register_put_receiver (x10rt_msg_type msg_type,
-                                              x10rt_finder *cb1, x10rt_notifier *cb2);
+X10RT_C void x10rt_net_register_put_receiver (x10rt_msg_type msg_type, x10rt_notifier *cb);
 
 
 /** A single-threaded SPMD host barrier. \deprecated
@@ -112,17 +108,19 @@ X10RT_C void x10rt_net_send_msg (x10rt_msg_params *p);
 
 /** \see #x10rt_lgl_send_msg
  * \param p As in x10rt_lgl_send_msg.
- * \param buf As in x10rt_lgl_send_msg.
+ * \param srcAddr As in x10rt_lgl_send_msg.
+ * \param dstAddr As in x10rt_lgl_send_msg.
  * \param len As in x10rt_lgl_send_msg.
  */
-X10RT_C void x10rt_net_send_get (x10rt_msg_params *p, void *buf, x10rt_copy_sz len);
+X10RT_C void x10rt_net_send_get (x10rt_msg_params *p, void *srcAddr, void *dstAddr, x10rt_copy_sz len);
 
 /** \see #x10rt_lgl_send_msg
  * \param p As in x10rt_lgl_send_msg.
- * \param buf As in x10rt_lgl_send_msg.
+ * \param srcAddr As in x10rt_lgl_send_msg.
+ * \param dstAddr As in x10rt_lgl_send_msg.
  * \param len As in x10rt_lgl_send_msg.
  */
-X10RT_C void x10rt_net_send_put (x10rt_msg_params *p, void *buf, x10rt_copy_sz len);
+X10RT_C void x10rt_net_send_put (x10rt_msg_params *p, void *srcAddr, void *dstAddr, x10rt_copy_sz len);
 
 /** Handle any oustanding message from the network by calling the registered callbacks.  \see #x10rt_lgl_probe
  */
@@ -164,6 +162,11 @@ X10RT_C void x10rt_net_remote_ops (x10rt_remote_op_params *ops, size_t num_ops);
  * \param len As in #x10rt_lgl_register_mem
  */
 X10RT_C void x10rt_net_register_mem (void *ptr, size_t len);
+
+/** \see #x10rt_lgl_deregister_mem
+ * \param ptr As in #x10rt_lgl_deregister_mem
+ */
+X10RT_C void x10rt_net_deregister_mem (void *ptr);
 
 /** Shut down the network layer.  \see #x10rt_lgl_finalize
  */
@@ -233,9 +236,10 @@ X10RT_C void x10rt_net_barrier (x10rt_team team, x10rt_place role,
  * \param ch As in #x10rt_lgl_bcast
  * \param arg As in #x10rt_lgl_bcast
  */
-X10RT_C void x10rt_net_bcast (x10rt_team team, x10rt_place role,
+X10RT_C bool x10rt_net_bcast (x10rt_team team, x10rt_place role,
                               x10rt_place root, const void *sbuf, void *dbuf,
                               size_t el, size_t count,
+                              x10rt_completion_handler *errch,
                               x10rt_completion_handler *ch, void *arg);
 
 /** \see #x10rt_lgl_scatter
@@ -253,6 +257,61 @@ X10RT_C void x10rt_net_scatter (x10rt_team team, x10rt_place role,
                                 x10rt_place root, const void *sbuf, void *dbuf,
                                 size_t el, size_t count,
                                 x10rt_completion_handler *ch, void *arg);
+
+/** \see #x10rt_lgl_scatterv
+ * \param team As in #x10rt_lgl_scatterv
+ * \param role As in #x10rt_lgl_scatterv
+ * \param root As in #x10rt_lgl_scatterv
+ * \param sbuf As in #x10rt_lgl_scatterv
+ * \param soffsets As in #x10rt_lgl_scatterv
+ * \param scounts As in #x10rt_lgl_scatterv
+ * \param dbuf As in #x10rt_lgl_scatterv
+ * \param dcount As in #x10rt_lgl_scatterv
+ * \param el As in #x10rt_lgl_scatterv
+ * \param ch As in #x10rt_lgl_scatterv
+ * \param arg As in #x10rt_lgl_scatterv
+ */
+X10RT_C bool x10rt_net_scatterv (x10rt_team team, x10rt_place role,
+                                 x10rt_place root, const void *sbuf, const void *soffsets, const void *scounts,
+                                 void *dbuf, size_t dcount,
+                                 size_t el,
+                                 x10rt_completion_handler *errch,
+                                 x10rt_completion_handler *ch, void *arg);
+/** \see #x10rt_lgl_gather
+ * \param team As in #x10rt_lgl_gather
+ * \param role As in #x10rt_lgl_gather
+ * \param root As in #x10rt_lgl_gather
+ * \param sbuf As in #x10rt_lgl_gather
+ * \param dbuf As in #x10rt_lgl_gather
+ * \param el As in #x10rt_lgl_gather
+ * \param count As in #x10rt_lgl_gather
+ * \param ch As in #x10rt_lgl_gather
+ * \param arg As in #x10rt_lgl_gather
+ */
+X10RT_C void x10rt_net_gather (x10rt_team team, x10rt_place role,
+							   x10rt_place root, const void *sbuf,
+							   void *dbuf, size_t el, size_t count,
+							   x10rt_completion_handler *ch, void *arg);
+
+
+/** \see #x10rt_lgl_gatherv
+ * \param team As in #x10rt_lgl_gatherv
+ * \param role As in #x10rt_lgl_gatherv
+ * \param root As in #x10rt_lgl_gatherv
+ * \param sbuf As in #x10rt_lgl_gatherv
+ * \param scount As in #x10rt_lgl_gatherv
+ * \param dbuf As in #x10rt_lgl_gatherv
+ * \param doffsets As in #x10rt_lgl_gatherv
+ * \param dcounts As in #x10rt_lgl_gatherv
+ * \param el As in #x10rt_lgl_gatherv
+ * \param ch As in #x10rt_lgl_gatherv
+ * \param arg As in #x10rt_lgl_gatherv
+ */
+X10RT_C bool x10rt_net_gatherv (x10rt_team team, x10rt_place role, x10rt_place root,
+		                        const void *sbuf, size_t scount, void *dbuf, const void *doffsets, const void *dcounts,
+		                        size_t el,
+		                        x10rt_completion_handler *errch,
+		                        x10rt_completion_handler *ch, void *arg);
 
 /** \see #x10rt_lgl_alltoall
  * \param team As in #x10rt_lgl_alltoall
@@ -298,11 +357,12 @@ X10RT_C void x10rt_net_reduce (x10rt_team team, x10rt_place role,
  * \param ch As in #x10rt_lgl_allreduce
  * \param arg As in #x10rt_lgl_allreduce
  */
-X10RT_C void x10rt_net_allreduce (x10rt_team team, x10rt_place role,
+X10RT_C bool x10rt_net_allreduce (x10rt_team team, x10rt_place role,
                                   const void *sbuf, void *dbuf,
                                   x10rt_red_op_type op,
                                   x10rt_red_type dtype,
                                   size_t count,
+                                  x10rt_completion_handler *errch,
                                   x10rt_completion_handler *ch, void *arg);
 
 /** Counters exposed to the backend for direct (i.e. fast) manipulation.

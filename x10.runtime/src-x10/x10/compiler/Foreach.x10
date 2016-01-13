@@ -119,11 +119,10 @@ public final class Foreach {
      * @param body a closure that executes over a contiguous range of indices, 
      *   returning the reduced value for that range
      * @param reduce the reduction operation
-     * @param identity the identity value for the reduction operation such that reduce(identity,f)=f
      */
     public static @Inline def sequentialReduce[T](min:Long, max:Long,
                                     body:(min:Long, max:Long)=>T,
-                                    reduce:(a:T,b:T)=>T, identity:T):T{
+                                    reduce:(a:T,b:T)=>T):T{
         return body(min, max);
     }
 
@@ -195,14 +194,20 @@ public final class Foreach {
      */
     public static @Inline def block(min:Long, max:Long,
                                     body:(min:Long, max:Long)=>void) {
-        if (Runtime.NTHREADS == 1n) {
+        val nthreads = Runtime.NTHREADS;
+        if (nthreads == 1n) {
             sequential(min, max, body);
         } else {
-            finish for (var t:Long = Runtime.NTHREADS-1; t >= 0; t--) {
+            val numElems = max - min + 1;
+	        if (numElems < 1) return;
+            val blockSize = numElems/nthreads;
+            val leftOver = numElems - nthreads*blockSize;
+            finish for (var t:Long = nthreads-1; t >= 0; t--) {
                 val myT = t;
                 async {
-                    val block = BlockingUtils.partitionBlock(min, max, Runtime.NTHREADS, myT);
-                    body(block.min, block.max);
+                    val lo = min + blockSize*myT + (myT < leftOver ? myT : leftOver);
+                    val hi = lo + blockSize + (myT < leftOver ? 0 : -1);
+                    body(lo, hi);
                 }
             }
         }
@@ -237,19 +242,25 @@ public final class Foreach {
     public static @Inline def blockReduce[T](min:Long, max:Long,
                                     body:(min:Long, max:Long)=>T,
                                     reduce:(a:T,b:T)=>T):T{
-        if (Runtime.NTHREADS == 1n) {
+        val nthreads = Runtime.NTHREADS;
+        if (nthreads == 1n) {
             return body(min, max); // sequential
         } else {
-            val results = Unsafe.allocRailUninitialized[T](Runtime.NTHREADS);
-            finish for (var t:Long = Runtime.NTHREADS-1; t >= 0; t--) {
+            val numElems = max - min + 1;
+	        if (numElems < 1) return body(min, max);
+            val blockSize = numElems/nthreads;
+            val leftOver = numElems - nthreads*blockSize;
+            val results = Unsafe.allocRailUninitialized[T](nthreads);
+            finish for (var t:Long = nthreads-1; t >= 0; t--) {
                 val myT = t;
                 async {
-                    val block = BlockingUtils.partitionBlock(min, max, Runtime.NTHREADS, myT);
-                    results(myT) = body(block.min, block.max);
+                    val lo = min + blockSize*myT + (myT < leftOver ? myT : leftOver);
+                    val hi = lo + blockSize + (myT < leftOver ? 0 : -1);
+                    results(myT) = body(lo, hi);
                 }
             }
             var res:T = results(0);
-            for (myT in 1..(Runtime.NTHREADS-1)) {
+            for (myT in 1..(nthreads-1)) {
                 res = reduce(res, results(myT));
             }
             return res;
@@ -501,24 +512,63 @@ public final class Foreach {
      * @param max the maximum value of the index
      * @param grainSize the maximum grain size for an activity
      * @param body a closure that executes over a single value of the index
+     * @param reduce the reduction operation
+     * @param identity the identity value for the reduction operation such that reduce(identity,f)=f
      */
     public static @Inline def bisectReduce[T](min:Long, max:Long,
                                      grainSize:Long,
                                      body:(i:Long)=>T,
                                      reduce:(a:T,b:T)=>T, identity:T):T {
+        // convert single index closure into execution over range
+        val executeRange = (start:Long, end:Long) => {
+            var myRes:T = identity;
+            for (i in start..end) {
+                myRes = reduce(myRes, body(i));
+            }
+            myRes
+        };
+        return bisectReduce(min, max, grainSize, executeRange, reduce);
+    }
+
+    /**
+     * Reduce over a range of indices in parallel using recursive bisection.
+     * The range is divided into two approximately equal pieces, with each 
+     * piece constituting an activity. Bisection recurs until each activity is
+     * less than or equal to a maximum grain size.
+     * @param min the minimum value of the index
+     * @param max the maximum value of the index
+     * @param grainSize the maximum grain size for an activity
+     * @param body a closure that executes over a contiguous range of indices, 
+     *   returning the reduced value for that range
+     * @param reduce the reduction operation
+     */
+    public static @Inline def bisectReduce[T](min:Long, max:Long,
+                                     grainSize:Long,
+                                     body:(i:Long, j:Long)=>T,
+                                     reduce:(a:T,b:T)=>T):T {
         if (Runtime.NTHREADS == 1n) {
-            return sequentialReduce(min, max, body, reduce, identity);
+            return sequentialReduce(min, max, body, reduce);
         } else {
-            // convert single index closure into execution over range
-            val executeRange = (start:Long, end:Long) => {
-                var myRes:T = identity;
-                for (i in start..end) {
-                    myRes = reduce(myRes, body(i));
-                }
-                myRes
-            };
-            return doBisectReduce1D(min, max+1, grainSize, executeRange, reduce);
+            return doBisectReduce1D(min, max+1, grainSize, body, reduce);
         }
+    }
+
+    /**
+     * Reduce over a range of indices in parallel using recursive bisection.
+     * The range is divided into two approximately equal pieces, with each 
+     * piece constituting an activity. Bisection recurs until a minimum grain
+     * size of (max-min+1) / (Runtime.NTHREADS &times; 8) is reached.
+     * @param min the minimum value of the index
+     * @param max the maximum value of the index
+     * @param body a closure that executes over a contiguous range of indices, 
+     *   returning the reduced value for that range
+     * @param reduce the reduction operation
+     */
+    public static @Inline def bisectReduce[T](min:Long, max:Long,
+                                     body:(i:Long, j:Long)=>T,
+                                     reduce:(a:T,b:T)=>T):T {
+        val grainSize = Math.max(1, (max-min) / (Runtime.NTHREADS*8));
+        return Foreach.bisectReduce(min, max, grainSize, body, reduce);
     }
 
     /**

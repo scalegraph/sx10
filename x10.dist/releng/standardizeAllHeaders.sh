@@ -15,13 +15,14 @@ for srcdir in \
 	x10.compiler \
 	x10.constraints \
 	x10.dist \
+	x10.network \
 	x10.runtime \
 	x10.tests
 do
   echo "Standardizing file headers in $srcdir"
   cd $srcdir
-  JAVA_FILES=`find . -name .svn -prune -o -name "*.java" -print`
-  X10_FILES=`find . -name .svn -prune -o -name "*.x10" -print`
+  JAVA_FILES=`find . -name .git -prune -o -name "*.java" -print`
+  X10_FILES=`find . -name .git -prune -o -name "*.x10" -print`
   for file in $JAVA_FILES $X10_FILES
   do
       hasHeader=yes

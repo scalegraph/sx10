@@ -21,8 +21,8 @@ import x10.matrix.util.Debug;
 import x10.matrix.util.MathTool;
 import x10.matrix.util.RandTool;
 import x10.matrix.util.ElemTypeTool;
-import x10.util.resilient.Snapshottable;
-import x10.util.resilient.DistObjectSnapshot;
+import x10.util.resilient.iterative.Snapshottable;
+import x10.util.resilient.iterative.DistObjectSnapshot;
 import x10.util.resilient.VectorSnapshotInfo;
 public type Vector(m:Long)=Vector{self.M==m};
 public type Vector(v:Vector)=Vector{self==v};
@@ -42,7 +42,7 @@ public type Vector(v:Vector)=Vector{self==v};
  * <p> 8) inverse of a vector: Mx1
  * <p> 9) norm of a vector: Mx1
  */
-public class Vector(M:Long) implements (Long) => ElemType, Snapshottable {
+public class Vector(M:Long) implements (Long) => ElemType {
     /** Vector data */
     public val d:Rail[ElemType]{self!=null,self.size==M};
 
@@ -174,8 +174,10 @@ public class Vector(M:Long) implements (Long) => ElemType, Snapshottable {
      * this *= alpha
      * Product of a vector and a scalar: Mx1 * 1
      */
-    public def scale(alpha:ElemType)
-        = map((x:ElemType)=>{alpha * x});
+    public def scale(alpha:ElemType) {
+        BLAS.compScale(this.M, alpha, this.d);
+        return this;
+    }
 
     /**
      * this = alpha * V
@@ -186,8 +188,10 @@ public class Vector(M:Long) implements (Long) => ElemType, Snapshottable {
     /**
      * this += alpha * V
      */
-    public def scaleAdd(alpha:ElemType, V:Vector(M))
-        = map(this, V, (x:ElemType, v:ElemType)=> {x + alpha * v});
+    public def scaleAdd(alpha:ElemType, v:Vector(M)) {
+        BLAS.compAxpy(this.M, alpha, this.d, v.d);
+        return this;
+    }
 
     /**
      * Cell-wise mulitply of two vectors
@@ -239,21 +243,10 @@ public class Vector(M:Long) implements (Long) => ElemType, Snapshottable {
         = map((x:ElemType)=> {d / x});
 
     /**
-     * Product transition of a vector: Mx1 * (Mx1)^T
-     * Return this^T * x.
-     */
-    public def blasTransProduct(x:Vector):ElemType =
-        BLAS.compDotProd(this.M, this.d, x.d);
-    
-
-    /**
      * Dot (scalar) product of this vector with another vector
      */
     public def dot(v:Vector(M)):ElemType {
-        var d:ElemType = ElemTypeTool.zero;
-         for (i in 0..(M-1))
-            d += this.d(i) * v.d(i);
-        return d;
+        return BLAS.compDotProd(this.M, this.d, v.d);
     }
 
     public def dotProd(v:Vector(M)) = dot(v);
@@ -560,22 +553,5 @@ public class Vector(M:Long) implements (Long) => ElemType, Snapshottable {
             output.add(this.d(i).toString()+" ");
         output.add("]\n");
         return output.toString();
-    }
-
-    /*
-     * Snapshot mechanism
-     */
-    private transient val DUMMY_KEY:Long = 8888L;
-
-    public def makeSnapshot():DistObjectSnapshot {        
-        val snapshot = DistObjectSnapshot.make();
-        val placeIndex:Long = 0;
-        snapshot.save(DUMMY_KEY, new VectorSnapshotInfo(placeIndex,d));
-        return snapshot;
-    }
-
-    public def restoreSnapshot(snapshot:DistObjectSnapshot) {
-        val vectorSnapshotInfo = snapshot.load(DUMMY_KEY) as VectorSnapshotInfo;        
-        new Vector(vectorSnapshotInfo.data).copyTo(this);
     }
 }

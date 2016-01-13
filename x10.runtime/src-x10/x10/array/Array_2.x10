@@ -97,9 +97,18 @@ public final class Array_2[T] (
      * @return the string representation of this array.
      */
     public def toString():String {
+        return toString(10);
+    }
+
+    /**
+     * Return the string representation of this array.
+     *
+     * @param limit maximum number of elements to print
+     * @return the string representation of this array.
+     */
+    public def toString(limit:Long):String {
         val sb = new StringBuilder();
         sb.add("[");
-        val limit = 10;
         var printed:Long = 0;
         outer: for (i in 0..(numElems_1 - 1)) {
             for (j in 0..(numElems_2 - 1)) {
@@ -171,8 +180,7 @@ public final class Array_2[T] (
                                             j < 0 || j >= numElems_2)) {
             raiseBoundsError(i, j);
         }
-        Unsafe.uncheckedRailSet(raw, offset(i, j), v);
-        return v;
+        return Unsafe.uncheckedRailSet(raw, offset(i, j), v);
     }
 
     /**

@@ -230,6 +230,13 @@ static void postCopyCallback(void *arg) {
                                   callbackArg->count);
         }
         break;
+    case 12:
+        // boolean[]
+        env->SetBooleanArrayRegion((jbooleanArray)callbackArg->globalDstArray,
+                                 callbackArg->dstOffset,
+                                 callbackArg->count,
+                                 (jboolean*)callbackArg->dstData);
+        break;
     default:
         jniHelper_abort("Unsupported typecode %d in postCopyCallback\n", callbackArg->typecode);
     }
@@ -381,6 +388,21 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeScatterImpl(JNIEnv *env,
         env->GetDoubleArrayRegion((jdoubleArray)src, 2*src_off, 2*count, (jdouble*)srcData);
         }
         break;
+    case 12:
+        // boolean[]
+        el = sizeof(jboolean);
+        dstData = malloc(rcount*sizeof(jboolean));
+        if (NULL == dstData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeScatterImpl\n");
+        }
+        if (role == root) {
+        srcData = malloc(count*sizeof(jboolean));
+        if (NULL == srcData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeScatterImpl\n");
+        }
+        env->GetBooleanArrayRegion((jbooleanArray)src, src_off, count, (jboolean*)srcData);
+        }
+        break;
     default:
         jniHelper_abort("Unsupported typecode %d in nativeScatterImpl\n", typecode);
     }
@@ -407,7 +429,7 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeScatterImpl(JNIEnv *env,
  * Method:    nativeBcastImpl
  * Signature: (IIILjava/lang/Object;ILjava/lang/Object;IIILx10/lang/FinishState;)V
  */
-JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeBcastImpl(JNIEnv *env, jclass klazz,
+JNIEXPORT jobject JNICALL Java_x10_x10rt_TeamSupport_nativeBcastImpl(JNIEnv *env, jclass klazz,
                                                                       jint id, jint role, jint root,
                                                                       jobject src, jint src_off,
                                                                       jobject dst, jint dst_off,
@@ -528,6 +550,21 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeBcastImpl(JNIEnv *env, j
         env->GetDoubleArrayRegion((jdoubleArray)src, 2*src_off, 2*count, (jdouble*)srcData);
         }
         break;
+    case 12:
+        // boolean []
+        el = sizeof(jboolean);
+        dstData = malloc(count*sizeof(jboolean));
+        if (NULL == dstData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeBcastImpl\n");
+        }
+        if (role == root) {
+        srcData = malloc(count*sizeof(jboolean));
+        if (NULL == srcData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeBcastImpl\n");
+        }
+        env->GetBooleanArrayRegion((jbooleanArray)src, src_off, count, (jboolean*)srcData);
+        }
+        break;
     default:
         jniHelper_abort("Unsupported typecode %d in nativeBcastImpl\n", typecode);
     }
@@ -541,7 +578,7 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeBcastImpl(JNIEnv *env, j
     callbackArg->srcData = srcData;
     callbackArg->dstData = dstData;
 
-    x10rt_bcast(id, role, root, srcData, dstData, el, count, &postCopyCallback, callbackArg);
+    return (jobject)x10rt_bcast(id, role, root, srcData, dstData, el, count, &postCopyCallback, &postCopyCallback, callbackArg);
 }
 
 
@@ -664,6 +701,19 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeAllToAllImpl(JNIEnv *env
         }
         env->GetDoubleArrayRegion((jdoubleArray)src, 2*src_off, 2*srcElemCount, (jdouble*)srcData);
         break;
+    case 12:
+        // boolean []
+        el = sizeof(jboolean);
+        dstData = malloc(dstElemCount*sizeof(jboolean));
+        if (NULL == dstData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeAllToAllImpl\n");
+        }
+        srcData = malloc(srcElemCount*sizeof(jboolean));
+        if (NULL == srcData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeAllToAllImpl\n");
+        }
+        env->GetBooleanArrayRegion((jbooleanArray)src, src_off, srcElemCount, (jboolean*)srcData);
+        break;
     default:
         jniHelper_abort("Unsupported typecode %d in nativeAllToAllImpl\n", typecode);
     }
@@ -768,6 +818,15 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeReduceImpl(JNIEnv *env, 
         }
         env->GetDoubleArrayRegion((jdoubleArray)src, 2*src_off, 2*count, (jdouble*)srcData);
         break;
+    case 12:
+        // boolean []
+        srcData = malloc(count*sizeof(jboolean));
+        dstData = malloc(count*sizeof(jboolean));
+        if (NULL == srcData || NULL == dstData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeReduceImpl\n");
+        }
+        env->GetBooleanArrayRegion((jbooleanArray)src, src_off, count, (jboolean*)srcData);
+        break;
     default:
         jniHelper_abort("Unsupported typecode %d in nativeReduceImpl\n", typecode);
     }        
@@ -795,7 +854,7 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeReduceImpl(JNIEnv *env, 
  * Method:    nativeAllReduceImpl
  * Signature: (IILjava/lang/Object;ILjava/lang/Object;IIIILx10/lang/FinishState;)V
  */
-JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeAllReduceImpl(JNIEnv *env, jclass klazz,
+JNIEXPORT jobject JNICALL Java_x10_x10rt_TeamSupport_nativeAllReduceImpl(JNIEnv *env, jclass klazz,
                                                                       jint id, jint role,
                                                                       jobject src, jint src_off,
                                                                       jobject dst, jint dst_off,
@@ -873,6 +932,15 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeAllReduceImpl(JNIEnv *en
         }
         env->GetDoubleArrayRegion((jdoubleArray)src, 2*src_off, 2*count, (jdouble*)srcData);
         break;
+    case 12:
+        // boolean []
+        srcData = malloc(count*sizeof(jboolean));
+        dstData = malloc(count*sizeof(jboolean));
+        if (NULL == srcData || NULL == dstData) {
+            jniHelper_abort("OOM while attempting to allocate malloced storage in nativeAllReduceImpl\n");
+        }
+        env->GetBooleanArrayRegion((jbooleanArray)src, src_off, count, (jboolean*)srcData);
+        break;
     default:
         jniHelper_abort("Unsupported typecode %d in nativeAllReduceImpl\n", typecode);
     }        
@@ -886,8 +954,9 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_nativeAllReduceImpl(JNIEnv *en
     callbackArg->srcData = srcData;
     callbackArg->dstData = dstData;
 
-    x10rt_allreduce(id, role, srcData, dstData, (x10rt_red_op_type)op, (x10rt_red_type)typecode,
-                    count, &postCopyCallback, callbackArg);
+    //FIXME: how to call the correct failure call back?
+    return (jobject)x10rt_allreduce(id, role, srcData, dstData, (x10rt_red_op_type)op, (x10rt_red_type)typecode,
+                    count, &postCopyCallback, &postCopyCallback, callbackArg);
 }
 
 
@@ -955,7 +1024,7 @@ static void indexOfImpl(JNIEnv *env, jint id, jint role,
     callbackArg->srcData = srcData;
     callbackArg->dstData = dstData;
 
-    x10rt_allreduce(id, role, srcData, dstData, op, X10RT_RED_TYPE_DBL_S32, 1, &minmaxCallback, callbackArg);
+    x10rt_allreduce(id, role, srcData, dstData, op, X10RT_RED_TYPE_DBL_S32, 1, &minmaxCallback, &minmaxCallback, callbackArg);
 }
 
 
@@ -1082,7 +1151,7 @@ JNIEXPORT void JNICALL Java_x10_x10rt_TeamSupport_initialize(JNIEnv *env, jclass
     if (NULL == amClass) {
         jniHelper_abort("Unable to find class x10.x10rt.ActivityManagement\n");
     }
-    jmethodID terminateId = env->GetStaticMethodID(amClass, "activityTerminationBookkeeping", "(Lx10/lang/FinishState;)V");
+    jmethodID terminateId = env->GetStaticMethodID(amClass, "activityTerminationBookkeeping", "(Lx10/xrx/FinishState;)V");
     if (NULL == terminateId) {
         jniHelper_abort("Unable to resolve methodID for ActivityManagement.activityTerminationBookkeeping\n");
     }

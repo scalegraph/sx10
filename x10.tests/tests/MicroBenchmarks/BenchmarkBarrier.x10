@@ -6,7 +6,7 @@
  *  You may obtain a copy of the License at
  *      http://www.opensource.org/licenses/eclipse-1.0.php
  *
- *  (C) Copyright IBM Corporation 2014.
+ *  (C) Copyright IBM Corporation 2014-2015.
  */
 import harness.x10Test;
 
@@ -18,8 +18,9 @@ import x10.util.Team;
 public class BenchmarkBarrier extends x10Test {
     private static ITERS = 1000;
 
-	public def run(): Boolean = {
+	public def run(): Boolean {
         finish for (place in Place.places()) at (place) async {
+            Team.WORLD.barrier(); // warm up comms layer
             val start = System.nanoTime();
             for (iter in 1..ITERS) {
                 Team.WORLD.barrier();
@@ -32,7 +33,7 @@ public class BenchmarkBarrier extends x10Test {
         return true;
 	}
 
-	public static def main(var args: Rail[String]): void = {
+	public static def main(var args: Rail[String]): void {
 		new BenchmarkBarrier().execute();
 	}
 }

@@ -11,6 +11,8 @@
 
 import harness.x10Test;
 
+// TIMEOUT: 30
+
 /**
  * Test resulted in unreachable statement message
  * in the compiler, as of 7/29/2005.
@@ -19,14 +21,14 @@ import harness.x10Test;
  */
 public class Unreachable3_MustFailTimeout extends x10Test {
 
-	public def run(): boolean = {
+	public def run(): boolean {
 		async {
 			while (true) { }
 		}
 		return true;
 	}
 
-	public static def main(var args: Rail[String]): void = {
+	public static def main(var args: Rail[String]): void {
 		new Unreachable3_MustFailTimeout().execute();
 	}
 }

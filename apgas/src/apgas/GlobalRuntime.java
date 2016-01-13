@@ -12,65 +12,72 @@
 package apgas;
 
 import java.io.Serializable;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
+
+import apgas.impl.SerializableRunnable;
 
 /**
  * The {@link GlobalRuntime} class provides mechanisms to initialize and shut
  * down the APGAS global runtime for the application.
  * <p>
- * The global runtime is implicitly initialized when this class is loaded.
- * <p>
- * If the system property APGAS_PLACES is set to an integer 'n' greater than 1,
- * this initialization will spawn 'n-1' additional JVMs. These additional JVMs
- * will execute the same main method as the current one.
- * <p>
- * The current runtime can be obtained from the {@link #getRuntime()} method.
+ * The global runtime is implicitly initialized when first used. The current
+ * runtime can be obtained from the {@link #getRuntime()} method, which forces
+ * initialization.
  */
 public abstract class GlobalRuntime {
   /**
-   * The {@link GlobalRuntime} instance for this application.
+   * A wrapper class for implementing double-checked locking.
    */
-  private static final GlobalRuntime runtime;
+  private static class GlobalRuntimeWrapper {
+    /**
+     * The {@link GlobalRuntime} instance for this place.
+     */
+    private final GlobalRuntime runtime;
 
-  /**
-   * Throws {@code UnsupportedOperationException}.
-   *
-   * @throws UnsupportedOperationException
-   *           when invoked
-   */
-  protected GlobalRuntime() {
-    if (runtime != null) {
-      throw new UnsupportedOperationException();
+    /**
+     * Initializes the {@link GlobalRuntime} instance for this place.
+     */
+    private GlobalRuntimeWrapper() {
+      try {
+        final String className = System.getProperty(
+            Configuration.APGAS_RUNTIME, "apgas.impl.GlobalRuntimeImpl");
+        runtime = (GlobalRuntime) Class.forName(className).newInstance();
+      } catch (final ReflectiveOperationException e) {
+        throw new RuntimeException(e);
+      }
     }
   }
 
   /**
-   * Returns the {@link GlobalRuntime} instance for this application.
+   * The {@link GlobalRuntimeWrapper} instance for this place.
+   */
+  private static GlobalRuntimeWrapper runtime;
+
+  /**
+   * Constructs a new {@link GlobalRuntime} instance.
+   */
+  protected GlobalRuntime() {
+  }
+
+  /**
+   * Returns the {@link GlobalRuntime} instance for this place.
    *
    * @return the GlobalRuntime instance
    */
   public static GlobalRuntime getRuntime() {
-    return runtime;
-  }
-
-  static {
-    try {
-      final String className = System.getProperty(Configuration.APGAS_RUNTIME,
-          "apgas.impl.GlobalRuntimeImpl");
-      final Constructor<?> constructor = Class.forName(className)
-          .getConstructor(new Class<?>[0]);
-      constructor.setAccessible(true);
-      try {
-        runtime = (GlobalRuntime) constructor.newInstance(new Object[0]);
-      } catch (final InvocationTargetException e) {
-        throw e.getCause();
+    GlobalRuntimeWrapper r = runtime;
+    if (r == null) {
+      synchronized (GlobalRuntime.class) {
+        if (runtime == null) {
+          runtime = new GlobalRuntimeWrapper();
+        }
+        r = runtime;
       }
-    } catch (final Throwable t) {
-      throw new ExceptionInInitializerError(t);
     }
+    return r.runtime;
   }
 
   /**
@@ -92,7 +99,7 @@ public abstract class GlobalRuntime {
    * Runs {@code f} then waits for all tasks transitively spawned by {@code f}
    * to complete.
    * <p>
-   * If {@code f} or the transitively tasks spawned by {@code f} have uncaught
+   * If {@code f} or the tasks transitively spawned by {@code f} have uncaught
    * exceptions then {@code finish(F)} then throws a {@link MultipleException}
    * that collects these uncaught exceptions.
    *
@@ -102,6 +109,22 @@ public abstract class GlobalRuntime {
    *           if there are uncaught exceptions
    */
   protected abstract void finish(Job f);
+
+  /**
+   * Evaluates {@code f}, waits for all the tasks transitively spawned by
+   * {@code f}, and returns the result.
+   * <p>
+   * If {@code f} or the tasks transitively spawned by {@code f} have uncaught
+   * exceptions then {@code finish(F)} then throws a {@link MultipleException}
+   * that collects these uncaught exceptions.
+   *
+   * @param <T>
+   *          the type of the result
+   * @param f
+   *          the function to run
+   * @return the result of the evaluation
+   */
+  protected abstract <T> T finish(Callable<T> f);
 
   /**
    * Submits a new local task to the global runtime with body {@code f} and
@@ -121,7 +144,7 @@ public abstract class GlobalRuntime {
    * @param f
    *          the function to run
    */
-  protected abstract void asyncat(Place p, SerializableJob f);
+  protected abstract void asyncAt(Place p, SerializableJob f);
 
   /**
    * Submits an uncounted task to the global runtime to be run at {@link Place}
@@ -134,7 +157,20 @@ public abstract class GlobalRuntime {
    * @param f
    *          the function to run
    */
-  protected abstract void uncountedasyncat(Place p, SerializableJob f);
+  protected abstract void uncountedAsyncAt(Place p, SerializableJob f);
+
+  /**
+   * Submits an immediate task to the global runtime to be run at {@link Place}
+   * {@code p} with body {@code f}. The termination of this task is not tracked
+   * by the enclosing finish. The call may block or not until the task
+   * completes. Exceptions may be masked or not.
+   *
+   * @param p
+   *          the place of execution
+   * @param f
+   *          the function to run
+   */
+  protected abstract void immediateAsyncAt(Place p, SerializableRunnable f);
 
   /**
    * Runs {@code f} at {@link Place} {@code p} and waits for all the tasks
@@ -159,7 +195,7 @@ public abstract class GlobalRuntime {
    *          the requested place of execution
    * @param f
    *          the function to run
-   * @return the result
+   * @return the result of the evaluation
    */
   protected abstract <T extends Serializable> T at(Place p,
       SerializableCallable<T> f);
@@ -176,26 +212,31 @@ public abstract class GlobalRuntime {
    *
    * @param id
    *          the requested ID
-   * @return a {@link Place} instance with the given ID
+   * @return the place with the given ID
    */
   protected abstract Place place(int id);
 
   /**
    * Returns the current list of places in the global runtime.
-   * <p>
-   * Subsequent calls to this method may return different lists as more places
-   * are added to the global runtime.
    *
    * @return the current list of places in the global runtime
    */
   protected abstract List<? extends Place> places();
 
   /**
-   * Starts the global runtime and waits for incoming tasks.
+   * Returns the executor service for the place.
+   *
+   * @return the executor service
+   */
+  public abstract ExecutorService getExecutorService();
+
+  /**
+   * Intializes the global runtime.
    *
    * @param args
    *          ignored
    */
   public static void main(String[] args) {
+    getRuntime();
   }
 }

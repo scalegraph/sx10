@@ -11,9 +11,11 @@
 
 package x10.runtime.impl.java;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Map;
 
+import sun.misc.Unsafe;
 import x10.core.fun.VoidFun_0_0;
 import x10.io.Reader;
 import x10.io.Writer;
@@ -24,8 +26,8 @@ import x10.rtt.RuntimeType;
 import x10.rtt.Type;
 import x10.rtt.Types;
 import x10.serialization.X10JavaSerializer;
-import x10.x10rt.SocketTransport;
-import x10.x10rt.SocketTransport.RETURNCODE;
+import x10.network.SocketTransport;
+import x10.network.SocketTransport.RETURNCODE;
 import x10.x10rt.X10RT;
 
 public abstract class Runtime implements VoidFun_0_0 {
@@ -100,6 +102,8 @@ public abstract class Runtime implements VoidFun_0_0 {
         x10.xrx.Runtime.get$NTHREADS();
         x10.xrx.Runtime.get$MAX_THREADS();
         x10.xrx.Runtime.get$STATIC_THREADS();
+        x10.xrx.Runtime.get$STABLE_POOL_SIZE();
+        x10.xrx.Runtime.get$NUM_IMMEDIATE_THREADS();
         x10.xrx.Runtime.get$WARN_ON_THREAD_CREATION();
         x10.xrx.Runtime.get$BUSY_WAITING();
         x10.xrx.Runtime.get$CANCELLABLE();
@@ -541,7 +545,7 @@ public abstract class Runtime implements VoidFun_0_0 {
     public static void throwCheckedWithoutThrows(java.lang.Throwable e) {
         if (e instanceof java.lang.RuntimeException) throw (java.lang.RuntimeException) e;
         if (e instanceof java.lang.Error) throw (java.lang.Error) e;
-        java.lang.Thread.currentThread().stop(e); // FIXME this will throw UnsupportedOperationException since Java 8 
+        X10Unsafe.throwException(e);
     }
     
     /**

@@ -117,12 +117,9 @@ X10RT_C void x10rt_lgl_register_msg_receiver (x10rt_msg_type msg_type, x10rt_han
  *
  * \param msg_type The type of the message to register callbacks for.
  *
- * \param cb1 As in x10rt_register_get_receiver
- *
- * \param cb2 As in x10rt_register_get_receiver
+ * \param cb As in x10rt_register_get_receiver
  */
-X10RT_C void x10rt_lgl_register_get_receiver (x10rt_msg_type msg_type,
-                                              x10rt_finder *cb1, x10rt_notifier *cb2);
+X10RT_C void x10rt_lgl_register_get_receiver (x10rt_msg_type msg_type, x10rt_notifier *cb);
 
 /** Register handlers for a put message.
  *
@@ -130,13 +127,10 @@ X10RT_C void x10rt_lgl_register_get_receiver (x10rt_msg_type msg_type,
  *
  * \param msg_type The type of the message to register callbacks for.
  *
- * \param cb1 As in x10rt_register_put_receiver
- *
- * \param cb2 As in x10rt_register_put_receiver
+ * \param cb As in x10rt_register_put_receiver
  */
 
-X10RT_C void x10rt_lgl_register_put_receiver (x10rt_msg_type msg_type,
-                                              x10rt_finder *cb1, x10rt_notifier *cb2);
+X10RT_C void x10rt_lgl_register_put_receiver (x10rt_msg_type msg_type, x10rt_notifier *cb);
 
 /** Register handlers for a CUDA plain message (kernel invocation).
  *
@@ -159,13 +153,10 @@ X10RT_C void x10rt_lgl_register_msg_receiver_cuda (x10rt_msg_type msg_type,
  *
  * \param msg_type The type of the message to register callbacks for.
  *
- * \param cb1 As in x10rt_register_put_receiver
- *
- * \param cb2 As in x10rt_register_put_receiver
+ * \param cb As in x10rt_register_put_receiver
  */
 
-X10RT_C void x10rt_lgl_register_get_receiver_cuda (x10rt_msg_type msg_type,
-                                                   x10rt_finder *cb1, x10rt_notifier *cb2);
+X10RT_C void x10rt_lgl_register_get_receiver_cuda (x10rt_msg_type msg_type, x10rt_notifier *cb);
 
 /** Register handlers for a CUDA put message.
  *
@@ -173,13 +164,10 @@ X10RT_C void x10rt_lgl_register_get_receiver_cuda (x10rt_msg_type msg_type,
  *
  * \param msg_type The type of the message to register callbacks for.
  *
- * \param cb1 As in x10rt_register_put_receiver
- *
- * \param cb2 As in x10rt_register_put_receiver
+ * \param cb As in x10rt_register_put_receiver
  */
 
-X10RT_C void x10rt_lgl_register_put_receiver_cuda (x10rt_msg_type msg_type,
-                                                   x10rt_finder *cb1, x10rt_notifier *cb2);
+X10RT_C void x10rt_lgl_register_put_receiver_cuda (x10rt_msg_type msg_type, x10rt_notifier *cb);
 
 /** An SPMD barrier that can only be used when each place has exactly one thread (the main thread).
  * Only the hosts are synchronized by this call (i.e. not accelerators).  This is used internally by
@@ -243,18 +231,20 @@ X10RT_C void x10rt_lgl_send_msg (x10rt_msg_params *p);
 
 /** \see #x10rt_send_get
  * \param p As in x10rt_send_get
- * \param buf As in x10rt_send_get
+ * \param srcAddr As in x10rt_send_get
+ * \param dstAddr As in x10rt_send_get
  * \param len As in x10rt_send_get
  */
-X10RT_C void x10rt_lgl_send_get (x10rt_msg_params *p, void *buf, x10rt_copy_sz len);
+X10RT_C void x10rt_lgl_send_get (x10rt_msg_params *p, void *srcAddr, void *dstAddr, x10rt_copy_sz len);
 
 
 /** \see #x10rt_send_put
  * \param p As in x10rt_send_put
- * \param buf As in x10rt_send_put
+ * \param srcAddr As in x10rt_send_get
+ * \param dstAddr As in x10rt_send_get
  * \param len As in x10rt_send_put
  */
-X10RT_C void x10rt_lgl_send_put (x10rt_msg_params *p, void *buf, x10rt_copy_sz len);
+X10RT_C void x10rt_lgl_send_put (x10rt_msg_params *p, void *srcAddr, void *dstAddr, x10rt_copy_sz len);
 
 
 /** \see #x10rt_remote_alloc
@@ -293,6 +283,12 @@ X10RT_C void x10rt_lgl_remote_ops (x10rt_remote_op_params *ops, size_t num_ops);
  * \param len As in #x10rt_register_mem
  */
 X10RT_C void x10rt_lgl_register_mem (void *ptr, size_t len);
+
+
+/** \see #x10rt_deregister_mem
+ * \param ptr As in #x10rt_deregister_mem
+ */
+X10RT_C void x10rt_lgl_deregister_mem (void *ptr);
 
 
 /** \see #x10rt_blocks_threads
@@ -394,9 +390,10 @@ X10RT_C void x10rt_lgl_barrier (x10rt_team team, x10rt_place role,
  * \param ch As in #x10rt_bcast
  * \param arg As in #x10rt_bcast
  */
-X10RT_C void x10rt_lgl_bcast (x10rt_team team, x10rt_place role,
+X10RT_C bool x10rt_lgl_bcast (x10rt_team team, x10rt_place role,
                               x10rt_place root, const void *sbuf, void *dbuf,
                               size_t el, size_t count,
+                              x10rt_completion_handler *errch,
                               x10rt_completion_handler *ch, void *arg);
 
 /** \see #x10rt_scatter
@@ -414,6 +411,63 @@ X10RT_C void x10rt_lgl_scatter (x10rt_team team, x10rt_place role,
                                 x10rt_place root, const void *sbuf, void *dbuf,
                                 size_t el, size_t count,
                                 x10rt_completion_handler *ch, void *arg);
+
+/** \see #x10rt_scatterv
+ * \param team As in #x10rt_scatterv
+ * \param role As in #x10rt_scatterv
+ * \param root As in #x10rt_scatterv
+ * \param sbuf As in #x10rt_scatterv
+ * \param soffsets As in #x10rt_scatterv
+ * \param scounts As in #x10rt_scatterv
+ * \param dbuf As in #x10rt_scatterv
+ * \param dcount As in #x10rt_scatterv
+ * \param el As in #x10rt_scatterv
+ * \param ch As in #x10rt_scatterv
+ * \param arg As in #x10rt_scatterv
+ */
+X10RT_C bool x10rt_lgl_scatterv (x10rt_team team, x10rt_place role,
+                                 x10rt_place root, const void *sbuf,
+                                 const void *soffsets, const void *scounts,
+                                 void *dbuf, size_t dcount,
+                                 size_t el,
+                                 x10rt_completion_handler *errch,
+                                 x10rt_completion_handler *ch, void *arg);
+
+/** \see #x10rt_gather
+ * \param team As in #x10rt_gather
+ * \param role As in #x10rt_gather
+ * \param root As in #x10rt_gather
+ * \param sbuf As in #x10rt_gather
+ * \param dbuf As in #x10rt_gather
+ * \param el As in #x10rt_gather
+ * \param count As in #x10rt_gather
+ * \param ch As in #x10rt_gather
+ * \param arg As in #x10rt_gather
+ */
+X10RT_C void x10rt_lgl_gather (x10rt_team team, x10rt_place role,
+					   x10rt_place root, const void *sbuf,
+					   void *dbuf, size_t el, size_t count,
+					   x10rt_completion_handler *ch, void *arg);
+
+/** \see #x10rt_gatherv
+ * \param team As in #x10rt_gatherv
+ * \param role As in #x10rt_gatherv
+ * \param root As in #x10rt_gatherv
+ * \param sbuf As in #x10rt_gatherv
+ * \param scount As in #x10rt_gatherv
+ * \param dbuf As in #x10rt_gatherv
+ * \param doffsets As in #x10rt_gatherv
+ * \param dcounts As in #x10rt_gatherv
+ * \param el As in #x10rt_gatherv
+ * \param ch As in #x10rt_gatherv
+ * \param arg As in #x10rt_gatherv
+ */
+X10RT_C bool x10rt_lgl_gatherv (x10rt_team team, x10rt_place role, x10rt_place root,
+		                const void *sbuf, size_t scount, void *dbuf,
+		                const void *doffsets, const void *dcounts,
+		                size_t el,
+		                x10rt_completion_handler *errch,
+		                x10rt_completion_handler *ch, void *arg);
 
 /** \see #x10rt_alltoall
  * \param team As in #x10rt_alltoall
@@ -459,11 +513,12 @@ X10RT_C void x10rt_lgl_reduce (x10rt_team team, x10rt_place role,
  * \param ch As in #x10rt_allreduce
  * \param arg As in #x10rt_allreduce
  */
-X10RT_C void x10rt_lgl_allreduce (x10rt_team team, x10rt_place role,
+X10RT_C bool x10rt_lgl_allreduce (x10rt_team team, x10rt_place role,
                                   const void *sbuf, void *dbuf,
                                   x10rt_red_op_type op,
                                   x10rt_red_type dtype,
                                   size_t count,
+                                  x10rt_completion_handler *errch,
                                   x10rt_completion_handler *ch, void *arg);
 
 #endif

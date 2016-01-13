@@ -99,6 +99,10 @@ public class CXXCommandBuilder {
                defaultPostCompiler().contains("mpCC") ||
 	       defaultPostCompiler().contains("xlcxx");
     }
+
+    protected final boolean usingCLANG() {
+        return defaultPostCompiler().contains("clang");
+    }
     
     protected final boolean bluegeneQ() {
         return getPlatform().contains("bgq");
@@ -134,8 +138,12 @@ public class CXXCommandBuilder {
         cxxCmd.add("-I.");
 
         if (options.x10_config.OPTIMIZE) {
-            cxxCmd.add(usingXLC() ? "-O3" : "-O2");
-            cxxCmd.add(usingXLC() ? "-qinline" : "-finline-functions");
+            if (options.x10_config.OPT_LEVEL != -1) {
+                cxxCmd.add("-O"+options.x10_config.OPT_LEVEL);
+            } else {
+                cxxCmd.add(usingXLC() || usingCLANG() ? "-O3" : "-O2");
+            }
+            if (!usingCLANG()) { cxxCmd.add(usingXLC() ? "-qinline" : "-finline-functions"); }
             cxxCmd.add("-DNO_TRACING");
             if (fx10()) {
                 cxxCmd.add("-Kfast");
@@ -453,6 +461,9 @@ public class CXXCommandBuilder {
         if (version >= 6.5) {
             ans.add("sm_32"); // requires CUDA Toolkit 6.5 or newer
             ans.add("sm_37"); // requires CUDA Toolkit 6.5 or newer
+        }
+        if (version >= 7.0) {
+            ans.add("sm_52"); // requires CUDA Toolkit 7.0 or newer
         }
         return ans;
     }

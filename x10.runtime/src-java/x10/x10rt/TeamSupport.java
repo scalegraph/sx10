@@ -28,6 +28,7 @@ public class TeamSupport {
     private static final int RED_TYPE_DOUBLE = 8;
     private static final int RED_TYPE_FLOAT = 9;
     private static final int RED_TYPE_COMPLEX = 11;
+    private static final int RED_TYPE_LOGICAL = 12;
     
     private static int getTypeCode(Rail<?> chunk) {
         Object chunkRaw = chunk.getBackingArray();
@@ -43,6 +44,8 @@ public class TeamSupport {
             return RED_TYPE_DOUBLE;
         } else if (chunkRaw instanceof float[]) {
             return RED_TYPE_FLOAT;
+        } else if (chunkRaw instanceof boolean[]) {
+            return RED_TYPE_LOGICAL;
         } else if (chunkRaw instanceof Object[]) {
             Type<?> elemType = chunk.$getParam(0);
             if (elemType.equals(x10.lang.Complex.$RTT)) {
@@ -137,8 +140,9 @@ public class TeamSupport {
         }
     }
         
-    public static void nativeBcast(int id, int role, int root, Rail<?> src, int src_off, 
+    public static boolean nativeBcast(int id, int role, int root, Rail<?> src, int src_off, 
                                    Rail<?> dst, int dst_off, int count) {
+    	boolean success = true;
         if (!X10RT.forceSinglePlace) {
         int typeCode = getTypeCode(src);
         assert getTypeCode(dst) == typeCode : "Incompatible src and dst arrays";
@@ -149,11 +153,12 @@ public class TeamSupport {
         FinishState fs = ActivityManagement.activityCreationBookkeeping();
 
         try {
-            nativeBcastImpl(id, role, root, srcRaw, src_off, dstRaw, dst_off, count, typeCode, fs);
+        	success =nativeBcastImpl(id, role, root, srcRaw, src_off, dstRaw, dst_off, count, typeCode, fs);
         } catch (UnsatisfiedLinkError e) {
             aboutToDie("nativeBcast");
         }
         }
+        return success;
     }
 
     public static void nativeAllToAll(int id, int role, Rail<?> src, int src_off, 
@@ -194,8 +199,9 @@ public class TeamSupport {
         }
     }
     
-    public static void nativeAllReduce(int id, int role, Rail<?> src, int src_off, 
+    public static boolean nativeAllReduce(int id, int role, Rail<?> src, int src_off, 
                                        Rail<?> dst, int dst_off, int count, int op) {
+    	boolean success = true;
         if (!X10RT.forceSinglePlace) {
         int typeCode = getTypeCode(src);
         Object srcRaw = typeCode == RED_TYPE_COMPLEX ? copyComplexToNewDouble(src, src_off, count) : src.getBackingArray();
@@ -206,11 +212,12 @@ public class TeamSupport {
         FinishState fs = ActivityManagement.activityCreationBookkeeping();
 
         try {
-            nativeAllReduceImpl(id, role, srcRaw, src_off, dstRaw, dst_off, count, op, typeCode, fs);
+            success = nativeAllReduceImpl(id, role, srcRaw, src_off, dstRaw, dst_off, count, op, typeCode, fs);
         } catch (UnsatisfiedLinkError e) {
             aboutToDie("nativeAllReduce");
         }
         }
+        return success;
     }
 
     public static void nativeIndexOfMax(int id, int role, Rail<?> src,
@@ -289,7 +296,7 @@ public class TeamSupport {
                                                  Object dstRaw, int dst_off,
                                                  int count, int typecode, FinishState fs);
     
-    private static native void nativeBcastImpl(int id, int role, int root, Object srcRaw, int src_off, 
+    private static native Boolean nativeBcastImpl(int id, int role, int root, Object srcRaw, int src_off, 
                                                Object dstRaw, int dst_off,
                                                int count, int typecode, FinishState fs);
     
@@ -301,7 +308,7 @@ public class TeamSupport {
                                                    Object dstRaw, int dst_off,
                                                    int count, int op, int typecode, FinishState fs);
 
-    private static native void nativeAllReduceImpl(int id, int role, Object srcRaw, int src_off, 
+    private static native Boolean nativeAllReduceImpl(int id, int role, Object srcRaw, int src_off, 
                                                    Object dstRaw, int dst_off,
                                                    int count, int op, int typecode, FinishState fs);
     

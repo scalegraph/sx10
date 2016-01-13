@@ -257,21 +257,14 @@ x10rt_cuda_post *post, const char *cubin, const char *kernel_name);
  * \see \ref messages
  * \see \ref callbacks
  *
- * \param cb1 A callback that is invoked to find a buffer from which to fetch the data.
- *
- * \param cb2 A callback that is invoked at the location where the data has been copied, upon
+ * \param cb A callback that is invoked at the location where the data has been copied, upon
  * completion of the copy.
  *
- * \param cuda_cb1 CUDA only: A callback that runs on the CPU on behalf of a GPU to find the buffer
- * from which to fetch the data.
- *
- * \param cuda_cb2 CUDA only: A callback that runs on the CPU after the data has been copied from
- * the GPU memory.  \todo Get callback cuda_cb2 seems to be pointless?
+ * \param cuda_cb CUDA only: A callback that runs on the CPU after the data has been copied from
+ * the GPU memory.  \todo Get callback cuda_cb seems to be pointless?
 */
 
-X10RT_C x10rt_msg_type x10rt_register_get_receiver (x10rt_finder *cb1, x10rt_notifier *cb2,
-                                                    x10rt_finder *cuda_cb1,
-                                                    x10rt_notifier *cuda_cb2);
+X10RT_C x10rt_msg_type x10rt_register_get_receiver (x10rt_notifier *cb, x10rt_notifier *cuda_cb);
 
 
 /** Register a new type of 'put' message.  These are used to do direct copies from one place to
@@ -282,21 +275,14 @@ X10RT_C x10rt_msg_type x10rt_register_get_receiver (x10rt_finder *cb1, x10rt_not
  * \see \ref messages
  * \see \ref callbacks
  *
- * \param cb1 A callback that is invoked to find a buffer into which to receive the data.
- *
- * \param cb2 A callback that is invoked at the location where the data has been copied, upon
+ * \param cb A callback that is invoked at the location where the data has been copied, upon
  * completion of the copy.
  *
- * \param cuda_cb1 CUDA only: A callback that runs on the CPU on behalf of a GPU to find the buffer
- * into which to push the data.
- *
- * \param cuda_cb2 CUDA only: A callback that runs on the CPU hosting the GPU after the data has
+ * \param cuda_cb CUDA only: A callback that runs on the CPU hosting the GPU after the data has
  * been copied to the GPU memory.
 */
 
-X10RT_C x10rt_msg_type x10rt_register_put_receiver (x10rt_finder *cb1, x10rt_notifier *cb2,
-                                                    x10rt_finder *cuda_cb1,
-                                                    x10rt_notifier *cuda_cb2);
+X10RT_C x10rt_msg_type x10rt_register_put_receiver (x10rt_notifier *cb, x10rt_notifier *cuda_cb);
 
 /** Signal that all message types have been registered.  This acts like a barrier.  After the
  * function returns, the process may start sending messages to arbitrary places.  The X10RT
@@ -445,11 +431,13 @@ X10RT_C void x10rt_send_msg (x10rt_msg_params *p);
  *
  * \param p The particulars of the message.
  *
- * \param buf The local location where the copy will receive the data.
+ * \param srcAddr The remote location where the copy will read the data.
+ *
+ * \param dstAddr The local location where the copy will store the data.
  *
  * \param len The amount of data to copy.
  */
-X10RT_C void x10rt_send_get (x10rt_msg_params *p, void *buf, x10rt_copy_sz len);
+X10RT_C void x10rt_send_get (x10rt_msg_params *p, void *srcAddr, void *dstAddr, x10rt_copy_sz len);
 
 /** Send a 'put' message.  See #x10rt_send_get for more information.  The #x10rt_send_put call
  * should not block waiting for the remote side to finish executing its callbacks, as to do so could
@@ -457,11 +445,13 @@ X10RT_C void x10rt_send_get (x10rt_msg_params *p, void *buf, x10rt_copy_sz len);
  *
  * \param p The particulars of the message.
  *
- * \param buf The local location from where the data will be copied.
+ * \param srcAddr The local location where the copy will read the data.
+ *
+ * \param dstAddr The remote location where the copy will store the data.
  *
  * \param len The amount of data to copy.
  */
-X10RT_C void x10rt_send_put (x10rt_msg_params *p, void *buf, x10rt_copy_sz len);
+X10RT_C void x10rt_send_put (x10rt_msg_params *p, void *srcAddr, void* dstAddr, x10rt_copy_sz len);
 
 /** Asynchronously allocate memory at a remote place.
  *
@@ -504,6 +494,13 @@ X10RT_C void x10rt_remote_ops (x10rt_remote_op_params *ops, size_t num_ops);
  */
 X10RT_C void x10rt_register_mem (void *ptr, size_t len);
 
+
+/** Disconnect memory from future RMA operations
+ * \param ptr Some previously-registered memory at the local place.
+ */
+X10RT_C void x10rt_deregister_mem (void *ptr);
+
+
 /** Automatically configure a CUDA kernel.  By studying the characteristics of the hardware upon
  * which the kernel will be executed, and the kernel itself, we can traverse a list of supported
  * configurations to find the first one that 'fits'.  If the configurations are listed in order of
@@ -542,17 +539,13 @@ X10RT_C void x10rt_device_sync (x10rt_place d);
  * \li For a message sent with #x10rt_send_msg the callback is simply executed on the remote side
  * with the x10rt_msg_params structure filled in with appropriate copies of the data.
  *
- * \li For a message sent with #x10rt_send_get the first callback will return a local pointer on the
- * remote side, from which the bytes should be read and transferred back, over the network. After
- * the data has arrived at the initiating place, the second callback should be executed at the
- * initiating place. The len parameter of the second callback is the size of the copied buffer,
- * which may be different to p.len.
+ * \li For a message sent with #x10rt_send_get the callback will be executed at the
+ * initiating place after the data has arrived. The len parameter of the second callback is
+ * the size of the copied buffer which may be different to p.len.
  *
- * \li For a message sent with #x10rt_send_put the first callback will return a pointer on the
- * remote side into which the bytes should be received from the network. After the data has arrived
- * at the destination, the second callback should be executed at the destination. The len parameter
- * of the first and second callbacks is the size of the copied buffer, which may be different to
- * p.len.
+ * \li For a message sent with #x10rt_send_put the callback will be executed at
+ * the destination after the data has arrived. The len parameter of the callback
+ * is the size of the copied buffer, which may be different to p.len.
  *
  * The X10RT implementation may supply an a argument of #x10rt_msg_params to a callback with the
  * length field set to a higher value than was originally supplied by the x10rt_send*_ functions.
@@ -730,9 +723,10 @@ X10RT_C void x10rt_barrier (x10rt_team team, x10rt_place role,
  *
  * \param arg User pointer that is passed to the completion handler
  */
-X10RT_C void x10rt_bcast (x10rt_team team, x10rt_place role,
+X10RT_C bool x10rt_bcast (x10rt_team team, x10rt_place role,
                           x10rt_place root, const void *sbuf, void *dbuf,
                           size_t el, size_t count,
+                          x10rt_completion_handler *errch,
                           x10rt_completion_handler *ch, void *arg);
 
 /** Asynchronously blocks until all members have received their part of root's array.  Note that
@@ -763,6 +757,103 @@ X10RT_C void x10rt_scatter (x10rt_team team, x10rt_place role,
                             x10rt_place root, const void *sbuf, void *dbuf,
                             size_t el, size_t count,
                             x10rt_completion_handler *ch, void *arg);
+
+/** Asynchronously blocks until all members have received their part of root's array. The number
+ * of elements received by each member can be different. 
+ * Each member receives a contiguous and distinct portion of the sbuf array.  sbuf should be structured so that
+ * the portions are sorted in ascending order, e.g., the first member gets the portion at offset 0
+ * of sbuf, and the last member gets the portion at the end of sbuf.
+ *
+ * \param team Team that identifies the members who are participating in this operation
+ *
+ * \param role Our role in the team
+ *
+ * \param root The member who is supplying the data
+ *
+ * \param sbuf The data that will be sent (will only be used when root == role)
+ * 
+ * \param soffsets the offsets of the members data from the sbuf array
+ * 
+ * \param scounts The number of elements being transferred to each member
+ *
+ * \param dbuf The array into which the data will be received for this member
+ * 
+ * \param dcount The number of elements to be received for this member, should equal scounts[role]
+ *
+ * \param el The size of each element, in bytes
+ *
+ * \param ch Will be called when the operation is complete
+ *
+ * \param arg User pointer that is passed to the completion handler
+ */
+X10RT_C bool x10rt_scatterv (x10rt_team team, x10rt_place role,
+                             x10rt_place root, const void *sbuf,
+                             const void *soffsets, const void *scounts,
+                             void *dbuf, size_t dcount, size_t el,
+                             x10rt_completion_handler *errch,
+                             x10rt_completion_handler *ch, void *arg);
+
+
+/** Asynchronously blocks until the root collects all members parts of the root's array. Note that
+ * dbuf is n times the size of sbuf, where n is the number of members in the team.
+ * The root receives the members data and stores them contiguously in the dbuf with the same order 
+ * of the team members.
+ *
+ * \param team Team that identifies the members who are participating in this operation
+ *
+ * \param role Our role in the team
+ *
+ * \param root The member who is supplying the data
+ *
+ * \param sbuf The data that will be sent from each member
+ * 
+ * \param dbuf The array into which the data will be received in the root
+ *
+ * \param el The size of each element, in bytes
+ * 
+ * \param count The number of elements to be sent to the root by each member
+ *
+ * \param ch Will be called when the operation is complete
+ *
+ * \param arg User pointer that is passed to the completion handler
+ */
+X10RT_C void x10rt_gather (x10rt_team team, x10rt_place role,
+							   x10rt_place root, const void *sbuf,
+							   void *dbuf, size_t el, size_t count,
+							   x10rt_completion_handler *ch, void *arg);
+
+/** Asynchronously blocks until the root collects all members parts of the root's array. The number of
+ * Elements sent by each member can be different. The root receives the members data and stores them contiguously in the dbuf with the same order 
+ * of the team members.
+ *
+ * \param team Team that identifies the members who are participating in this operation
+ *
+ * \param role Our role in the team
+ *
+ * \param root The member who is supplying the data
+ *
+ * \param sbuf The data that will be sent from each member
+ * 
+ * \param scount The number of elements to be sent by this member, should equal dcounts[role]
+ * 
+ * \param dbuf The array into which the data will be received in the root
+ * 
+ * \param doffsets the offsets of the members data parts in the root's dbuf
+ * 
+ * \param dcounts the number of elements to be received by each member
+ *
+ * \param el The size of each element, in bytes
+ *
+ * \param ch Will be called when the operation is complete
+ *
+ * \param arg User pointer that is passed to the completion handler
+ */
+X10RT_C bool x10rt_gatherv (x10rt_team team, x10rt_place role, x10rt_place root,
+		                        const void *sbuf, size_t scount, void *dbuf,
+		                        const void *doffsets, const void *dcounts,
+		                        size_t el,
+		                        x10rt_completion_handler *errch,
+		                        x10rt_completion_handler *ch, void *arg);
 
 /** Asynchronously blocks until all members have received their portion of data from each 
  * member.  Note that sbuf and dbuf are the same size, which is n*el*count where n is the
@@ -847,11 +938,12 @@ X10RT_C void x10rt_reduce (x10rt_team team, x10rt_place role,
  *
  * \param arg User pointer that is passed to the completion handler
  */
-X10RT_C void x10rt_allreduce (x10rt_team team, x10rt_place role,
+X10RT_C bool x10rt_allreduce (x10rt_team team, x10rt_place role,
                               const void *sbuf, void *dbuf,
                               x10rt_red_op_type op,
                               x10rt_red_type dtype,
                               size_t count,
+                              x10rt_completion_handler *errch,
                               x10rt_completion_handler *ch, void *arg);
 
 /** Sets arg to 1.
