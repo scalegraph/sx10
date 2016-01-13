@@ -372,7 +372,7 @@ static void coll_test (x10rt_team team, x10rt_place role, x10rt_place per_place)
                       << " correctness (if no warnings follow then OK)..." << std::endl;
         finished = 0;
         x10rt_scatterv(team, role, root, root==role ? sbuf : NULL, soffsets, scounts, dbuf, count,
-                      el, x10rt_one_setter, &finished);
+                      el, x10rt_one_setter, x10rt_one_setter, &finished);
         while (!finished) { x10rt_probe(); }
         for (size_t i=0 ; i<count ; ++i) {
             test_t oracle = pow(test_t(role+2),test_t(root+1)) + i;
@@ -388,7 +388,7 @@ static void coll_test (x10rt_team team, x10rt_place role, x10rt_place per_place)
         taken = -nano_time();
         for (int i=0 ; i<long_tests ; ++i) {
             finished = 0;
-            x10rt_scatterv(team, role, root, sbuf, soffsets, scounts, dbuf, count, el, x10rt_one_setter, &finished);
+            x10rt_scatterv(team, role, root, sbuf, soffsets, scounts, dbuf, count, el, x10rt_one_setter, x10rt_one_setter, &finished);
             while (!finished) { sched_yield(); x10rt_probe(); }
         }
         taken += nano_time();
@@ -527,7 +527,7 @@ static void coll_test (x10rt_team team, x10rt_place role, x10rt_place per_place)
                       << " correctness (if no warnings follow then OK)..." << std::endl;
         finished = 0;
         x10rt_gatherv(team, role, root, sbuf, count, root==role ? dbuf : NULL, doffsets, dcounts,
-                      el, x10rt_one_setter, &finished);
+                      el, x10rt_one_setter, x10rt_one_setter, &finished);
         while (!finished) { x10rt_probe(); }
         if (role==root) {
             for (size_t p=0 ; p<x10rt_team_sz(team) ; ++p) {
@@ -547,7 +547,7 @@ static void coll_test (x10rt_team team, x10rt_place role, x10rt_place per_place)
         taken = -nano_time();
         for (int i=0 ; i<long_tests ; ++i) {
             finished = 0;
-            x10rt_gatherv(team, role, root, sbuf, count, root==role ? dbuf : NULL, doffsets, dcounts, el, x10rt_one_setter, &finished);
+            x10rt_gatherv(team, role, root, sbuf, count, root==role ? dbuf : NULL, doffsets, dcounts, el, x10rt_one_setter, x10rt_one_setter, &finished);
             while (!finished) { sched_yield(); x10rt_probe(); }
         }
         taken += nano_time();

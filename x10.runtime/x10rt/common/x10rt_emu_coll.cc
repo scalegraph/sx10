@@ -95,19 +95,6 @@ namespace {
         struct {
             x10rt_place root;
             const void *sbuf;
-            const void *soffsets;
-            const void *scounts;
-            void *dbuf;
-            size_t dcount;
-            size_t el; // element size
-            x10rt_completion_handler *ch;
-            void *arg;
-            bool barrier_done;
-            bool data_done;
-        } scatterv;
-        struct {
-            x10rt_place root;
-            const void *sbuf;
             void *dbuf;
             size_t el; // element size
             size_t count;
@@ -1386,123 +1373,12 @@ bool x10rt_emu_coll_probe (void)
     return progressing;
 }
 
-static void x10rt_net_one_setter (void *arg)
-{ *((x10rt_int*)arg) = 1; }
-
-void x10rt_emu_scatterv (x10rt_team team, x10rt_place role,
-                    x10rt_place root, const void *sbuf, const void *soffsets, const void *scounts,
-                    void *dbuf, size_t dcounts,
-                    size_t el, x10rt_completion_handler *ch, void *arg)
-{
-    const x10rt_int *soffsets_i = static_cast<const x10rt_int *>(soffsets);
-    const x10rt_int *scounts_i = static_cast<const x10rt_int *>(scounts);
-    x10rt_place sz = x10rt_team_sz(team);
-    x10rt_int progress;
-    x10rt_int localLen;
-    x10rt_int len;
-
-    if (role == root) {
-        localLen = 0;
-        for (x10rt_place i = 0; i < sz; i++) {
-            localLen = std::max(localLen, scounts_i[i]);
-        }
-        progress = 0;
-        x10rt_bcast(team, role, root, &localLen, &len, sizeof(x10rt_int), 1, x10rt_net_one_setter, &progress);
-        while (progress != 1) x10rt_probe();
-
-        void *sbuf_long = malloc(el * len * sz);
-        for (x10rt_place i = 0; i < sz; i++) {
-            memcpy(static_cast<char *>(sbuf_long) + el * len * i, static_cast<const char *>(sbuf) + el * soffsets_i[i], el * len);
-        }
-        void *dbuf_long = malloc(el * len);
-        progress = 0;
-        x10rt_scatter(team, role, root, sbuf_long, dbuf_long, len, el, x10rt_net_one_setter, &progress);
-        while (progress != 1) x10rt_probe();
-
-        memcpy(dbuf, dbuf_long, el * dcounts);
-        free(sbuf_long);
-        free(dbuf_long);
-    } else {
-        progress = 0;
-        x10rt_bcast(team, role, root, &localLen, &len, sizeof(x10rt_int), 1, x10rt_net_one_setter, &progress);
-        while (progress != 1) x10rt_probe();
-
-        void *dbuf_long = malloc(el * len);
-        progress = 0;
-        x10rt_scatter(team, role, root, sbuf, dbuf_long, len, el, x10rt_net_one_setter, &progress);
-        while (progress != 1) x10rt_probe();
-
-        memcpy(dbuf, dbuf_long, el * dcounts);
-        free(dbuf_long);
-    }
-    ch(arg);
-}
-
-void x10rt_emu_gather (x10rt_team team, x10rt_place role, x10rt_place root, const void *sbuf,
-		void *dbuf, size_t el, size_t count, x10rt_completion_handler *ch, void *arg)
-{
-    x10rt_place sz = x10rt_team_sz(team);
-    void *dbuf_i = malloc(el * count * sz);
-    x10rt_int progress;
-
-    progress = 0;
-    x10rt_allgather(team, role, sbuf, dbuf_i, el, count, x10rt_net_one_setter, &progress);
-    while (progress != 1) x10rt_probe();
-
-    if (role == root) {
-        memcpy(dbuf, dbuf_i, el * count * sz);
-    }
-    free(dbuf_i);
-    ch(arg);
-}
-
-void x10rt_emu_gatherv (x10rt_team team, x10rt_place role, x10rt_place root, const void *sbuf, size_t scount,
-		void *dbuf, const void *doffsets, const void *dcounts, size_t el, x10rt_completion_handler *ch, void *arg)
-{
-    x10rt_place sz = x10rt_team_sz(team);
-    x10rt_int *dcounts_i = static_cast<x10rt_int *>(malloc(sizeof(x10rt_int) * sz));
-    x10rt_int progress;
-
-    progress = 0;
-    x10rt_bcast(team, role, root, dcounts, dcounts_i, sizeof(x10rt_int), sz, x10rt_net_one_setter, &progress);
-    while (progress != 1) x10rt_probe();
-
-    if (role == root) {
-        progress = 0;
-        x10rt_allgatherv(team, role, sbuf, scount, dbuf, doffsets, dcounts, el, x10rt_net_one_setter, &progress);
-        while (progress != 1) x10rt_probe();
-    } else {
-        x10rt_int *doffsets_i = static_cast<x10rt_int *>(malloc(sizeof(x10rt_int) * sz));
-        x10rt_int sum_counts = 0;
-        for (x10rt_place i = 0; i < sz; i++) {
-            doffsets_i[i] = sum_counts;
-            sum_counts += dcounts_i[i];
-        }
-        void *dbuf_i = malloc(el * sum_counts);
-        progress = 0;
-        x10rt_allgatherv(team, role, sbuf, scount, dbuf_i, doffsets_i, dcounts_i, el, x10rt_net_one_setter, &progress);
-        while (progress != 1) x10rt_probe();
-
-        free(doffsets_i);
-        free(dbuf_i);
-    }
-    free(dcounts_i);
-    ch(arg);
-}
-
 void x10rt_emu_allgather (x10rt_team team, x10rt_place role,
 		const void *sbuf,
 		void *dbuf,
 		size_t el, size_t count, x10rt_completion_handler *ch, void *arg)
 {
-    x10rt_place sz = x10rt_team_sz(team);
-    x10rt_int progress;
-    for (x10rt_place i = 0; i < sz; i++) {
-        progress = 0;
-        x10rt_bcast(team, role, i, sbuf, static_cast<char *>(dbuf) + el * count * i, el, count, x10rt_net_one_setter, &progress);
-        while (progress != 1)  x10rt_probe();
-    }
-    ch(arg);
+	abort(); //not used by Team.x10
 }
 
 void x10rt_emu_allgatherv (x10rt_team team, x10rt_place role,
@@ -1510,52 +1386,13 @@ void x10rt_emu_allgatherv (x10rt_team team, x10rt_place role,
 		void *dbuf, const void *doffsets, const void *dcounts,
 		size_t el, x10rt_completion_handler *ch, void *arg)
 {
-    const x10rt_int *doffsets_i = static_cast<const x10rt_int *>(doffsets);
-    const x10rt_int *dcounts_i = static_cast<const x10rt_int *>(dcounts);
-    x10rt_place sz = x10rt_team_sz(team);
-    x10rt_int progress;
-    for (x10rt_place i = 0; i < sz; i++) {
-        progress = 0;
-        x10rt_bcast(team, role, i, sbuf, static_cast<char *>(dbuf) + el * doffsets_i[i], el, dcounts_i[i], x10rt_net_one_setter, &progress);
-        while (progress != 1) x10rt_probe();
-    }
-    ch(arg);
+	abort(); //not used by Team.x10
 }
 
 void x10rt_emu_alltoallv (x10rt_team team, x10rt_place role, const void *sbuf, const void *soffsets, const void *scounts,
 		void *dbuf, const void *doffsets, const void *dcounts, size_t el, x10rt_completion_handler *ch, void *arg)
 {
-    const x10rt_int *doffsets_i = static_cast<const x10rt_int *>(doffsets);
-    const x10rt_int *dcounts_i = static_cast<const x10rt_int *>(dcounts);
-    x10rt_place sz = x10rt_team_sz(team);
-    x10rt_int progress;
-    for (x10rt_place i = 0; i < sz; i++) {
-        progress = 0;
-        x10rt_scatterv(team, role, i, sbuf, soffsets, scounts, static_cast<char *>(dbuf) + el * doffsets_i[i], dcounts_i[i], el, x10rt_net_one_setter, &progress); 
-        while (progress != 1) x10rt_probe();
-    }
-    ch(arg);
-}
-
-static int sizeof_dtype(x10rt_red_type dtype)
-{
-    switch (dtype) {
-        #define BORING_MACRO(x) \
-        case x: return sizeof(x10rt_red_type_info<x>::Type);
-        BORING_MACRO(X10RT_RED_TYPE_U8);
-        BORING_MACRO(X10RT_RED_TYPE_S8);
-        BORING_MACRO(X10RT_RED_TYPE_S16);
-        BORING_MACRO(X10RT_RED_TYPE_U16);
-        BORING_MACRO(X10RT_RED_TYPE_S32);
-        BORING_MACRO(X10RT_RED_TYPE_U32);
-        BORING_MACRO(X10RT_RED_TYPE_S64);
-        BORING_MACRO(X10RT_RED_TYPE_U64);
-        BORING_MACRO(X10RT_RED_TYPE_DBL);
-        BORING_MACRO(X10RT_RED_TYPE_FLT);
-        BORING_MACRO(X10RT_RED_TYPE_DBL_S32);
-        #undef BORING_MACRO
-        default: fprintf(stderr, "Corrupted type? %x\n", dtype); abort();
-    }
+	abort(); //not used by Team.x10
 }
 
 void x10rt_emu_reduce (x10rt_team team, x10rt_place role, x10rt_place root,
@@ -1563,16 +1400,5 @@ void x10rt_emu_reduce (x10rt_team team, x10rt_place role, x10rt_place root,
                           x10rt_red_type dtype, size_t count,
                           x10rt_completion_handler *ch, void *arg)
 {
-    fprintf(stderr, "X10RT: x10rt_emu_reduce begin.\n");
-    fprintf(stderr, "X10RT: role: %d, root: %d, op: %d, count: %d\n", role, root, op, count);
-    void *buf = (role == root) ? dbuf : static_cast<void *>(safe_malloc<char>(count * sizeof_dtype(dtype)));
-    //void *buf = dbuf;
-    fprintf(stderr, "X10RT: buf: %x, dbuf: %x, size: %d.\n", buf, dbuf, sizeof_dtype(dtype));
-    fprintf(stderr, "X10RT: x10rt_emu_reduce call allreduce.\n");
-    x10rt_emu_allreduce (team, role, sbuf, buf, op, dtype, count, ch, arg);
-    fprintf(stderr, "X10RT: x10rt_emu_reduce end allreduce.\n");
-    if (buf != dbuf) {
-        safe_free(static_cast<char *>(buf));
-    }
-    fprintf(stderr, "X10RT: x10rt_emu_reduce end.\n");
+	abort(); //not used by Team.x10
 }

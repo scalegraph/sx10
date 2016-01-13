@@ -193,20 +193,10 @@ X10RT_C void x10rt_emu_reduce (x10rt_team team, x10rt_place role,
 
 X10RT_C void x10rt_emu_team_members (x10rt_team team, x10rt_place *members);
 
-X10RT_C void x10rt_emu_scatterv (x10rt_team team, x10rt_place role,
-                    x10rt_place root, const void *sbuf, const void *soffsets, const void *scounts,
-                    void *dbuf, size_t dcounts,
-                    size_t el, x10rt_completion_handler *ch, void *arg);
-
 X10RT_C void x10rt_emu_gather (x10rt_team team, x10rt_place role,
                     x10rt_place root, const void *sbuf, void *dbuf,
                     size_t el, size_t count,
                     x10rt_completion_handler *ch, void *arg);
-
-X10RT_C void x10rt_emu_gatherv (x10rt_team team, x10rt_place role,
-                    x10rt_place root, const void *sbuf, size_t scount,
-                    void *dbuf, const void *doffsets, const void *dcounts,
-                    size_t el, x10rt_completion_handler *ch, void *arg);
 
 X10RT_C void x10rt_emu_allgather (x10rt_team team, x10rt_place role,
 		const void *sbuf,

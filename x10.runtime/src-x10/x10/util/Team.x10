@@ -68,13 +68,9 @@ public struct Team {
 
     /** Returns the role of here
      */
-    public def role() : Rail[Int] {
-    	return role(placeGroup(), here);
-
-    //	//if(members == null) setupMembers();
-    //	return role(Team.state(id).places, here);
-    }
-    public def role(place:Place) : Rail[Int] = {
+    public def role() = ((id == 0n) ? here.id() as Int : Team.roles(id));
+    
+    public def role(place:Place) : Rail[Int] {
     	return role(placeGroup(), place);
 
         //return role(Team.state(id).places, place);
@@ -96,7 +92,7 @@ public struct Team {
 
     /** Returns the PlaceGroup of the places of the team.
      */
-    public def placeGroup() : PlaceGroup = {
+    public def placeGroup() : PlaceGroup {
         return new OrderedPlaceGroup(places());
         //return new SparsePlaceGroup(places());
 
@@ -265,7 +261,7 @@ public struct Team {
     public def barrier () : void {
         if (collectiveSupportLevel >= X10RT_COLL_NONBLOCKINGBARRIER) {
             if (DEBUG) Runtime.println(here + " entering native barrier on team "+id);
-            finish nativeBarrier(id, (id==0n?here.id() as Int:Team.roles(id)));
+            finish nativeBarrier(id, role());
         }
         else {
             if (DEBUG) Runtime.println(here + " entering Team.x10 barrier on team "+id);
@@ -276,7 +272,7 @@ public struct Team {
     
     /** @deprecated use {@link barrier() instead} */
     public def nativeBarrier () : void {
-        finish nativeBarrier(id, (id==0n?here.id() as Int:Team.roles(id)));
+        finish nativeBarrier(id, role());
     }
 
     private static def nativeBarrier (id:Int, role:Int) : void {
@@ -303,17 +299,17 @@ public struct Team {
      *
      * @param count The number of elements being transferred
      */
-    public def scatter[T] (root:Place, src:Rail[T], src_off:Long, dst:Rail[T], dst_off:Long, count:Long) : void {
-        if (CompilerFlags.checkBounds() && here == root) checkBounds(src_off + (size() * count) -1, src.size);
+    public def scatter[T] (root:Int, src:Rail[T], src_off:Long, dst:Rail[T], dst_off:Long, count:Long) : void {
+        //if (CompilerFlags.checkBounds() && here == root) checkBounds(src_off + (size() * count) -1, src.size);
         checkBounds(dst_off+count-1, dst.size); 
         if (collectiveSupportLevel == X10RT_COLL_ALLNONBLOCKINGCOLLECTIVES)
-            finish nativeScatter(id, id==0n?here.id() as Int:Team.roles(id), root.id() as Int, src, src_off as Int, dst, dst_off as Int, count as Int);        
+            finish nativeScatter(id, role(), root as Int, src, src_off as Int, dst, dst_off as Int, count as Int);        
         else if (collectiveSupportLevel == X10RT_COLL_ALLBLOCKINGCOLLECTIVES || collectiveSupportLevel == X10RT_COLL_NONBLOCKINGBARRIER) {
             barrier();
-            nativeScatter(id, id==0n?here.id() as Int:Team.roles(id), root.id() as Int, src, src_off as Int, dst, dst_off as Int, count as Int);
+            nativeScatter(id, role(), root as Int, src, src_off as Int, dst, dst_off as Int, count as Int);
         }
         else
-            state(id).collective_impl[T](LocalTeamState.COLL_SCATTER, root, src, src_off, dst, dst_off, count, 0n, null, null);
+            state(id).collective_impl[T](LocalTeamState.COLL_SCATTER, place(root), src, src_off, dst, dst_off, count, 0n, null, null);
     }
 
     private static def nativeScatter[T] (id:Int, role:Int, root:Int, src:Rail[T], src_off:Int, dst:Rail[T], dst_off:Int, count:Int) : void {
@@ -352,8 +348,8 @@ public struct Team {
      * @return received array
      *
      */
-    public def scatter[T] (role:Int, root:Int, src:Rail[T], count:Int){T haszero}{
-    	assert (role != root || src != null);
+    public def scatter[T] (root:Int, src:Rail[T], count:Int){T haszero}{
+    	assert (role() != root || src != null);
         val dst_raw = new Rail[T](count);
         scatter(root, src, 0, dst_raw, 0, count as Long);
         return new Rail[T](dst_raw);
@@ -381,11 +377,11 @@ public struct Team {
      *
      * @param dst_count The numbers of elements being received
      */
-    public def scatterv[T] (role:Int, root:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int], dst:Rail[T], dst_off:Int, dst_count:Int) : void {
-        scatterv(id, role, root, getRawOrDummyChunk(src), getRawOrDummyChunk(src_offs), getRawOrDummyChunk(src_counts), getRawOrDummyChunk(dst), dst_off, dst_count);
+    public def scatterv[T] (root:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int], dst:Rail[T], dst_off:Int, dst_count:Int) : void {
+        scatterv(id, role(), root, getRawOrDummyChunk(src), getRawOrDummyChunk(src_offs), getRawOrDummyChunk(src_counts), getRawOrDummyChunk(dst), dst_off, dst_count);
     }
 
-    public def scatterv[T] (id:Int, role:Int, root:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int], dst:Rail[T], dst_off:Int, dst_count:Int) : void {
+    private def scatterv[T] (id:Int, role:Int, root:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int], dst:Rail[T], dst_off:Int, dst_count:Int) : void {
         //if (needToSerialize[T]()) {
         //    if (role == root) {
         //        val places = size();
@@ -435,12 +431,12 @@ public struct Team {
      *
      * @return received array
      */
-    public def scatterv[T] (role:Int, root:Int, src:Rail[T], src_counts:Rail[Int], src_offs:Rail[Int], dst_count:Int) {
-        assert(role != root || src_counts.size == size());
-        assert(role != root || src_offs.size == size());
+    public def scatterv[T] (root:Int, src:Rail[T], src_counts:Rail[Int], src_offs:Rail[Int], dst_count:Int) {
+        assert(role() != root || src_counts.size == size());
+        assert(role() != root || src_offs.size == size());
         //val dst = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](dst_count));
         val dst = new Rail[T](Unsafe.allocRailUninitialized[T](dst_count));
-        scatterv(role, root, src, src_offs, src_counts, dst, 0n, dst_count);
+        scatterv(root, src, src_offs, src_counts, dst, 0n, dst_count);
         return dst;
     }
 
@@ -466,11 +462,11 @@ public struct Team {
      *
      * @param count The number of elements being transferred
      */
-    public def gather[T] (role:Int, root:Int, src:Rail[T], src_off:Int, dst:Rail[T], dst_off:Int, count:Int) : void {
-        gather(id, role, root, src, src_off, getRawOrDummyChunk(dst), dst_off, count);
+    public def gather[T] (root:Int, src:Rail[T], src_off:Int, dst:Rail[T], dst_off:Int, count:Int) : void {
+        gather(id, role(), root, src, src_off, getRawOrDummyChunk(dst), dst_off, count);
     }
 
-    public def gather[T] (id:Int, role:Int, root:Int, src:Rail[T], src_off:Int, dst:Rail[T], dst_off:Int, count:Int) : void {
+    private def gather[T] (id:Int, role:Int, root:Int, src:Rail[T], src_off:Int, dst:Rail[T], dst_off:Int, count:Int) : void {
         //if (needToSerialize[T]()) {
         //    if (role == root) {
         //        val places = size();
@@ -522,10 +518,10 @@ public struct Team {
      *
      * @return received array
      */
-    public def gather[T] (role:Int, root:Int, src:Rail[T], count:Int) {
-        //val dst = (role == root) ? new Array[T](IndexedMemoryChunk.allocateUninitialized[T](count * size())) : null;
-        val dst = (role == root) ? new Rail[T](Unsafe.allocRailUninitialized[T](count * size())) : null;
-        gather(role, root, src, 0n, dst, 0n, count);
+    public def gather[T] (root:Int, src:Rail[T], count:Int) {
+        //val dst = (role() == root) ? new Array[T](IndexedMemoryChunk.allocateUninitialized[T](count * size())) : null;
+        val dst = (role() == root) ? new Rail[T](Unsafe.allocRailUninitialized[T](count * size())) : null;
+        gather(root, src, 0n, dst, 0n, count);
         return dst;
     }
 
@@ -539,11 +535,11 @@ public struct Team {
      *
      * @param count The number of elements being transferred
      */
-    public def gather1[T] (role:Int, root:Int, src:T) {T haszero} : Rail[T] {
+    public def gather1[T] (root:Int, src:T) {T haszero} : Rail[T] {
         val src_raw = Unsafe.allocRailUninitialized[T](1);
         src_raw(0) = src;
-        val dst : Rail[T] = new Rail[T](Unsafe.allocRailUninitialized[T](role == root ? size() : 0)) ;
-        gather(role, root, src_raw, 0n, dst, 0n, 1n);
+        val dst : Rail[T] = new Rail[T](Unsafe.allocRailUninitialized[T](role() == root ? size() : 0)) ;
+        gather(root, src_raw, 0n, dst, 0n, 1n);
         return dst;
     }
 
@@ -568,11 +564,11 @@ public struct Team {
      * @param dst_counts The numbers of elements being transferred
      */
 
-    public def gatherv[T] (role:Int, root:Int, src:Rail[T], src_off:Int, src_count:Int, dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
-        gatherv(id, role, root, getRawOrDummyChunk(src), src_off, src_count, getRawOrDummyChunk(dst), getRawOrDummyChunk(dst_offs), getRawOrDummyChunk(dst_counts));
+    public def gatherv[T] (root:Int, src:Rail[T], src_off:Int, src_count:Int, dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
+        gatherv(id, role(), root, getRawOrDummyChunk(src), src_off, src_count, getRawOrDummyChunk(dst), getRawOrDummyChunk(dst_offs), getRawOrDummyChunk(dst_counts));
     }
 
-    public def gatherv[T] (id:Int, role:Int, root:Int, src:Rail[T], src_off:Int, src_count:Int, dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
+    private def gatherv[T] (id:Int, role:Int, root:Int, src:Rail[T], src_off:Int, src_count:Int, dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
         //if (needToSerialize[T]()) {
         //    if (role == root) {
         //        val places = size();
@@ -603,9 +599,9 @@ public struct Team {
     @Native("c++", "x10rt_gatherv(#id, #role, #root, &(#src)->raw[#src_off], #dcounts->raw[#role], #dst->raw, #doffsets->raw, #dcounts->raw, sizeof(TPMGL(T)), ::x10aux::failed_coll_handler, ::x10aux::coll_handler, ::x10aux::coll_enter())")
     private static def nativeGatherv[T] (id:Int, role:Int, root:Int, src:Rail[T], src_off:Int, dst:Rail[T], doffsets:Rail[Int], dcounts:Rail[Int]) : Boolean = false;
     
-    public def gatherv[T] (role:Int, root:Int, src:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int] ) {
-        val dst = (role == root) ? new Rail[T](Unsafe.allocRailUninitialized[T](RailUtils.reduce(dst_counts, (x:Int, y:Int)=>x+y, 0n))) : null;
-        gatherv(role, root, src, 0n, src.size as Int, dst, dst_offs, dst_counts);
+    public def gatherv[T] (root:Int, src:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int] ) {
+        val dst = (role() == root) ? new Rail[T](Unsafe.allocRailUninitialized[T](RailUtils.reduce(dst_counts, (x:Int, y:Int)=>x+y, 0n))) : null;
+        gatherv(root, src, 0n, src.size as Int, dst, dst_offs, dst_counts);
         return dst;
     }
 
@@ -617,12 +613,12 @@ public struct Team {
         return new Rail[Int](1);
     }
     
-    public def gatherv[T] (role:Int, root:Int, src:Rail[T], dst_counts:Rail[Int] ) {
-        if (role == root) {
+    public def gatherv[T] (root:Int, src:Rail[T], dst_counts:Rail[Int] ) {
+        if (role() == root) {
             val dst_offs = countsToOffs(dst_counts);
-            return gatherv[T](role, root, src, dst_offs, dst_counts);
+            return gatherv[T](root, src, dst_offs, dst_counts);
         } else {
-            return gatherv[T](role, root, src, null, null);
+            return gatherv[T](root, src, null, null);
         }
     }
 
@@ -640,19 +636,19 @@ public struct Team {
      *
      * @param count The number of elements being transferred
      */
-     public def bcast[T] (root:Place, src:Rail[T], src_off:Long, dst:Rail[T], dst_off:Long, count:Long) : void {
-        if (here == root) checkBounds(src_off+count-1, src.size);
+     public def bcast[T] (root:Int, src:Rail[T], src_off:Long, dst:Rail[T], dst_off:Long, count:Long) : void {
+        //if (here == root) checkBounds(src_off+count-1, src.size);
         checkBounds(dst_off+count-1, dst.size); 
         if (collectiveSupportLevel == X10RT_COLL_ALLNONBLOCKINGCOLLECTIVES)
             finish nativeBcast(id, id==0n?here.id() as Int:Team.roles(id), root, src, src_off as Int, dst, dst_off as Int, count as Int);
         else if (collectiveSupportLevel == X10RT_COLL_ALLBLOCKINGCOLLECTIVES || collectiveSupportLevel == X10RT_COLL_NONBLOCKINGBARRIER) {
             barrier();
-            val success = nativeBcast(id, id==0n?here.id() as Int:Team.roles(id), root.id() as Int, src, src_off as Int, dst, dst_off as Int, count as Int);
+            val success = nativeBcast(id, id==0n?here.id() as Int:Team.roles(id), root as Int, src, src_off as Int, dst, dst_off as Int, count as Int);
             if (!success)
                 throw new DeadPlaceException("[Native] Team "+id+" contains at least one dead member");
         }
          else
-             state(id).collective_impl[T](LocalTeamState.COLL_BROADCAST, root, src, src_off, dst, dst_off, count, 0n, null, null);
+             state(id).collective_impl[T](LocalTeamState.COLL_BROADCAST, place(root), src, src_off, dst, dst_off, count, 0n, null, null);
     }
 
     @Native("java", "x10.x10rt.TeamSupport.nativeBcast(#id, #role, #root, #src, #src_off, #dst, #dst_off, #count)")
@@ -668,32 +664,32 @@ public struct Team {
         return dst_raw(0);
     }
 
-    public def bcast[T] (role:Int, root:Int, src:Rail[T], count:Int) {
+    public def bcast[T] (root:Int, src:Rail[T], count:Int) {
     	//val dst_raw = new Rail[T](count);
         val dst_raw = Unsafe.allocRailUninitialized[T](count);
         bcast(root, src, 0, dst_raw, 0, count as Long);
         return dst_raw;
     }
 
-    public def allgather1[T] (role:Int, src:T) {
+    public def allgather1[T] (src:T) {
         //val src_raw = IndexedMemoryChunk.allocateUninitialized[T](1);
         val src_raw = new Rail[T](1, (Long)=>src);
         //src_raw(0) = src;
         //val dst = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](size()));
         val dst = Unsafe.allocRailUninitialized[T](size());
-        //allgather(role, new Array[T](src_raw), 0, dst, 0, 1);
-        allgather(role, src_raw, 0n, dst, 0n, 1n);
+        //allgather(new Array[T](src_raw), 0, dst, 0, 1);
+        allgather(src_raw, 0n, dst, 0n, 1n);
         return dst;
     }
 
-    public def allgather[T] (role:Int, src:Rail[T]) {
+    public def allgather[T] (src:Rail[T]) {
         val dst = new Rail[T](Unsafe.allocRailUninitialized[T](src.size * size()));
-        allgather(role, src, 0n, dst, 0n, src.size as Int);
+        allgather(src, 0n, dst, 0n, src.size as Int);
         return dst;
     }
 
-    public def allgather[T] (role:Int, src:Rail[T], src_off:Int, dst:Rail[T], dst_off:Int, count:Int) : void {
-        allgather(id, role, src, src_off, dst, dst_off, count);
+    public def allgather[T] (src:Rail[T], src_off:Int, dst:Rail[T], dst_off:Int, count:Int) : void {
+        allgather(id, role(), src, src_off, dst, dst_off, count);
     }
 
     public def allgather[T](id:Int, role:Int, src:Rail[T], src_off:Int, dst:Rail[T], dst_off:Int, count:Int) : void {
@@ -721,18 +717,18 @@ public struct Team {
         @Native("c++", "x10rt_allgather(id, role, &src->raw[src_off], &dst->raw[dst_off], sizeof(TPMGL(T)), count, x10aux::coll_handler, x10aux::coll_enter());") {}
     }
     
-    public def allgatherv[T] (role:Int, src:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) {
+    public def allgatherv[T] (src:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) {
         //val dst = new Array[T](IndexedMemoryChunk.allocateUninitialized[T](dst_counts.reduce((x:Int, y:Int)=>x+y, 0)));
         val dst = new Rail[T](Unsafe.allocRailUninitialized[T](RailUtils.reduce(dst_counts, (x:Int, y:Int)=>x+y, 0n)));
-        allgatherv(role, src, 0n, src.size as Int, dst, dst_offs, dst_counts);
+        allgatherv(src, 0n, src.size as Int, dst, dst_offs, dst_counts);
         return dst;
     }
 
-    public def allgatherv[T] (role:Int, src:Rail[T], src_off:Int, src_count:Int, dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
-        allgatherv(id, role, src, src_off, src_count, dst, dst_offs, dst_counts);
+    public def allgatherv[T] (src:Rail[T], src_off:Int, src_count:Int, dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
+        allgatherv(id, role(), src, src_off, src_count, dst, dst_offs, dst_counts);
     }
 
-    public def allgatherv[T] (id:Int, role:Int, src:Rail[T], src_off:Int, src_count:Int, dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
+    private def allgatherv[T] (id:Int, role:Int, src:Rail[T], src_off:Int, src_count:Int, dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
         //if (needToSerialize[T]()) {
         //    val places = size();
         //    val ser_src = ParallelSerialization.serialize(src, src_off, src_count);
@@ -802,7 +798,7 @@ public struct Team {
         @Native("c++", "x10rt_alltoall(id, role, &src->raw[src_off], &dst->raw[dst_off], sizeof(TPMGL(T)), count, ::x10aux::coll_handler, ::x10aux::coll_enter());") {}
     }
 
-    public def alltoall[T] (role:Int, src:Rail[T]){T haszero} {
+    public def alltoall[T] (src:Rail[T]){T haszero} {
         assert(src != null);
     	assert(src.size % size() == 0);
     	val dst_raw = new Rail[T](src.size);//IndexedMemoryChunk.allocateUninitialized[T](src.size);
@@ -811,11 +807,11 @@ public struct Team {
         return new Rail[T](dst_raw);
     }
     
-    public def alltoallv[T] (role:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int], dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
-        alltoallv(id, role, src, src_offs, src_counts, dst, dst_offs, dst_counts);
+    public def alltoallv[T] (src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int], dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
+        alltoallv(id, role(), src, src_offs, src_counts, dst, dst_offs, dst_counts);
     }
 
-    public def alltoallv[T] (id:Int, role:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int], dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
+    private def alltoallv[T] (id:Int, role:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int], dst:Rail[T], dst_offs:Rail[Int], dst_counts:Rail[Int]) : void {
         //if (needToSerialize[T]()) {
         //    val places = size();
         //    val ser_offs = new Array[Int](places);
@@ -840,7 +836,7 @@ public struct Team {
         @Native("c++", "x10rt_alltoallv(id, role, src->raw, src_offs->raw, src_counts->raw, dst->raw, dst_offs->raw, dst_counts->raw, sizeof(TPMGL(T)), x10aux::coll_handler, x10aux::coll_enter());") {}
     }
 
-    public def alltoallv[T] (role:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int], dst_offs:Rail[Int], dst_counts:Rail[Int]) {
+    public def alltoallv[T] (src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int], dst_offs:Rail[Int], dst_counts:Rail[Int]) {
         assert(src != null);
         assert(src_counts.size == size());
         assert(src_offs.size == size());
@@ -848,7 +844,7 @@ public struct Team {
         assert(dst_offs.size == size());
         assert(size() > 0);
         val dst = new Rail[T](Unsafe.allocRailUninitialized[T](RailUtils.reduce(dst_counts, (x:Int, y:Int)=>x+y, 0n)));
-        alltoallv(role, src, src_offs, src_counts, dst, dst_offs, dst_counts);
+        alltoallv(src, src_offs, src_counts, dst, dst_offs, dst_counts);
         return dst;
     }
 
@@ -2007,89 +2003,89 @@ public struct Team {
     }
 
 
-    public def scatter[T] (role:Int, root:Int, src:Rail[T]){T haszero} {
+    public def scatter[T] (root:Int, src:Rail[T]){T haszero} {
         val team_size = size();
-        assert(role != root || src != null);
-        assert(role != root || src.size % team_size == 0);
-        val src_size = src.size;//role == root ? src.size : Zero.get[Long]();
+        assert(role() != root || src != null);
+        assert(role() != root || src.size % team_size == 0);
+        val src_size = src.size;//role() == root ? src.size : Zero.get[Long]();
         val count = bcast1(root, src_size / team_size);
         debugln("scatter", "count: " + count);
-        return scatter(role, root, src, count as Int);
+        return scatter(root, src, count as Int);
     }
 
-    public def scatterv[T] (role:Int, root:Int, src:Rail[T], src_counts:Rail[Int], src_offs:Rail[Int]) {
-        assert(role != root || src_counts != null);
-        assert(role != root || src_offs != null);
+    public def scatterv[T] (root:Int, src:Rail[T], src_counts:Rail[Int], src_offs:Rail[Int]) {
+        assert(role() != root || src_counts != null);
+        assert(role() != root || src_offs != null);
         val team_size = size();
-        assert(role != root || src_counts.size == team_size);
-        assert(role != root || src_offs.size == team_size);
-        val dst_count = scatter(role, root, src_counts, 1n)(0);
+        assert(role() != root || src_counts.size == team_size);
+        assert(role() != root || src_offs.size == team_size);
+        val dst_count = scatter(root, src_counts, 1n)(0);
         debugln("scatterv", "dst_count: " + dst_count);
-        return scatterv(role, root, src, src_counts, src_offs, dst_count);
+        return scatterv(root, src, src_counts, src_offs, dst_count);
     }
 
-    public def scatterv[T] (role:Int, root:Int, src:Rail[T], src_counts:Rail[Int]) {
-        assert(role != root || src_counts != null);
-        val src_offs : Rail[Int] = role == root ? countsToOffs(src_counts as Rail[Int]) : null;
+    public def scatterv[T] (root:Int, src:Rail[T], src_counts:Rail[Int]) {
+        assert(role() != root || src_counts != null);
+        val src_offs : Rail[Int] = role() == root ? countsToOffs(src_counts as Rail[Int]) : null;
         debugln("scatterv", "src_offs: " +  src_offs);
-        return scatterv[T](role, root, src, src_counts, src_offs);
+        return scatterv[T](root, src, src_counts, src_offs);
     }
 
-    public def scatterv[T] (role:Int, root:Int, src:Rail[Rail[T]]) {
-        if (role == root) {
+    public def scatterv[T] (root:Int, src:Rail[Rail[T]]) {
+        if (role() == root) {
             assert(src != null);
             val flatten_src_tuple = flatten(src);
             val flatten_src = flatten_src_tuple.first;
             val src_offs = flatten_src_tuple.second.first;
             val src_sizes = flatten_src_tuple.second.second;
             debugln("scatterv", "flatten_src_tuple: " + flatten_src_tuple);
-            return scatterv[T](role, root, flatten_src, src_sizes, src_offs);
+            return scatterv[T](root, flatten_src, src_sizes, src_offs);
         } else {
             debugln("scatterv", "non root");
-            return scatterv[T](role, root, null, null, null);
+            return scatterv[T](root, null, null, null);
         }
     }
 
-    public def gatherv[T] (role:Int, root:Int, src:Rail[T]) {
+    public def gatherv[T] (root:Int, src:Rail[T]) {
         assert(src != null);
-        val src_size = (role == root) ? src.size : 0;
-        val dst_counts = gather1[Int](role, root, src_size as Int);
+        val src_size = (role() == root) ? src.size : 0;
+        val dst_counts = gather1[Int](root, src_size as Int);
         debugln("gatherv", "dst_counts: " + dst_counts);
-        return gatherv[T](role, root, src, dst_counts);
+        return gatherv[T](root, src, dst_counts);
     }
 
-    public def bcast[T] (role:Int, root:Int, src:Rail[T]) {
-        assert(role != root || src != null);
-        val src_size = (role == root) ? src.size : 0;
+    public def bcast[T] (root:Int, src:Rail[T]) {
+        assert(role() != root || src != null);
+        val src_size = (role() == root) ? src.size : 0;
         val count = bcast1(root, src_size);
         debugln("bcast", "count: " + count);
-        bcast(role, root, src, count as Int);
+        bcast(root, src, count as Int);
     }
 
-    public def allgatherv[T] (role:Int, src:Rail[T]) {
+    public def allgatherv[T] (src:Rail[T]) {
         assert(src != null);
-        val dst_counts = allgather1(role, src.size as Int);
+        val dst_counts = allgather1(src.size as Int);
         val dst_offs = countsToOffs(dst_counts);
         debugln("allgatherv", "dst_counts: " + dst_counts);
         debugln("allgatherv", "dst_offs: " + dst_offs);
 
-        return allgatherv[T](role, src, dst_offs, dst_counts);
+        return allgatherv[T](src, dst_offs, dst_counts);
     }
 
-    public def alltoallvWithBreakdown[T] (role:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int]) : Pair[Rail[T],Rail[Int]] {
+    public def alltoallvWithBreakdown[T] (src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int]) : Pair[Rail[T],Rail[Int]] {
         assert(src != null);
         assert(src_offs != null);
         assert(src_counts != null);
-        val dst_counts = alltoall(role, src_counts);
+        val dst_counts = alltoall(src_counts);
         val dst_offs = countsToOffs(dst_counts);
-        val dst = alltoallv[T](role, src, src_offs, src_counts, dst_offs, dst_counts);
+        val dst = alltoallv[T](src, src_offs, src_counts, dst_offs, dst_counts);
         debugln("alltoallvWithBreakdown", "dst_counts: " + dst_counts);
         debugln("alltoallvWithBreakdown", "dst_offs: " + dst_offs);
         debugln("alltoallvWithBreakdown", "dst: " + dst);
         return Pair[Rail[T],Rail[Int]](dst, dst_counts);
     }
 
-    public def alltoallvWithBreakdown[T] (role:Int, src:Rail[Rail[T]]) : Pair[Rail[T],Rail[Int]] {
+    public def alltoallvWithBreakdown[T] (src:Rail[Rail[T]]) : Pair[Rail[T],Rail[Int]] {
         assert(src != null);
         val flatten_src_tuple = flatten(src);
         val flatten_src = flatten_src_tuple.first;
@@ -2098,31 +2094,31 @@ public struct Team {
         debugln("alltoallvWithBreakdown", "src_counts: " + src_sizes);
         debugln("alltoallvWithBreakdown", "src_offs: " + src_offs);
         debugln("alltoallvWithBreakdown", "flatten_src: " + flatten_src);
-        return alltoallvWithBreakdown(role, flatten_src, src_offs, src_sizes);
+        return alltoallvWithBreakdown(flatten_src, src_offs, src_sizes);
     }
 
-    public def alltoallv[T] (role:Int, src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int]) {
+    public def alltoallv[T] (src:Rail[T], src_offs:Rail[Int], src_counts:Rail[Int]) {
         assert(src != null);
         assert(src_offs != null);
         assert(src_counts != null);
-        val dst_counts = alltoall(role, src_counts);
+        val dst_counts = alltoall(src_counts);
         val dst_offs = countsToOffs(dst_counts);
-        val dst = alltoallv[T](role, src, src_offs, src_counts, dst_offs, dst_counts);
+        val dst = alltoallv[T](src, src_offs, src_counts, dst_offs, dst_counts);
         debugln("alltoallv", "dst_counts: " + dst_counts);
         debugln("alltoallv", "dst_offs: " + dst_offs);
         debugln("alltoallv", "dst: " + dst);
         return dst;
     }
 
-    public def alltoallv[T] (role:Int, src:Rail[T], src_counts:Rail[Int]) {
+    public def alltoallv[T] (src:Rail[T], src_counts:Rail[Int]) {
         assert(src != null);
         assert(src_counts != null);
         val src_offs = countsToOffs(src_counts);
         debugln("alltoallv", "src_offs: " + src_offs);
-        return alltoallv[T](role, src, src_offs, src_counts);
+        return alltoallv[T](src, src_offs, src_counts);
     }
 
-    public def alltoallv[T] (role:Int, src:Rail[Rail[T]]) {
+    public def alltoallv[T] (src:Rail[Rail[T]]) {
         assert(src != null);
         val flatten_src_tuple = flatten(src);
         val flatten_src = flatten_src_tuple.first;
@@ -2131,7 +2127,7 @@ public struct Team {
         debugln("alltoallv", "src_counts: " + src_sizes);
         debugln("alltoallv", "src_offs: " + src_offs);
         debugln("alltoallv", "flatten_src: " + flatten_src);
-        return alltoallv(role, flatten_src, src_offs, src_sizes);
+        return alltoallv(flatten_src, src_offs, src_sizes);
     }
 
     private static val OPT_REMOTE_OP = 0;

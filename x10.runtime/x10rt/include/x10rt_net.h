@@ -374,22 +374,6 @@ X10RT_C bool x10rt_net_allreduce (x10rt_team team, x10rt_place role,
 //X10RT_C void x10rt_net_team_members (x10rt_team team, x10rt_place *members);
 X10RT_C void x10rt_net_team_members (x10rt_team team, x10rt_place *members, x10rt_completion_handler *ch, void *arg);
 
-/** \see #x10rt_lgl_scatterv
- * \param team As in #x10rt_lgl_scatterv
- * \param role As in #x10rt_lgl_scatterv
- * \param sbuf As in #x10rt_lgl_scatterv
- * \param dbuf As in #x10rt_lgl_scatterv
- * \param op As in #x10rt_lgl_scatterv
- * \param dtype As in #x10rt_lgl_scatterv
- * \param count As in #x10rt_lgl_scatterv
- * \param ch As in #x10rt_lgl_scatterv
- * \param arg As in #x10rt_lgl_scatterv
- */
-X10RT_C void x10rt_net_scatterv (x10rt_team team, x10rt_place role,
-                    x10rt_place root, const void *sbuf, const void *soffsets, const void *scounts,
-                    void *dbuf, size_t dcount,
-                    size_t el, x10rt_completion_handler *ch, void *arg);
-
 /** \see #x10rt_lgl_gather
  * \param team As in #x10rt_lgl_gather
  * \param role As in #x10rt_lgl_gather
@@ -405,22 +389,6 @@ X10RT_C void x10rt_net_gather (x10rt_team team, x10rt_place role,
                     x10rt_place root, const void *sbuf, void *dbuf,
                     size_t el, size_t count,
                     x10rt_completion_handler *ch, void *arg);
-
-/** \see #x10rt_lgl_gatherv
- * \param team As in #x10rt_lgl_gatherv
- * \param role As in #x10rt_lgl_gatherv
- * \param sbuf As in #x10rt_lgl_gatherv
- * \param dbuf As in #x10rt_lgl_gatherv
- * \param op As in #x10rt_lgl_gatherv
- * \param dtype As in #x10rt_lgl_gatherv
- * \param count As in #x10rt_lgl_gatherv
- * \param ch As in #x10rt_lgl_gatherv
- * \param arg As in #x10rt_lgl_gatherv
- */
-X10RT_C void x10rt_net_gatherv (x10rt_team team, x10rt_place role,
-                    x10rt_place root, const void *sbuf, size_t scount,
-                    void *dbuf, const void *doffsets, const void *dcounts,
-                    size_t el, x10rt_completion_handler *ch, void *arg);
 
 /** \see #x10rt_lgl_allgather
  * \param team As in #x10rt_lgl_allgather
