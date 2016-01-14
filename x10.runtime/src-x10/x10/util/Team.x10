@@ -151,20 +151,22 @@ public struct Team {
             Team.roles(id) = role as Int;
             if (DEBUG) Runtime.println(here + " created native team "+id);
         }
-        if (DEBUG) Runtime.println(here + " creating our own team "+id);
-        if (Team.state.capacity() <= id) // TODO move this check into the GrowableRail.grow() method
-            Team.state.grow(id+1);
-        while (Team.state.size() < id)
-            Team.state.add(null); // I am not a member of this team id.  Insert a dummy value.
-        val teamState = new LocalTeamState(places, id, places.indexOf(here));
-        if (id == 0n) {
-            // Team.WORLD is constructed by each place during Runtime.start()
-            Team.state(id) = teamState;
-        } else {
-            atomic { Team.state(id) = teamState; }
-            teamState.init();
+        if (collectiveSupportLevel < X10RT_COLL_ALLNONBLOCKINGCOLLECTIVES) {
+            if (DEBUG) Runtime.println(here + " creating our own team "+id);
+            if (Team.state.capacity() <= id) // TODO move this check into the GrowableRail.grow() method
+                Team.state.grow(id+1);
+            while (Team.state.size() < id)
+                Team.state.add(null); // I am not a member of this team id.  Insert a dummy value.
+            val teamState = new LocalTeamState(places, id, places.indexOf(here));
+            if (id == 0n) {
+                // Team.WORLD is constructed by each place during Runtime.start()
+                Team.state(id) = teamState;
+            } else {
+                atomic { Team.state(id) = teamState; }
+                teamState.init();
+            }
+            if (DEBUG) Runtime.println(here + " created our own team "+id);
         }
-        if (DEBUG) Runtime.println(here + " created our own team "+id);
     }
 
     /** 
